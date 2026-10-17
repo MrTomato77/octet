@@ -1093,8 +1093,9 @@ function ask(text, yes, ic = "", more = "", facts = []) {
   $("ask-yes").className = "btn " + (ic === "warning" ? "danger" : "primary");
   d.returnValue = ""; d.showModal();
   if (ic === "warning") $("ask-no").focus();
-  const w = document.querySelector(".window").getBoundingClientRect(), r = d.getBoundingClientRect();
-  d.style.left = `${w.left + (w.width - r.width) / 2}px`; d.style.top = `${w.top + (w.height - r.height) / 2}px`;
+  // offsetWidth/Height ignore the opening scale, so the box lands truly centred on the window.
+  const w = document.querySelector(".window").getBoundingClientRect();
+  d.style.left = `${w.left + (w.width - d.offsetWidth) / 2}px`; d.style.top = `${w.top + (w.height - d.offsetHeight) / 2}px`;
   return new Promise(res => d.addEventListener("close", () => res(d.returnValue === "yes"), { once: true }));
 }
 const discardOk = () => !changed().length ? Promise.resolve(true)
