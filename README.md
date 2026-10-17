@@ -1,4 +1,12 @@
-# Simple IP v2
+# Octet
+
+Switch IPv4 and DNS settings on Windows in seconds. A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simple-IP-Config), built with Rust and Tauri.
+
+> **Status: early.** The interface is being designed in `ui/demo.html` (open it in a browser; sample data, touches nothing). The app is moving from egui to Tauri; the earlier egui build is described below and archived on the `egui-archive` branch.
+
+Licensed under the [MIT License](LICENSE). Inspired by Simple IP Config by Kurtis Liggett (GPL-3.0); no code is copied from it.
+
+---
 
 A native Rust IPv4/DNS settings tool for Windows. Current milestone: **CP1 interface prototype**, using sample data only.
 

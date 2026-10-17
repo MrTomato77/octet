@@ -1,0 +1,1266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Octet layout demo</title>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+/* Layout spec. Every size in the window comes from these tokens. */
+:root {
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px;
+  --win-w: 680px; --win-h: 542px;
+  --side-w: 216px;
+  --label-w: 112px;          /* shared by adapter facts and the form */
+  --col-gap: 16px;
+  --field-w: 258px;          /* value column: octets 200 + "/ prefix" 58 */
+  --octets-w: 200px;
+  --row-h: 32px; --row-gap: 8px;
+  --group-gap: 24px;         /* each side of a divider: 3x the row gap */
+  --r-input: 4px; --r-item: 6px;
+  --font: "Segoe UI Variable Text", "Segoe UI", "Noto Sans Thai", system-ui, sans-serif;
+  /* Motion. Names follow Motion Reference; durations cut for a desktop tool
+     (web references run 500-900ms, a utility should answer in 100-240ms). */
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);     /* easeOutCubic */
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1); /* easeOutBack, small overshoot */
+  --t-press: 100ms; --t-fast: 140ms; --t-base: 180ms; --t-slow: 240ms;
+
+  --bg: oklch(0.965 0.002 250); --surface: oklch(0.99 0.001 250); --side: oklch(0.94 0.004 250);
+  --ink: oklch(0.24 0.01 250); --muted: oklch(0.47 0.012 250); --faint: oklch(0.62 0.01 250);
+  --border: oklch(0.86 0.006 250); --border-strong: oklch(0.72 0.008 250);
+  --hover: oklch(0.915 0.006 250); --select: oklch(0.895 0.008 250);
+  --accent: oklch(0.5 0.15 255); --accent-ink: oklch(0.99 0 0); --accent-soft: oklch(0.93 0.035 255);
+  --sel-fill: oklch(0.885 0.055 255); --sel-ink: oklch(0.27 0.06 255);
+  --ok: oklch(0.6 0.13 150); --bad: oklch(0.55 0.18 25);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: oklch(0.215 0.006 250); --surface: oklch(0.245 0.006 250); --side: oklch(0.19 0.006 250);
+    --ink: oklch(0.94 0.004 250); --muted: oklch(0.72 0.01 250); --faint: oklch(0.56 0.01 250);
+    --border: oklch(0.35 0.008 250); --border-strong: oklch(0.48 0.01 250);
+    --hover: oklch(0.27 0.008 250); --select: oklch(0.3 0.01 250);
+    --accent: oklch(0.74 0.12 255); --accent-ink: oklch(0.17 0.02 255); --accent-soft: oklch(0.32 0.05 255);
+    --sel-fill: oklch(0.38 0.075 255); --sel-ink: oklch(0.96 0.01 255);
+    --ok: oklch(0.76 0.13 150); --bad: oklch(0.72 0.15 25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: oklch(0.215 0.006 250); --surface: oklch(0.245 0.006 250); --side: oklch(0.19 0.006 250);
+  --ink: oklch(0.94 0.004 250); --muted: oklch(0.72 0.01 250); --faint: oklch(0.56 0.01 250);
+  --border: oklch(0.35 0.008 250); --border-strong: oklch(0.48 0.01 250);
+  --hover: oklch(0.27 0.008 250); --select: oklch(0.3 0.01 250);
+  --accent: oklch(0.74 0.12 255); --accent-ink: oklch(0.17 0.02 255); --accent-soft: oklch(0.32 0.05 255);
+    --sel-fill: oklch(0.38 0.075 255); --sel-ink: oklch(0.96 0.01 255);
+  --ok: oklch(0.76 0.13 150); --bad: oklch(0.72 0.15 25);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100dvh; display: grid; place-items: center; gap: var(--s4);
+  background: oklch(0.5 0.01 250 / 0.15); font: 14px/20px var(--font); color: var(--ink); padding: var(--s4); }
+button, input, select { font: inherit; color: inherit; }
+.note { font-size: 12px; color: var(--muted); max-width: var(--win-w); text-align: center; }
+
+/* Window: fixed size, like the real app */
+/* Collapsing the sidebar to a rail shrinks the window instead of leaving the
+   fixed-width form floating in extra space (Tauri: appWindow.setSize). */
+.window.rail { --side-w: 56px; --win-w: 520px; }
+.window { width: var(--win-w); height: var(--win-h); display: grid; grid-template-rows: 32px 1fr;
+  transition: width var(--t-slow) var(--ease-out);
+  background: var(--bg); border-radius: 8px; overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border-strong), 0 16px 48px oklch(0.2 0.02 250 / 0.25); }
+.titlebar { display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3); font-size: 12px; color: var(--muted); background: var(--side); }
+.titlebar i { font-size: 16px; color: var(--accent); }
+.body { display: grid; grid-template-columns: var(--side-w) 1fr; min-height: 0; transition: grid-template-columns var(--t-slow) var(--ease-out); }
+
+/* Sidebar */
+.side { background: var(--side); border-right: 1px solid var(--border); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; overflow: hidden; }
+.side-head { display: flex; align-items: center; gap: var(--s1); padding: var(--s3) var(--s2) var(--s2); }
+.side-head h2 { flex: 1; margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+
+/* Rail: icons only, status dot becomes a badge on the icon, names move to tooltips */
+.rail .side-head { flex-direction: column; }
+.rail .side-head h2, .rail .item .name { display: none; }
+.rail .item { grid-template-columns: 20px; justify-content: center; padding: 0; }
+.rail .side-foot .item { grid-template-columns: 20px; }
+.rail .list .item .dot { position: absolute; left: 21px; top: 22px; width: 7px; height: 7px; box-shadow: 0 0 0 2px var(--side); }
+.rail .list .item .dot.off { background: var(--side); box-shadow: inset 0 0 0 1.5px var(--faint), 0 0 0 2px var(--side); }
+.rail .list .item[aria-current="true"] .dot { box-shadow: 0 0 0 2px var(--sel-fill); }
+.rail .list .item[aria-current="true"] .dot.off { background: var(--sel-fill); box-shadow: inset 0 0 0 1.5px var(--sel-ink), 0 0 0 2px var(--sel-fill); }
+.icon-btn { width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: transparent;
+  border-radius: var(--r-item); color: var(--muted); cursor: pointer; font-size: 18px; }
+.icon-btn:hover { background: var(--hover); color: var(--ink); }
+.icon-btn:focus-visible, .item:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.list { list-style: none; margin: 0; padding: 0 var(--s2); display: grid; gap: 2px; align-content: start; overflow: auto; }
+.item { position: relative; width: 100%; display: grid; grid-template-columns: 20px 1fr 8px; align-items: center; gap: var(--s3);
+  height: 40px; padding: 0 var(--s3); border: 0; border-radius: var(--r-item); background: transparent; text-align: left; cursor: pointer; }
+.item:hover { background: var(--hover); }
+.list { position: relative; }
+.list li { position: relative; z-index: 1; }
+/* Selection: one accent block behind the rows that travels to the picked adapter.
+   Motion: Motion Reference "tab indicator" (stretch toward the target, then settle on it). */
+.indicator { position: absolute; z-index: 0; left: var(--s2); right: var(--s2); top: 0; height: 40px;
+  border-radius: var(--r-item); background: var(--sel-fill); pointer-events: none; }
+.item[aria-current="true"], .item[aria-current="true"]:hover { background: transparent; }
+.item[aria-current="true"] i, .item[aria-current="true"] .name, .item.off[aria-current="true"] .name { color: var(--sel-ink); }
+.item[aria-current="true"] .dot.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--sel-ink); }
+.item[aria-current="true"]:focus-visible { outline-color: var(--ink); }
+.item i, .item .name { transition: color var(--t-fast) var(--ease-out); }
+.item i { font-size: 18px; color: var(--muted); }
+.item .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.item.off .name { color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.dot.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--faint); }
+.side-foot { padding: var(--s2); border-top: 1px solid var(--border); }
+.side-foot .item { grid-template-columns: 20px 1fr; }
+
+/* Main pane */
+.main { display: grid; grid-template-rows: 1fr auto; min-height: 0; background: var(--surface); }
+.scroll { overflow: hidden; padding: var(--s4) var(--s6) var(--s4); }
+/* Identity header: name + state on one line, hardware details as one meta line.
+   Facts are not settings, so they no longer borrow the form's label column. */
+.head { display: grid; grid-template-columns: minmax(0, max-content) auto 1fr auto; align-items: center; column-gap: var(--s3); }
+.head h1 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.head h1 i { font-size: 20px; color: var(--muted); }
+/* One hardware line: what the adapter is (left, truncates) and its address (right, never cut). */
+.sub { grid-column: 1 / -1; margin: var(--s1) 0 0; display: flex; align-items: baseline; gap: var(--s6); font-size: 12px; line-height: 16px; color: var(--muted); }
+.desc { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Lease source sits with the DHCP choice it belongs to */
+.hint { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hint:empty { display: none; }
+.kv { display: inline-flex; gap: var(--s2); font-variant-numeric: tabular-nums; }
+.kv .k { color: var(--muted); }
+.kv[hidden] { display: none; }
+.copy { border: 0; background: none; padding: 0; cursor: copy; border-radius: 2px; }
+.copy:hover .v { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
+.copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.state { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 var(--s2); border-radius: var(--r-input);
+  background: var(--hover); font-size: 12px; line-height: 16px; white-space: nowrap; }
+.state.off { color: var(--muted); }
+
+/* One grid shape for facts and form rows, so all values share one left edge */
+.grid { display: grid; grid-template-columns: var(--label-w) var(--field-w); column-gap: var(--col-gap); align-items: center; }
+.break { border: 0; border-top: 1px solid var(--border); margin: var(--group-gap) 0; }
+.form { row-gap: var(--row-gap); }
+.form > label, .form > .lbl { color: var(--muted); }
+.form > * { min-height: var(--row-h); display: flex; align-items: center; }
+/* Mode toggle: two options, one thumb that slides left/right (Motion Reference "toggle morph") */
+.ctl { gap: 0; }
+/* Row action in the right column: same 40x32 box as the prefix and the DNS mark.
+   Its job follows the mode, and the icon morphs when the job changes. */
+.ext { position: relative; }
+.slot-btn { width: 40px; height: var(--row-h); display: grid; place-items: center; padding: 0; border: 1px solid var(--border-strong);
+  border-radius: var(--r-input); background: var(--surface); color: var(--muted); cursor: pointer; font-size: 16px; }
+.slot-btn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.slot-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.slot-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.slot-btn[aria-expanded="true"] { background: var(--hover); color: var(--ink); }
+.slot-btn { transition: background-color var(--t-fast) var(--ease-out), transform var(--t-press) var(--ease-out); }
+.slot-btn:active:not(:disabled) { transform: scale(0.95); }
+#presets { right: 0; top: 36px; min-width: 168px; }
+#presets.up { top: auto; bottom: 36px; transform-origin: bottom right; }
+#presets button { grid-template-columns: 20px 1fr; }
+#presets .ips { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.plogo { width: 16px; height: 16px; background: var(--muted); -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
+#presets button:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Same width as the subnet octet box, so mode rows and address rows share one edge */
+.seg { width: var(--octets-w); position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: var(--row-h);
+  padding: 2px; border: 1px solid var(--border); border-radius: var(--r-item); background: var(--bg); }
+.seg .thumb { position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); border-radius: var(--r-input);
+  background: var(--sel-fill); transition: transform 220ms var(--ease-back); }
+.seg:has(input[value=manual]:checked) .thumb { transform: translateX(100%); }
+.choice { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0 var(--s4);
+  color: var(--muted); cursor: pointer; white-space: nowrap; transition: color var(--t-fast) var(--ease-out); }
+.choice:has(input:checked) { color: var(--sel-ink); font-weight: 600; }
+.choice input { position: absolute; opacity: 0; pointer-events: none; }
+.choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-input); }
+.choice.disabled { color: var(--faint); cursor: not-allowed; }
+.check { display: inline-flex; align-items: center; gap: var(--s2); font-size: 13px; color: var(--muted); cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+
+/* IPv4 input: four octets in fixed columns, identical in every row */
+.ip { position: relative; display: flex; align-items: center; width: var(--field-w); height: var(--row-h);
+  padding: 0 var(--s1); border: 1px solid var(--border-strong); border-radius: var(--r-input); background: var(--surface); }
+.ip.short { width: var(--octets-w); }
+.ip:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.ip input { width: 40px; height: 100%; border: 0; background: transparent; text-align: center; outline: 0; padding: 0;
+  font-variant-numeric: tabular-nums; }
+.ip span.sep { width: 8px; text-align: center; color: var(--muted); }
+.ip.ro { background: transparent; border-color: var(--border); }
+.ip.ro input { color: var(--muted); }
+.ip.invalid { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+.diff { position: absolute; right: 10px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; transform: rotate(45deg);
+  background: var(--accent); border-radius: 1px; display: none; }
+.ip.changed .diff { display: block; }
+/* Tail of the box: what kind of address this is (IP) or who runs it (DNS) */
+.tag { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); height: 18px; padding: 0 5px; border-radius: var(--r-input);
+  font-size: 11px; line-height: 18px; color: var(--muted); background: var(--hover); white-space: nowrap; pointer-events: auto; }
+.tag:empty:not(.logo) { display: none; }
+.tag.logo { width: 16px; height: 16px; padding: 0; background: currentColor;
+  -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
+.tag.public { color: var(--accent); }
+/* The changed-mark takes the far right; the tag steps aside for it */
+.ip.changed .tag { right: 27px; }
+.tag { transition: right var(--t-fast) var(--ease-out); }
+/* DNS: the resolver mark sits outside, in the column the subnet uses for "/ prefix".
+   Every mark gets the same 28px tile so wide and narrow logos read the same size. */
+.ext { flex: none; width: calc(var(--field-w) - var(--octets-w)); display: flex; justify-content: flex-end; }
+/* Every right-column tile is 40x32, the size of the prefix box and the row buttons */
+/* Every right-column tile is 40x32, the size of the prefix box and the row buttons */
+.ext .tag { position: static; right: auto; transform: none; width: 40px; height: var(--row-h); line-height: var(--row-h); padding: 0;
+  text-align: center; font-size: 10px; letter-spacing: -0.01em; overflow: hidden; }
+.ext .tag.logo { position: relative; width: 40px; padding: 0; background: var(--hover); -webkit-mask: none; mask: none; }
+.ext .tag.logo::after { content: ""; position: absolute; inset: 8px 12px; background: var(--muted);
+  -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
+/* Empty slot: dashed outline, faint "None" */
+.ext .tag.empty { color: var(--faint); background: transparent; outline: 1px dashed var(--border); outline-offset: -1px; }
+.tag.fresh { animation: rise var(--t-base) var(--ease-out); }
+.subnet { display: flex; align-items: center; gap: 0; }
+.slash { width: 18px; text-align: center; color: var(--muted); }
+.prefix { width: 40px; height: var(--row-h); border: 1px solid var(--border-strong); border-radius: var(--r-input);
+  background: var(--surface); text-align: center; outline: 0; font-variant-numeric: tabular-nums; }
+.prefix:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.prefix:disabled { background: transparent; border-color: var(--border); color: var(--muted); }
+
+/* Action bar */
+.actions { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s6); border-top: 1px solid var(--border); background: var(--surface); }
+.status { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status.bad { color: var(--bad); }
+.status.ok { color: var(--ok); }
+.btn { height: 32px; padding: 0 var(--s4); border-radius: var(--r-item); border: 1px solid var(--border-strong); background: var(--surface);
+  cursor: pointer; display: inline-flex; align-items: center; gap: var(--s2); white-space: nowrap; }
+.btn:hover:not(:disabled) { background: var(--hover); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn i { font-size: 16px; }
+/* Buttons wake up when there is something to apply, rewind when reverting */
+.btn { transition: opacity 240ms var(--ease-out), background-color 240ms var(--ease-out), border-color 240ms var(--ease-out),
+  color 240ms var(--ease-out), transform var(--t-press) var(--ease-out); }
+.btn.rewind i { animation: rewind 420ms var(--ease-out); }
+@keyframes rewind { from { transform: rotate(360deg); } }
+
+/* Menus and dialog */
+.menu { position: absolute; min-width: 220px; padding: var(--s1); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 8px 24px oklch(0.2 0.02 250 / 0.2); display: none; z-index: 10; }
+.menu.open { display: grid; }
+.menu button { display: grid; grid-template-columns: 20px 1fr; gap: var(--s2); align-items: center; height: 32px; padding: 0 var(--s2);
+  border: 0; background: transparent; border-radius: var(--r-input); text-align: left; cursor: pointer; }
+.menu button:hover { background: var(--hover); }
+.menu hr { border: 0; border-top: 1px solid var(--border); margin: var(--s1) 0; }
+.menu i { font-size: 16px; color: var(--muted); }
+.head-wrap { position: relative; z-index: 2; }
+dialog { width: 400px; max-width: calc(var(--win-w) - 2 * var(--s6)); position: fixed; margin: 0; padding: 0;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink); }
+dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
+.dlg-body { padding: var(--s6); display: grid; gap: var(--s4); }
+.dlg-body h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.set { display: grid; grid-template-columns: 96px 1fr; column-gap: var(--col-gap); row-gap: var(--s2); align-items: start; }
+.set .lbl { color: var(--muted); min-height: 32px; display: flex; align-items: center; }
+.set > .check, .set .stack > * { min-height: 32px; }
+.set select { height: 32px; border: 1px solid var(--border-strong); border-radius: var(--r-input); background: var(--surface); padding: 0 var(--s2); }
+.set .stack { display: grid; gap: 0; }
+.dlg-foot { display: flex; justify-content: space-between; gap: var(--s2); padding: var(--s3) var(--s6); border-top: 1px solid var(--border); }
+.link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 13px; }
+
+/* ---------- Motion ---------- */
+.mi { width: 16px; height: 16px; display: block; }
+.icon-btn .mi { width: 18px; height: 18px; }
+.spin .mi { animation: spin 800ms linear infinite; }
+/* Broom: held at the top of the handle, the bristles flick left twice (fast stroke, slow return),
+   and a puff of dust leaves the bristles on each stroke. */
+.slot-btn { position: relative; }
+.sweep .mi { transform-origin: 85% 15%; animation: sweep 800ms var(--ease-out); }
+@keyframes sweep {
+  0% { transform: rotate(0); }
+  18% { transform: rotate(16deg); animation-timing-function: ease-in-out; }
+  45% { transform: rotate(-6deg); animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+  63% { transform: rotate(16deg); animation-timing-function: ease-in-out; }
+  100% { transform: rotate(0); } }
+.sweep::before, .sweep::after { content: ""; position: absolute; left: 11px; top: 21px; width: 2px; height: 2px; border-radius: 50%;
+  background: currentColor; box-shadow: -3px 2px 0 0 currentColor, -1px -2px 0 -0.5px currentColor; opacity: 0; pointer-events: none;
+  animation: dust 420ms var(--ease-out) 60ms; }
+.sweep::after { top: 19px; animation-delay: 420ms; }
+@keyframes dust { 0% { opacity: 0; transform: none; } 20% { opacity: 0.8; } 100% { opacity: 0; transform: translate(-7px, -2px) scale(0.6); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Press feedback */
+.icon-btn, .item { transition: background-color var(--t-fast) var(--ease-out), transform var(--t-press) var(--ease-out); }
+.btn:active:not(:disabled), .icon-btn:active { transform: scale(0.97); }
+.item:active { transform: scale(0.99); }
+
+/* Fade + slide: adapter content when switching adapters */
+.swap > * { animation: rise var(--t-base) var(--ease-out) backwards; }
+.swap > :nth-child(n+3) { animation-delay: 30ms; }
+@keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+
+/* Fields: state changes ease instead of jumping */
+.ip, .prefix { transition: border-color var(--t-fast) var(--ease-out), background-color var(--t-fast) var(--ease-out), box-shadow var(--t-fast) var(--ease-out); }
+.ip input, .prefix { transition: color var(--t-fast) var(--ease-out); }
+/* Pop scale: the "changed" mark */
+.ip.changed .diff { animation: pop var(--t-base) var(--ease-back); }
+/* Octets that change from outside (DHCP lease, refresh) drop in one after another */
+.ip input.roll { animation: roll 280ms var(--ease-out) backwards; animation-delay: calc(var(--i) * 45ms); }
+@keyframes roll { from { opacity: 0; transform: translateY(-8px); filter: blur(2px); } }
+@keyframes pop { from { transform: rotate(45deg) scale(0); } }
+/* Nudge: a field that turns invalid */
+.ip.invalid { animation: nudge 280ms var(--ease-out); }
+@keyframes nudge { 25% { transform: translateX(-3px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-1px); } }
+
+/* Menu and dialog open */
+.menu { transform-origin: top right; }
+.menu.open { animation: menu-in var(--t-fast) var(--ease-out); }
+@keyframes menu-in { from { opacity: 0; transform: scale(0.97) translateY(-4px); } }
+dialog[open] { animation: dialog-in var(--t-base) var(--ease-out); }
+dialog[open]::backdrop { animation: fade var(--t-base) var(--ease-out); }
+@keyframes dialog-in { from { opacity: 0; transform: scale(0.98) translateY(6px); } }
+@keyframes fade { from { opacity: 0; } }
+
+/* Status line */
+.status.changed { animation: rise var(--t-fast) var(--ease-out); }
+
+/* Refresh: skeleton shimmer, then rows in sequence */
+.skel { height: 40px; border-radius: var(--r-item); margin: 0 0 2px; background:
+  linear-gradient(90deg, transparent 0%, color-mix(in oklch, var(--surface) 70%, transparent) 50%, transparent 100%) 0 0 / 200% 100% no-repeat, var(--hover);
+  animation: shimmer 1100ms linear infinite; }
+@keyframes shimmer { from { background-position: 150% 0, 0 0; } to { background-position: -50% 0, 0 0; } }
+.list.enter li { animation: rise var(--t-base) var(--ease-out) both; animation-delay: calc(var(--i) * 30ms); }
+
+/* Tooltip (5) and rail flyout (14): one element, fades and slides from its anchor */
+.tip { position: fixed; z-index: 100; max-width: 260px; padding: 4px 8px; border-radius: var(--r-input); pointer-events: none;
+  background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border), 0 4px 12px oklch(0.2 0.02 250 / 0.18); font-size: 12px; line-height: 16px; white-space: pre-line;
+  opacity: 0; transform: translateY(-3px); transition: opacity var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out); }
+.tip.side { transform: translateX(-6px); }
+.tip.show { opacity: 1; transform: none; }
+
+/* Apply in progress (1) and refresh changes (10): a highlight runs across the row */
+.working, .flash { position: relative; overflow: hidden; }
+.working::after, .flash::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--accent) 24%, transparent), transparent) 0 0 / 50% 100% no-repeat; }
+.working::after { animation: sweep-row 900ms var(--ease-out) infinite; }
+.flash::after { animation: sweep-row 700ms var(--ease-out); }
+@keyframes sweep-row { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+/* Apply success (2): changed-marks fold away one after another */
+.ip.settle .diff { animation: fold 180ms ease-in forwards; animation-delay: calc(var(--i) * 60ms); }
+@keyframes fold { to { transform: rotate(45deg) scale(0); } }
+/* Apply failure (3): the row shakes, the reason slides out under it */
+.ip.shake { animation: shake 360ms var(--ease-out); }
+@keyframes shake { 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+.form > .row-msg { grid-column: 2; min-height: 0; margin-top: -4px; gap: 6px; font-size: 12px; line-height: 16px; color: var(--bad);
+  overflow: hidden; animation: msg-in var(--t-base) var(--ease-out); }
+.row-msg i { font-size: 14px; }
+.row-msg.hint { color: var(--muted); }
+@keyframes msg-in { from { opacity: 0; max-height: 0; transform: translateY(-4px); } to { max-height: 16px; } }
+/* Live validation (8): an out-of-range octet turns red while typing */
+.ip.over { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+.ip input.over { color: var(--bad); }
+.main { position: relative; overflow: hidden; min-width: 0; }
+.actions { min-width: 0; }
+/* Copy feedback (6) */
+.copy .v.copied { color: var(--ok); }
+.copy .v i { font-size: 12px; margin-right: 4px; }
+.copy .v.in { animation: rise var(--t-fast) var(--ease-out); }
+.status i { margin-right: 4px; }
+/* None tile becomes a real tile (7) */
+.tag.fill { animation: tile-in 220ms var(--ease-out); }
+@keyframes tile-in { from { opacity: 0; transform: scale(0.8); } }
+/* Link change (9): chip crossfades (WAAPI), sidebar dot pulses once */
+.dot.pulse { animation: pulse 700ms var(--ease-out); }
+.dot.off.pulse { animation-name: pulse-off; }
+@keyframes pulse { from { outline: 2px solid var(--ok); outline-offset: 0; } to { outline: 2px solid transparent; outline-offset: 7px; } }
+@keyframes pulse-off { from { outline: 2px solid var(--faint); outline-offset: 0; } to { outline: 2px solid transparent; outline-offset: 7px; } }
+/* Down or disabled adapter (11): the status line says why, the form steps back until touched */
+.form { transition: opacity var(--t-slow) var(--ease-out); }
+.scroll.dim .form { opacity: 0.55; }
+.scroll.dim .form:hover, .scroll.dim .form:focus-within { opacity: 1; }
+/* Theme switch (12) */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 240ms; }
+/* App open (13): the form's shape first, values count in after */
+.loading :is(.ip, .seg, .slot-btn, .ext .tag, .prefix, .state, #a-name, #a-icon, .desc, .kv .v) {
+  color: transparent !important; border-color: transparent !important; outline-color: transparent !important; box-shadow: none !important;
+  background-color: var(--hover) !important; background-repeat: no-repeat; background-size: 200% 100%;
+  background-image: linear-gradient(90deg, transparent 0%, color-mix(in oklch, var(--surface) 70%, transparent) 50%, transparent 100%) !important;
+  animation: shimmer 1100ms linear infinite; }
+.loading :is(.ip, .seg, .slot-btn) > *, .loading .tag::after { visibility: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after, ::backdrop { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="window" role="application" aria-label="Octet">
+  <div class="titlebar"><i class="ph ph-network"></i>Octet</div>
+  <div class="body">
+    <nav class="side" aria-label="Adapters">
+      <div class="side-head">
+        <button class="icon-btn" id="collapse" aria-expanded="true" aria-controls="list" title="Collapse sidebar (Ctrl+B)" aria-label="Collapse sidebar"><i class="ph ph-sidebar-simple"></i></button>
+        <h2 data-t="adapters">Adapters</h2>
+        <button class="icon-btn" id="refresh" title="Refresh (F5)" aria-label="Refresh"><i class="ph ph-arrow-clockwise"></i></button>
+      </div>
+      <ul class="list" id="list"></ul>
+      <div class="side-foot">
+        <button class="item" id="open-settings" title="Settings"><i class="ph ph-gear-six"></i><span class="name" data-t="settings">Settings</span></button>
+      </div>
+    </nav>
+
+    <section class="main">
+      <div class="scroll">
+        <div class="head-wrap">
+          <div class="head">
+            <h1><i id="a-icon" class="ph ph-wifi-high"></i><span id="a-name"></span></h1>
+            <span class="state" id="a-state-chip"><span class="dot" id="a-dot"></span><span id="a-state"></span></span>
+            <span></span>
+            <button class="icon-btn" id="more" aria-haspopup="menu" title="Adapter tools" aria-label="Adapter tools"><i class="ph ph-dots-three"></i></button>
+            <p class="sub">
+              <span class="desc" id="a-desc"></span>
+              <button class="kv copy" id="mac-kv" title="Click to copy"><span class="k">MAC</span><span class="v" id="a-mac"></span></button>
+            </p>
+          </div>
+          <div class="menu" id="tools" role="menu" style="right:0; top:36px">
+            <button role="menuitem" data-act="release"><i class="ph ph-arrow-line-up"></i><span data-t="release">Release DHCP</span></button>
+            <button role="menuitem" data-act="renew"><i class="ph ph-arrow-line-down"></i><span data-t="renew">Renew DHCP</span></button>
+            <button role="menuitem" data-act="cycle"><i class="ph ph-arrows-clockwise"></i><span data-t="cycle">Release and renew</span></button>
+            <hr>
+            <button role="menuitem" data-act="toggle"><i class="ph ph-power"></i><span id="toggle-label">Disable adapter</span></button>
+            <button role="menuitem" data-act="hide"><i class="ph ph-eye-slash"></i><span data-t="hide">Hide from list</span></button>
+            <button role="menuitemcheckbox" data-act="register" id="m-register" title="Publish this PC's name and address to the DNS server (needed on Active Directory networks)"><i class="ph ph-square"></i><span data-t="register">Register in DNS</span></button>
+            <hr>
+            <button role="menuitem" data-act="ncpa"><i class="ph ph-arrow-square-out"></i><span data-t="ncpa">Network Connections</span></button>
+          </div>
+        </div>
+
+        <hr class="break">
+
+        <div class="grid form" role="group" aria-label="IP">
+          <span class="lbl">IP</span>
+          <div class="ctl">
+            <div class="seg" role="radiogroup" aria-label="IP">
+              <span class="thumb"></span>
+              <label class="choice"><input type="radio" name="ipmode" value="auto"><span data-t="dhcp">DHCP</span></label>
+              <label class="choice"><input type="radio" name="ipmode" value="manual"><span data-t="manual">Manual</span></label>
+            </div>
+            <span class="ext"><button class="slot-btn" id="ip-act"><i class="ph ph-arrows-clockwise"></i></button></span>
+          </div>
+          <label data-t="ip" for="f-address-0">IP address</label><div id="f-address"></div>
+          <label data-t="subnet" for="f-subnet-0">Subnet mask</label><div class="subnet" id="f-subnet-wrap"></div>
+          <label data-t="gateway" for="f-gateway-0">Gateway</label><div id="f-gateway"></div>
+        </div>
+
+        <hr class="break">
+
+        <div class="grid form" role="group" aria-label="DNS">
+          <span class="lbl">DNS</span>
+          <div class="ctl">
+            <div class="seg" role="radiogroup" aria-label="DNS">
+              <span class="thumb"></span>
+              <label class="choice" id="dns-auto-wrap"><input type="radio" name="dnsmode" value="auto"><span data-t="auto">Automatic</span></label>
+              <label class="choice"><input type="radio" name="dnsmode" value="manual"><span data-t="manual">Manual</span></label>
+            </div>
+            <span class="ext">
+              <button class="slot-btn" id="dns-act" aria-haspopup="menu"><i class="ph ph-broom"></i></button>
+              <div class="menu" id="presets" role="menu"></div>
+            </span>
+          </div>
+          <label data-t="dns1" for="f-dns1-0">Preferred</label><div id="f-dns1"></div>
+          <label data-t="dns2" for="f-dns2-0">Alternate</label><div id="f-dns2"></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <span class="status" id="status" role="status"></span>
+        <button class="btn" id="revert" disabled><i class="ph ph-arrow-counter-clockwise"></i><span data-t="revert">Revert</span></button>
+        <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<p class="note">Layout demo with sample data. Nothing here touches the network. Try: switch adapters, Manual, typing octets (3 digits or "." moves on, arrow keys cross), the "..." tools menu, Settings.</p>
+
+<dialog id="settings">
+  <form method="dialog">
+    <div class="dlg-body">
+      <h3 data-t="settings">Settings</h3>
+      <div class="set">
+        <span class="lbl" data-t="theme">Theme</span>
+        <select id="s-theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+        <span class="lbl" data-t="language">Language</span>
+        <select id="s-lang"><option value="en">English</option><option value="th">ไทย</option></select>
+        <span class="lbl" data-t="tray">Tray</span>
+        <div class="stack">
+          <label class="check"><input type="checkbox"><span data-t="startTray">Start in tray</span></label>
+          <label class="check"><input type="checkbox" checked><span data-t="minTray">Minimize to tray</span></label>
+        </div>
+        <span class="lbl" data-t="hidden">Hidden</span>
+        <div class="stack" id="s-hidden"></div>
+        <span class="lbl" data-t="updates">Updates</span>
+        <label class="check"><input type="checkbox" checked><span data-t="checkUpdates">Check automatically</span></label>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <span style="display:flex; gap: var(--s4); align-items:center">
+        <button type="button" class="link" data-t="help">Help (F1)</button>
+        <button type="button" class="link" data-t="about">About</button>
+      </span>
+      <button class="btn primary" value="close" data-t="done">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+// Sample adapters modelled on a real read. Mock data only.
+const adapters = [
+  { id: 1, name: "Wi-Fi", desc: "Qualcomm FastConnect 7800 Wi-Fi 7 High Band Simultaneous (HBS) Network Adapter",
+    mac: "02-08-64-03-B7-0B", state: "up", dhcpServer: "10.0.0.1",
+    cfg: { ipAuto: true, address: "10.0.1.124", subnet: "255.255.254.0", gateway: "10.0.0.1", dnsAuto: true, dns1: "8.8.8.8", dns2: "8.8.4.4", register: true } },
+  { id: 2, name: "Ethernet", desc: "Realtek USB GbE Family Controller", mac: "00-E0-4C-68-04-66", state: "down", dhcpServer: "",
+    cfg: { ipAuto: false, address: "192.168.50.20", subnet: "255.255.255.0", gateway: "192.168.50.254", dnsAuto: false, dns1: "192.168.50.254", dns2: "1.1.1.1", register: true } },
+  { id: 3, name: "Npcap Loopback Adapter", desc: "Npcap Loopback Adapter", mac: "02-00-4C-4F-4F-50", state: "up", dhcpServer: "",
+    cfg: { ipAuto: true, address: "169.254.165.178", subnet: "255.255.0.0", gateway: "", dnsAuto: true, dns1: "", dns2: "", register: true } },
+  { id: 5, name: "vEthernet (WSL)", desc: "Hyper-V Virtual Ethernet Adapter", mac: "00-15-5D-A1-3C-02", state: "up", dhcpServer: "",
+    cfg: { ipAuto: false, address: "172.24.80.1", subnet: "255.255.240.0", gateway: "", dnsAuto: false, dns1: "", dns2: "", register: false } },
+  { id: 6, name: "Tailscale", desc: "Tailscale Tunnel", mac: "", state: "up", dhcpServer: "",
+    cfg: { ipAuto: false, address: "100.101.5.7", subnet: "255.255.255.255", gateway: "", dnsAuto: false, dns1: "100.100.100.100", dns2: "", register: false } },
+  { id: 4, name: "Bluetooth Network Connection", desc: "Bluetooth Device (Personal Area Network)", mac: "D4-54-8B-1F-22-07", state: "disabled", dhcpServer: "",
+    cfg: { ipAuto: true, address: "", subnet: "", gateway: "", dnsAuto: true, dns1: "", dns2: "", register: true } },
+];
+const hidden = new Set();
+let sel = 0, draft = null, lang = "en";
+
+const T = {
+  en: { adapters: "Adapters", settings: "Settings", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
+    hide: "Hide from list", ncpa: "Network Connections", dhcpServer: "DHCP server", state: "State", ipMode: "IP address",
+    dhcp: "DHCP", manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
+    dns1: "Preferred", dns2: "Alternate", register: "Register in DNS", revert: "Revert", apply: "Apply",
+    theme: "Theme", language: "Language", tray: "Tray", startTray: "Start in tray", minTray: "Minimize to tray",
+    hidden: "Hidden", updates: "Updates", checkUpdates: "Check automatically", help: "Help (F1)", about: "About", done: "Done",
+    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes",
+    changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
+    noneHidden: "No hidden adapters" },
+  th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", release: "ปล่อย DHCP", renew: "ขอ DHCP ใหม่", cycle: "ปล่อยแล้วขอใหม่",
+    hide: "ซ่อนจากรายการ", ncpa: "Network Connections", dhcpServer: "DHCP server", state: "สถานะ", ipMode: "IP address",
+    dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
+    dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "ลงทะเบียนใน DNS", revert: "คืนค่า", apply: "ใช้ค่า",
+    theme: "ธีม", language: "ภาษา", tray: "ถาดระบบ", startTray: "เริ่มในถาดระบบ", minTray: "ย่อไปถาดระบบ",
+    hidden: "ที่ซ่อนไว้", updates: "อัปเดต", checkUpdates: "ตรวจอัตโนมัติ", help: "วิธีใช้ (F1)", about: "เกี่ยวกับ", done: "เสร็จ",
+    up: "เชื่อมต่ออยู่", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดใช้งาน", none: "ไม่มี", noChanges: "ไม่มีการเปลี่ยนแปลง",
+    changes: n => `มี ${n} รายการที่ยังไม่ได้ใช้`, applied: n => `ใช้ค่ากับ ${n} แล้ว`, disable: "ปิดอะแดปเตอร์", enable: "เปิดอะแดปเตอร์",
+    noneHidden: "ไม่มีอะแดปเตอร์ที่ซ่อน" },
+};
+const t = k => T[lang][k];
+const $ = id => document.getElementById(id);
+
+// ---------- adapter kind ----------
+// The demo guesses from names; the real app reads Get-NetAdapter (MediaType, Virtual,
+// HardwareInterface, ComponentID) and only falls back to names.
+function kind(a) {
+  const s = `${a.name} ${a.desc}`.toLowerCase();
+  if (/loopback/.test(s)) return "loopback";
+  if (/bluetooth/.test(s)) return "bluetooth";
+  if (/wi-?fi|wireless|wlan|802\.11/.test(s)) return "wifi";
+  if (/vpn|wireguard|openvpn|tap-windows|anyconnect|fortinet|zerotier|tailscale|tunnel/.test(s)) return "vpn";
+  if (/hyper-v|vmware|virtualbox|vethernet|wsl|virtual/.test(s)) return "virtual";
+  if (/cellular|mobile broadband|wwan|\blte\b/.test(s)) return "cellular";
+  return "ethernet";
+}
+const kindIcon = { wifi: "ph-wifi-high", ethernet: "ph-network", bluetooth: "ph-bluetooth", loopback: "ph-arrow-u-up-left",
+  vpn: "ph-lock-key", virtual: "ph-cube", cellular: "ph-cell-signal-full" };
+const kindName = { wifi: "Wi-Fi", ethernet: "Ethernet", bluetooth: "Bluetooth", loopback: "Loopback", vpn: "VPN / tunnel", virtual: "Virtual", cellular: "Cellular" };
+
+// ---------- address classification ----------
+const ipNum = v => v.split(".").reduce((n, o) => n * 256 + +o, 0);
+const inNet = (v, net, bits) => (ipNum(v) >>> (32 - bits)) === (ipNum(net) >>> (32 - bits));
+function scope(v) {
+  if (!validIp(v)) return null;
+  if (inNet(v, "127.0.0.0", 8)) return ["Loop", "Loopback: this machine only"];
+  if (inNet(v, "169.254.0.0", 16)) return ["APIPA", "Link-local: no DHCP answer, Windows picked this itself"];
+  if (inNet(v, "10.0.0.0", 8) || inNet(v, "172.16.0.0", 12) || inNet(v, "192.168.0.0", 16)) return ["Private", "Private range (RFC 1918)"];
+  if (inNet(v, "100.64.0.0", 10)) return ["CGNAT", "Shared address space (RFC 6598), used by carriers and Tailscale"];
+  return ["Public", "Reachable on the internet"];
+}
+// Simple Icons slugs; the mark is drawn in the text colour through a CSS mask.
+const resolvers = [
+  [["8.8.8.8", "8.8.4.4"], "Google Public DNS", "google"],
+  [["1.1.1.1", "1.0.0.1", "1.1.1.2", "1.0.0.2", "1.1.1.3", "1.0.0.3"], "Cloudflare", "cloudflare"],
+  [["9.9.9.9", "149.112.112.112"], "Quad9", "quad9"],
+  [["94.140.14.14", "94.140.15.15"], "AdGuard DNS", "adguard"],
+  [["208.67.222.222", "208.67.220.220"], "OpenDNS (Cisco)", "cisco"],
+  [["45.90.28.0", "45.90.30.0"], "NextDNS", "nextdns"],
+];
+function resolver(v) {
+  if (!validIp(v)) return null;
+  const hit = resolvers.find(([ips]) => ips.includes(v));
+  if (hit) return { logo: hit[2], title: hit[1] };
+  if (v === "100.100.100.100") return { logo: "tailscale", title: "Tailscale MagicDNS" };
+  const gw = adapters[sel].cfg.gateway;
+  if (gw && v === gw) return { text: "Router", title: "Your gateway answers DNS" };
+  const sc = scope(v)[0];
+  if (sc !== "Public") return { text: "Local", title: `${sc} DNS server on your network` };
+  return { text: "Public", title: "Public resolver" };
+}
+function tag(field, info, cls) {
+  // Right-column tiles never vanish: an empty value gets an explicit "None" slot.
+  if (!info && field.tag.parentElement.classList.contains("ext")) { info = { text: "None", title: "Not set" }; cls = "empty"; }
+  const el = field.tag, key = info ? JSON.stringify(info) : "";
+  if (el.dataset.key === key) return;
+  const wasEmpty = el.classList.contains("empty");
+  el.dataset.key = key;
+  el.className = "tag" + (cls ? " " + cls : "");
+  el.textContent = ""; el.style.removeProperty("--logo"); el.title = "";
+  if (!info) return;
+  if (info.logo) { el.classList.add("logo"); el.style.setProperty("--logo", `url(https://cdn.simpleicons.org/${info.logo})`); }
+  else el.textContent = info.text;
+  el.title = info.title || "";
+  void el.offsetWidth; el.classList.add(wasEmpty && cls !== "empty" ? "fill" : "fresh");
+}
+function updateTags() {
+  const shown = k => fields[k].inputs.map(shownOf).join(".");
+  const sc = scope(shown("address"));
+  tag(fields.address, sc && { text: sc[0], title: sc[1] }, sc && sc[0] === "Public" ? "public" : "");
+  // The DHCP server is almost always the gateway: mark it there instead of a loose line of text.
+  const a = adapters[sel], gw = shown("gateway");
+  const gsc = scope(gw);
+  tag(fields.gateway, a.dhcpServer && gw === a.dhcpServer ? { text: "DHCP", title: "Also the DHCP server that leased this address" }
+    : gsc && { text: gsc[0], title: gsc[1] }, gsc && gsc[0] === "Public" ? "public" : "");
+  tag(fields.dns1, resolver(shown("dns1")));
+  tag(fields.dns2, resolver(shown("dns2")));
+}
+
+// Count-up (Motion Reference): an octet runs from its old number to the new one.
+const shownOf = x => x.dataset.final ?? x.value;
+function countTo(x, next, delay) {
+  const from = /^\d+$/.test(x.value) ? +x.value : 0, to = /^\d+$/.test(next) ? +next : null;
+  const token = (x._count = (x._count || 0) + 1);
+  x.dataset.final = next;
+  const finish = () => { if (x._count === token) { x.value = next; delete x.dataset.final; } };
+  if (to === null || from === to || calm.matches) { finish(); return; }
+  const dur = 700, start = performance.now() + delay;
+  const step = now => {
+    if (x._count !== token) return;
+    const t = Math.min(1, Math.max(0, (now - start) / dur)), e = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+    x.value = String(Math.round(from + (to - from) * e));
+    t < 1 ? requestAnimationFrame(step) : finish();
+  };
+  requestAnimationFrame(step);
+  setTimeout(finish, delay + dur + 120);   // background tabs pause rAF; never leave a stale number
+}
+
+// ---------- IPv4 field ----------
+const masks = Array.from({ length: 33 }, (_, n) => {
+  const v = n ? (0xffffffff << (32 - n)) >>> 0 : 0;
+  return [24, 16, 8, 0].map(s => (v >>> s) & 255).join(".");
+});
+const prefixOf = m => masks.indexOf(m);
+
+function ipField(host, key, short, ext) {
+  host.innerHTML = "";
+  const box = document.createElement("div");
+  box.className = "ip" + (short ? " short" : "");
+  const inputs = [];
+  for (let i = 0; i < 4; i++) {
+    if (i) { const s = document.createElement("span"); s.className = "sep"; s.textContent = "."; box.append(s); }
+    const inp = document.createElement("input");
+    inp.id = `f-${key}-${i}`; inp.inputMode = "numeric"; inp.maxLength = 3; inp.autocomplete = "off";
+    inp.setAttribute("aria-label", `${key} octet ${i + 1}`);
+    inputs.push(inp); box.append(inp);
+  }
+  const d = document.createElement("span"); d.className = "diff"; d.title = "Changed"; box.append(d);
+  const tg = document.createElement("span"); tg.className = "tag";
+  host.append(box);
+  if (ext) { const slot = document.createElement("span"); slot.className = "ext"; slot.append(tg); host.append(slot); }
+  else box.append(tg);
+  const go = i => { const el = inputs[i]; if (el) { el.focus(); el.select(); } };
+  inputs.forEach((inp, i) => {
+    inp.addEventListener("keydown", e => {
+      const atStart = inp.selectionStart === 0 && inp.selectionEnd === 0;
+      const atEnd = inp.selectionStart === inp.value.length;
+      if (e.key === "." || e.key === " ") { e.preventDefault(); if (inp.value) go(i + 1); }
+      else if (e.key === "ArrowRight" && atEnd) { e.preventDefault(); i < 3 ? go(i + 1) : box.dispatchEvent(new CustomEvent("exit-right")); }
+      else if (e.key === "ArrowLeft" && atStart) { e.preventDefault(); go(i - 1); }
+      else if (e.key === "Backspace" && atStart && !inp.value) { e.preventDefault(); go(i - 1); }
+    });
+    inp.addEventListener("input", () => {
+      inp.value = inp.value.replace(/\D/g, "");
+      if (inp.value.length === 3 && i < 3) go(i + 1);
+      write();
+    });
+    inp.addEventListener("blur", () => {
+      if (/^0\d/.test(inp.value)) { inp.value = String(+inp.value); write(); }
+    });
+    inp.addEventListener("paste", e => {
+      const text = e.clipboardData.getData("text").trim();
+      if (/\s|\//.test(text) && pasteConfig(text)) { e.preventDefault(); return; }
+      const parts = text.split(".");
+      if (parts.length === 4) { e.preventDefault(); parts.forEach((p, j) => inputs[j].value = p.replace(/\D/g, "").slice(0, 3)); write(); }
+    });
+  });
+  function write() {
+    inputs.forEach(x => { x._count = (x._count || 0) + 1; delete x.dataset.final; });  // typing stops a count
+    const v = inputs.map(x => x.value);
+    inputs.forEach(x => x.classList.toggle("over", +x.value > 255));
+    const over = v.some(x => +x > 255);
+    box.classList.toggle("over", over);
+    rowMsg(key, over ? "Each number is 0 to 255" : null, "hint");
+    draft[key] = v.every(x => x === "") ? "" : v.map(x => x === "" ? x : String(+x)).join(".");
+    sync(key);
+  }
+  return {
+    box, inputs, tag: tg,
+    set(value, editable, roll = false) {
+      const p = value ? value.split(".") : ["", "", "", ""];
+      inputs.forEach((x, j) => {
+        const next = p[j] ?? "";
+        x.disabled = !editable;
+        if (roll && (x.dataset.final ?? x.value) !== next) countTo(x, next, j * 40);
+        else if (x.dataset.final === undefined) x.value = next;
+      });
+      box.classList.toggle("ro", !editable);
+    },
+  };
+}
+
+const fields = {
+  address: ipField($("f-address"), "address", true, true),
+  gateway: ipField($("f-gateway"), "gateway", true, true),
+  dns1: ipField($("f-dns1"), "dns1", true, true),
+  dns2: ipField($("f-dns2"), "dns2", true, true),
+};
+// Subnet: short octet box, then "/ prefix", so every row ends on the same right edge.
+fields.subnet = ipField($("f-subnet-wrap"), "subnet", true);
+const slash = document.createElement("span"); slash.className = "slash"; slash.textContent = "/";
+const prefix = document.createElement("input"); prefix.className = "prefix"; prefix.maxLength = 2; prefix.inputMode = "numeric";
+prefix.setAttribute("aria-label", "Prefix length");
+$("f-subnet-wrap").append(slash, prefix);
+fields.subnet.box.addEventListener("exit-right", () => { prefix.focus(); prefix.select(); });
+prefix.addEventListener("keydown", e => {
+  if ((e.key === "ArrowLeft" && prefix.selectionStart === 0) || (e.key === "Backspace" && !prefix.value)) {
+    e.preventDefault(); const last = fields.subnet.inputs[3]; last.focus(); last.select();
+  }
+});
+prefix.addEventListener("input", () => {
+  prefix.value = prefix.value.replace(/\D/g, "");
+  const n = +prefix.value;
+  if (prefix.value !== "" && n <= 32) { draft.subnet = masks[n]; fields.subnet.set(draft.subnet, true); }
+  sync("prefix");
+});
+
+// Message under a row: apply errors and typing hints. null removes it.
+function rowMsg(key, text, kind = "") {
+  const host = fields[key].box.parentElement;
+  let m = host.nextElementSibling?.classList.contains("row-msg") ? host.nextElementSibling : null;
+  if (!text) { m?.remove(); return; }
+  if (m && m.dataset.text === text) return;
+  m?.remove();
+  m = document.createElement("div"); m.className = "row-msg " + kind; m.dataset.text = text;
+  m.innerHTML = `<i class="ph ${kind === "hint" ? "ph-info" : "ph-warning-circle"}"></i><span></span>`;
+  m.lastChild.textContent = text;
+  host.after(m);
+}
+const clearMsgs = () => document.querySelectorAll(".row-msg").forEach(m => m.remove());
+const replay = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+function flash(el) { replay(el, "flash"); clearTimeout(el._flash); el._flash = setTimeout(() => el.classList.remove("flash"), 800); }
+
+// ---------- validation and state ----------
+const validIp = v => /^\d{1,3}(\.\d{1,3}){3}$/.test(v) && v.split(".").every(o => +o <= 255);
+function problems() {
+  const out = [];
+  if (!draft.ipAuto) {
+    if (!validIp(draft.address)) out.push(["address", t("ip")]);
+    if (prefixOf(draft.subnet) < 1) out.push(["subnet", t("subnet")]);
+    if (draft.gateway && !validIp(draft.gateway)) out.push(["gateway", t("gateway")]);
+  }
+  if (!draft.dnsAuto) {
+    if (draft.dns1 && !validIp(draft.dns1)) out.push(["dns1", t("dns1")]);
+    if (draft.dns2 && !validIp(draft.dns2)) out.push(["dns2", t("dns2")]);
+  }
+  return out;
+}
+const keys = ["ipAuto", "address", "subnet", "gateway", "dnsAuto", "dns1", "dns2", "register"];
+const changed = () => keys.filter(k => {
+  const a = adapters[sel].cfg;
+  if (draft.ipAuto && ["address", "subnet", "gateway"].includes(k)) return false;
+  if (draft.dnsAuto && ["dns1", "dns2"].includes(k)) return false;
+  return a[k] !== draft[k];
+});
+
+function say(text, kind = "", ic = "") {
+  const st = $("status");
+  st.removeAttribute("title"); delete st.dataset.tip;
+  const fresh = st.textContent !== text;
+  st.textContent = text;
+  if (ic) st.insertAdjacentHTML("afterbegin", `<i class="ph ph-${ic}"></i>`);
+  st.className = "status" + (kind ? " " + kind : "");
+  if (fresh) { void st.offsetWidth; st.classList.add("changed"); }
+}
+const icon = (button, name) => window.morph?.[button]?.(name);
+
+function sync(from) {
+  const a = adapters[sel].cfg, diff = changed(), bad = problems();
+  for (const k of ["address", "subnet", "gateway", "dns1", "dns2"]) {
+    const f = fields[k];
+    f.box.classList.toggle("changed", diff.includes(k));
+    f.box.classList.toggle("invalid", bad.some(([b]) => b === k) && draft[k] !== "" && !f.box.contains(document.activeElement));
+  }
+  if (from !== "prefix") { const shownMask = fields.subnet.inputs.map(shownOf).join("."), p = prefixOf(shownMask); prefix.value = p >= 0 ? p : ""; }
+  updateTags();
+  if (bad.length && diff.length) say(bad.map(b => b[1]).join(", ") + (lang === "th" ? " ไม่ถูกต้อง" : " needs a valid value"), "bad");
+  else if (diff.length) say(t("changes")(diff.length));
+  // Idle: the line explains an adapter that is down or off instead of "No changes".
+  else if (adapters[sel].state === "disabled") { say("Adapter is off", "", "power"); $("status").title = "Settings are kept but not in use until the adapter is enabled"; }
+  else if (adapters[sel].state === "down") { say("Not connected", "", "plugs"); $("status").title = "Settings apply when it connects"; }
+  else say(t("noChanges"));
+  for (const [id, off] of [["apply", !diff.length || bad.length > 0], ["revert", !diff.length]]) {
+    const b = $(id);
+    b.disabled = off;
+  }
+}
+
+// Read-only rows show what Windows has now, not the hidden draft; roll = values changed underneath.
+function renderForm(roll = false) {
+  const ipEdit = !draft.ipAuto, dnsEdit = !draft.dnsAuto, cur = adapters[sel].cfg;
+  document.querySelector(`input[name=ipmode][value=${draft.ipAuto ? "auto" : "manual"}]`).checked = true;
+  document.querySelector(`input[name=dnsmode][value=${draft.dnsAuto ? "auto" : "manual"}]`).checked = true;
+  const dnsAuto = document.querySelector("input[name=dnsmode][value=auto]");
+  dnsAuto.disabled = !draft.ipAuto;
+  $("dns-auto-wrap").classList.toggle("disabled", !draft.ipAuto);
+  $("dns-auto-wrap").title = draft.ipAuto ? "" : "Automatic DNS needs DHCP";
+  for (const k of ["address", "subnet", "gateway"]) fields[k].set(ipEdit ? draft[k] : cur[k], ipEdit, roll);
+  for (const k of ["dns1", "dns2"]) fields[k].set(dnsEdit ? draft[k] : cur[k], dnsEdit, roll);
+  prefix.disabled = !ipEdit;
+  renderRegister();
+  clearMsgs();
+  sync();
+  renderSlots();
+}
+
+function renderAdapterFacts() {
+  const a = adapters[sel];
+  $("a-name").textContent = a.name;
+  $("a-icon").className = "ph " + kindIcon[kind(a)];
+  $("a-icon").title = kindName[kind(a)];
+  $("a-desc").textContent = a.desc; $("a-desc").title = a.desc;
+  $("a-mac").textContent = a.mac;
+  // DHCP server only exists while a lease does; no empty "None" slot.
+  // Only when the DHCP server is not the gateway does it need its own text.
+  $("a-state").textContent = t(a.state);
+  const chip = $("a-state-chip"), was = chip.dataset.key, now = a.id + ":" + a.state;
+  chip.dataset.key = now;
+  if (was && was !== now && was.split(":")[0] === String(a.id) && !calm.matches)
+    chip.animate([{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
+  const off = a.state !== "up";
+  document.querySelector(".scroll").classList.toggle("dim", off);
+  if (draft) sync();
+  $("a-state-chip").className = "state" + (a.state === "up" ? "" : " off");
+  $("a-dot").className = "dot" + (a.state === "up" ? "" : " off");
+  $("toggle-label").textContent = a.state === "disabled" ? t("enable") : t("disable");
+}
+function renderAdapter(roll = false) {
+  renderAdapterFacts();
+  draft = structuredClone(adapters[sel].cfg);
+  renderForm(roll);
+}
+
+const indicator = document.createElement("span");
+indicator.className = "indicator";
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
+function placeIndicator(animate = false) {
+  const cur = $("list").querySelector('.item[aria-current="true"]');
+  indicator.style.opacity = cur ? 1 : 0;
+  if (!cur) return;
+  const to = cur.parentElement.offsetTop, h = cur.offsetHeight;
+  const from = indicator.dataset.top === undefined ? to : +indicator.dataset.top;
+  indicator.dataset.top = to;
+  indicator.style.height = h + "px";
+  indicator.style.transform = `translateY(${to}px)`;
+  if (!animate || from === to || calm.matches) return;
+  // Stretch over both rows first, then contract onto the target (320ms, easeOutCubic tail).
+  const top = Math.min(from, to), span = Math.abs(to - from) + h;
+  indicator.animate([
+    { transform: `translateY(${from}px)`, height: h + "px", easing: "cubic-bezier(0.5, 0, 0.75, 0)" },
+    { transform: `translateY(${top}px)`, height: span + "px", offset: 0.4, easing: "cubic-bezier(0.33, 1, 0.68, 1)" },
+    { transform: `translateY(${to}px)`, height: h + "px" },
+  ], { duration: 320 });
+}
+function renderList(enter = false) {
+  const ul = $("list"); ul.innerHTML = ""; ul.append(indicator);
+  ul.classList.toggle("enter", enter);
+  let n = 0;
+  adapters.forEach((a, i) => {
+    if (hidden.has(a.id)) return;
+    const li = document.createElement("li");
+    li.style.setProperty("--i", n++);
+    const b = document.createElement("button");
+    b.className = "item" + (a.state === "up" ? "" : " off");
+    b.setAttribute("aria-current", i === sel);
+    b.title = `${a.name}\n${kindName[kind(a)]} · ${t(a.state)}`;
+    b.innerHTML = `<i class="ph ${kindIcon[kind(a)]}"></i><span class="name"></span><span class="dot ${a.state === "up" ? "" : "off"}"></span>`;
+    b.querySelector(".name").textContent = a.name;
+    if (seen[a.id] && seen[a.id] !== a.state && !calm.matches) b.querySelector(".dot").classList.add("pulse");
+    seen[a.id] = a.state;
+    b.onclick = () => select(i);
+    li.append(b); ul.append(li);
+  });
+  placeIndicator(animateNext);
+  animateNext = false;
+}
+let animateNext = false;
+const seen = {};   // last state drawn per adapter, so a change can pulse its dot
+function select(i) {
+  if (i === sel) return;
+  if (changed().length && !confirm(lang === "th" ? `ทิ้งค่าที่แก้ของ ${adapters[sel].name}?` : `Discard changes to ${adapters[sel].name}?`)) return;
+  sel = i; animateNext = true; renderList(); renderAdapter();
+  const sc = document.querySelector(".scroll");
+  sc.classList.remove("swap"); void sc.offsetWidth; sc.classList.add("swap");
+}
+
+// ---------- events ----------
+document.querySelectorAll("input[name=ipmode]").forEach(r => r.onchange = () => {
+  draft.ipAuto = r.value === "auto";
+  if (!draft.ipAuto) draft.dnsAuto = false;   // static IP needs static DNS
+  renderForm();
+  if (!draft.ipAuto) fields.address.inputs[0].focus();
+});
+document.querySelectorAll("input[name=dnsmode]").forEach(r => r.onchange = () => { draft.dnsAuto = r.value === "auto"; renderForm(); });
+function renderRegister() {
+  const m = $("m-register");
+  m.setAttribute("aria-checked", draft.register);
+  m.querySelector("i").className = "ph " + (draft.register ? "ph-check-square" : "ph-square");
+}
+$("revert").onclick = () => {
+  const b = $("revert"); b.classList.remove("rewind"); void b.offsetWidth; b.classList.add("rewind");
+  draft = structuredClone(adapters[sel].cfg);
+  renderForm(true);
+  say(lang === "th" ? "คืนค่าเดิมแล้ว" : "Back to current values");
+};
+$("mac-kv").onclick = () => {
+  navigator.clipboard?.writeText(adapters[sel].mac).catch(() => {});
+  const v = $("a-mac");
+  clearTimeout(v._t);
+  v.innerHTML = `<i class="ph ph-check"></i>Copied`; v.classList.add("copied"); replay(v, "in");
+  v._t = setTimeout(() => { v.classList.remove("copied"); v.textContent = adapters[sel].mac; replay(v, "in"); }, 1200);
+};
+// Demo failures, the kind Windows or a pre-check would reject.
+function demoFailure() {
+  if (draft.ipAuto) return null;
+  if (draft.address === draft.gateway) return ["address", "Same address as the gateway"];
+  const p = prefixOf(draft.subnet);
+  if (draft.gateway && p > 0 && !inNet(draft.gateway, draft.address, p)) return ["gateway", "Gateway is outside this subnet"];
+  return null;
+}
+function rowsOf(diff) {
+  const seg = document.querySelectorAll(".seg");
+  return diff.map(k => ({ ipAuto: seg[0], dnsAuto: seg[1] })[k] || fields[k]?.box).filter(Boolean);
+}
+$("apply").onclick = () => {
+  const btn = $("apply"), a = adapters[sel], rows = rowsOf(changed());
+  btn.disabled = true; $("revert").disabled = true; btn.classList.add("spin");
+  icon("apply", "circle-notch"); clearMsgs();
+  rows.forEach(el => el.classList.add("working"));
+  say(lang === "th" ? "กำลังใช้ค่า…" : "Applying…");
+  setTimeout(() => {
+    rows.forEach(el => el.classList.remove("working"));
+    btn.classList.remove("spin");
+    const err = demoFailure();
+    if (err) {
+      icon("apply", "shield-check"); sync();
+      replay(fields[err[0]].box, "shake"); rowMsg(err[0], err[1]);
+      say("Not applied", "bad");
+      return;
+    }
+    icon("apply", "check");
+    const marks = [...document.querySelectorAll(".ip.changed")];
+    marks.forEach((b, i) => { b.style.setProperty("--i", i); b.classList.add("settle"); });
+    setTimeout(() => {
+      marks.forEach(b => b.classList.remove("settle"));
+      a.cfg = structuredClone(draft);
+      renderAdapter();
+      say(t("applied")(a.name) + " · testing…");
+      setTimeout(() => say(a.cfg.gateway ? `Gateway ${1 + Math.floor(Math.random() * 4)} ms · DNS ok` : t("applied")(a.name), "ok", "check"), 900);
+      setTimeout(() => icon("apply", "shield-check"), 1200);
+    }, calm.matches ? 0 : 180 + marks.length * 60);
+  }, 900);
+};
+// Refresh: spinner and skeleton rows while reading, then rows arrive in order
+$("refresh").onclick = () => {
+  const btn = $("refresh"), ul = $("list");
+  if (btn.classList.contains("spin")) return;
+  btn.classList.add("spin"); icon("refresh", "circle-notch");
+  const rows = adapters.filter(a => !hidden.has(a.id)).length;
+  ul.innerHTML = "";
+  for (let k = 0; k < rows; k++) { const li = document.createElement("li"); li.className = "skel"; ul.append(li); }
+  say(lang === "th" ? "กำลังอ่านอะแดปเตอร์…" : "Reading adapters…");
+  setTimeout(() => {
+    // Demo: the world moved while we weren't looking (cable plugged, lease changed).
+    const a = adapters[sel], before = structuredClone(a.cfg);
+    const eth = adapters.find(x => x.name === "Ethernet");
+    if (eth.state !== "disabled") eth.state = eth.state === "up" ? "down" : "up";
+    if (a.cfg.ipAuto && a.cfg.address) {
+      a.cfg.address = a.cfg.address.replace(/\d+$/, String(100 + Math.floor(Math.random() * 150)));
+      if (draft.ipAuto) draft.address = a.cfg.address;
+    }
+    renderList(true); renderAdapterFacts(); renderForm(true);
+    for (const k of ["address", "subnet", "gateway", "dns1", "dns2"])
+      if (before[k] !== a.cfg[k] && (k.startsWith("dns") ? draft.dnsAuto : draft.ipAuto)) flash(fields[k].box);
+    btn.classList.remove("spin"); icon("refresh", "check");
+    say(lang === "th" ? "อ่านอะแดปเตอร์ใหม่แล้ว" : "Adapters refreshed");
+    setTimeout(() => icon("refresh", "arrow-clockwise"), 1000);
+  }, 800);
+};
+
+const tools = $("tools");
+function setTools(open) {
+  if (tools.classList.contains("open") === open) return;
+  tools.classList.toggle("open", open);
+  $("more").setAttribute("aria-expanded", open);
+  icon("more", open ? "x" : "dots-three");
+}
+$("more").onclick = e => { e.stopPropagation(); setTools(!tools.classList.contains("open")); };
+document.addEventListener("click", () => setTools(false));
+document.addEventListener("keydown", e => { if (e.key === "Escape") setTools(false); });
+tools.onclick = e => {
+  const act = e.target.closest("button")?.dataset.act; if (!act) return;
+  if (act === "register") { e.stopPropagation(); draft.register = !draft.register; renderRegister(); sync(); return; }   // menu stays open to show the tick
+  const a = adapters[sel];
+  if (act === "hide") { hidden.add(a.id); sel = adapters.findIndex(x => !hidden.has(x.id)); renderList(); renderAdapter(); renderHidden(); return; }
+  if (act === "toggle") { a.state = a.state === "disabled" ? "down" : "disabled"; renderList(); renderAdapterFacts(); return; }
+  if (["release", "renew", "cycle"].includes(act) && a.cfg.ipAuto) { leaseAction(act); return; }
+  say({ release: "Not a DHCP adapter", renew: "Not a DHCP adapter", cycle: "Not a DHCP adapter", ncpa: "Opens ncpa.cpl (demo)" }[act]);
+};
+
+// ---------- DHCP lease (demo: a random address from the same scope) ----------
+function leaseAction(act) {
+  const a = adapters[sel];
+  const fresh = () => { const o = 100 + Math.floor(Math.random() * 150); return { address: `10.0.1.${o}`, subnet: "255.255.254.0", gateway: "10.0.0.1", dns1: "8.8.8.8", dns2: "8.8.4.4" }; };
+  const none = { address: "", subnet: "", gateway: "", dns1: "", dns2: "" };
+  const put = (v, msg) => {
+    Object.assign(a.cfg, v);
+    // While a group is automatic the draft mirrors Windows, so Manual later starts from the new lease.
+    if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = v[k];
+    if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = v[k];
+    a.dhcpServer = v.address ? "10.0.0.1" : ""; renderAdapterFacts(); renderForm(true); say(msg); };
+  if (act === "release") put(none, "Lease released");
+  else if (act === "renew") put(fresh(), "Lease renewed from 10.0.0.1");
+  else { put(none, "Releasing…"); setTimeout(() => put(fresh(), "Lease renewed from 10.0.0.1"), 700); }
+}
+
+// ---------- row buttons ----------
+const presets = [
+  { name: "Google", logo: "google", ips: ["8.8.8.8", "8.8.4.4"] },
+  { name: "Cloudflare", logo: "cloudflare", ips: ["1.1.1.1", "1.0.0.1"] },
+  { name: "Quad9", logo: "quad9", ips: ["9.9.9.9", "149.112.112.112"] },
+  { name: "AdGuard", logo: "adguard", ips: ["94.140.14.14", "94.140.15.15"] },
+];
+function slotIcon(id, name) {
+  if (window.morph?.[id]) return window.morph[id](name);
+  const i = $(id).querySelector("i.ph"); if (i) i.className = "ph ph-" + name;
+}
+function renderSlots() {
+  const a = adapters[sel], cur = a.cfg, ip = $("ip-act"), dns = $("dns-act");
+  if (draft.ipAuto) {
+    ip.dataset.act = "renew"; slotIcon("ip-act", "arrows-clockwise");
+    ip.disabled = !cur.ipAuto;
+    ip.title = cur.ipAuto ? `Renew lease${a.dhcpServer ? " from " + a.dhcpServer : ""}` : "Apply DHCP first, then renew";
+  } else {
+    ip.dataset.act = "pull"; slotIcon("ip-act", "tray-arrow-down");
+    ip.disabled = !cur.address;
+    ip.title = "Fill with the values Windows has now";
+  }
+  ip.setAttribute("aria-label", ip.title);
+  if (draft.dnsAuto) { dns.dataset.act = "flush"; slotIcon("dns-act", "broom"); dns.title = "Flush DNS cache"; }
+  else { dns.dataset.act = "presets"; slotIcon("dns-act", "list-bullets"); dns.title = "Choose a DNS provider"; }
+  dns.setAttribute("aria-label", dns.title);
+  setPresets(false);
+}
+function busy(btn, ms, done, motion = "spin") { btn.classList.add(motion); btn.disabled = true; setTimeout(() => { btn.classList.remove(motion); btn.disabled = false; done(); }, ms); }
+$("ip-act").onclick = () => {
+  const btn = $("ip-act"), cur = adapters[sel].cfg;
+  if (btn.dataset.act === "renew") { say("Renewing lease…"); busy(btn, 600, () => { leaseAction("renew"); renderSlots(); }); return; }
+  for (const k of ["address", "subnet", "gateway"]) { draft[k] = cur[k]; fields[k].set(cur[k], true, true); }
+  sync(); say("Filled with current values");
+};
+function setPresets(open) {
+  const menu = $("presets");
+  menu.classList.toggle("open", open);
+  menu.classList.remove("up");
+  $("dns-act").setAttribute("aria-expanded", open);
+  if (!open) return;
+  const gw = draft.gateway || adapters[sel].cfg.gateway;
+  menu.innerHTML = "";
+  for (const p of [...presets, { name: "Router", icon: "ph-house", ips: [gw, ""], off: !validIp(gw || "") }]) {
+    const b = document.createElement("button");
+    b.setAttribute("role", "menuitem"); b.disabled = !!p.off;
+    b.innerHTML = p.logo ? `<span class="plogo" style="--logo:url(https://cdn.simpleicons.org/${p.logo})"></span>` : `<i class="ph ${p.icon}"></i>`;
+    b.insertAdjacentHTML("beforeend", `<span></span>`);
+    b.children[1].textContent = p.name;
+    b.title = p.off ? "No gateway" : p.ips.filter(Boolean).join(", ");
+    b.onclick = e => {
+      e.stopPropagation();
+      [draft.dns1, draft.dns2] = p.ips;
+      fields.dns1.set(draft.dns1, true, true); fields.dns2.set(draft.dns2, true, true);
+      setPresets(false); sync(); say(`DNS set to ${p.name}`);
+    };
+    menu.append(b);
+  }
+  const limit = document.querySelector(".actions").getBoundingClientRect().top;
+  if (menu.getBoundingClientRect().bottom > limit - 4) menu.classList.add("up");
+}
+$("dns-act").onclick = e => {
+  e.stopPropagation();
+  const btn = $("dns-act");
+  if (btn.dataset.act === "flush") { say("Flushing DNS cache…"); busy(btn, 800, () => say("DNS cache flushed", "ok"), "sweep"); return; }
+  setPresets(!$("presets").classList.contains("open"));
+};
+document.addEventListener("click", () => setPresets(false));
+document.addEventListener("keydown", e => { if (e.key === "Escape") setPresets(false); });
+
+// ---------- whole-config copy and paste ----------
+// "192.168.1.50/24 gw 192.168.1.1 dns 1.1.1.1, 8.8.8.8" in, the same format out.
+function parseConfig(text) {
+  const ip = "(\\d{1,3}(?:\\.\\d{1,3}){3})";
+  const m = text.match(new RegExp(`^\\s*${ip}\\s*(?:/(\\d{1,2})|\\s+(?:mask\\s+)?${ip})`, "i"));
+  if (!m) return null;
+  const mask = m[2] !== undefined ? masks[+m[2]] : m[3];
+  if (!mask || !validIp(m[1])) return null;
+  const gw = text.match(new RegExp(`(?:gw|gateway)\\s*:?\\s*${ip}`, "i"));
+  const dns = text.match(new RegExp(`dns\\s*:?\\s*${ip}(?:\\s*[,\\s]\\s*${ip})?`, "i"));
+  return { address: m[1], subnet: mask, gateway: gw ? gw[1] : "", dns1: dns ? dns[1] : "", dns2: dns && dns[2] ? dns[2] : "" };
+}
+function pasteConfig(text) {
+  const c = parseConfig(text);
+  if (!c) return false;
+  draft.ipAuto = false; Object.assign(draft, { address: c.address, subnet: c.subnet, gateway: c.gateway });
+  if (c.dns1) { draft.dnsAuto = false; draft.dns1 = c.dns1; draft.dns2 = c.dns2; } else draft.dnsAuto = false;
+  renderForm();
+  for (const k of ["address", "subnet", "gateway", "dns1", "dns2"]) fields[k].set(draft[k], true, true);
+  sync(); say("Pasted a full configuration");
+  return true;
+}
+function configText() {
+  const v = k => fields[k].inputs.map(shownOf).join(".");
+  const p = prefixOf(v("subnet")), d = [v("dns1"), v("dns2")].filter(validIp);
+  return `${v("address")}/${p >= 0 ? p : v("subnet")}` + (validIp(v("gateway")) ? ` gw ${v("gateway")}` : "") + (d.length ? ` dns ${d.join(", ")}` : "");
+}
+document.addEventListener("copy", e => {
+  if (document.activeElement?.matches("input") && getSelection().toString()) return;
+  if (document.activeElement?.matches("input:not([type=checkbox]):not([type=radio])")) return;
+  e.preventDefault(); e.clipboardData.setData("text/plain", configText()); say("Configuration copied", "ok", "check");
+});
+document.addEventListener("paste", e => {
+  if (document.activeElement?.matches(".ip input, .prefix")) return;   // the field handles it
+  if (pasteConfig(e.clipboardData.getData("text"))) e.preventDefault();
+});
+
+function renderHidden() {
+  const box = $("s-hidden"); box.innerHTML = "";
+  if (!hidden.size) { box.innerHTML = `<span class="check">${t("noneHidden")}</span>`; return; }
+  adapters.filter(a => hidden.has(a.id)).forEach(a => {
+    const l = document.createElement("label"); l.className = "check";
+    l.innerHTML = `<input type="checkbox" checked><span></span>`; l.querySelector("span").textContent = a.name;
+    l.querySelector("input").onchange = () => { hidden.delete(a.id); renderList(); renderHidden(); };
+    box.append(l);
+  });
+}
+// A modal centres on the viewport; in Tauri that is the window. The demo page is
+// larger, so centre it on the window explicitly.
+$("open-settings").onclick = () => {
+  renderHidden();
+  const dlg = $("settings"); dlg.showModal();
+  const w = document.querySelector(".window").getBoundingClientRect(), d = dlg.getBoundingClientRect();
+  dlg.style.left = `${w.left + (w.width - d.width) / 2}px`;
+  dlg.style.top = `${w.top + (w.height - d.height) / 2}px`;
+};
+$("s-theme").onchange = e => {
+  const v = e.target.value;
+  const go = () => { if (v === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = v; };
+  document.startViewTransition && !calm.matches ? document.startViewTransition(go) : go();
+};
+$("s-lang").onchange = e => { lang = e.target.value; document.documentElement.lang = lang; translate(); renderList(); renderAdapter(); renderHidden(); };
+function translate() { document.querySelectorAll("[data-t]").forEach(el => { const v = T[lang][el.dataset.t]; if (typeof v === "string") el.textContent = v; }); }
+// Sidebar collapse, remembered per machine (storage may be unavailable; the default is expanded)
+function setRail(on, instant) {
+  const win = document.querySelector(".window");
+  if (instant) win.style.transition = "none";
+  win.classList.toggle("rail", on);
+  $("collapse").setAttribute("aria-expanded", !on);
+  $("collapse").title = on ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
+  $("collapse").setAttribute("aria-label", on ? "Expand sidebar" : "Collapse sidebar");
+  try { localStorage.setItem("octet-rail", on ? "1" : "0"); } catch {}
+  requestAnimationFrame(() => { placeIndicator(); if (instant) win.style.transition = ""; });
+}
+$("collapse").onclick = () => setRail(!document.querySelector(".window").classList.contains("rail"));
+document.querySelector(".body").addEventListener("transitionend", placeIndicator);
+document.addEventListener("keydown", e => {
+  if (e.key.toLowerCase() === "b" && e.ctrlKey) { e.preventDefault(); $("collapse").click(); }
+  if (e.key === "F5") { e.preventDefault(); $("refresh").click(); }
+  if (e.key === "Enter" && e.ctrlKey && !$("apply").disabled) $("apply").click();
+});
+
+// Tooltips replace native titles (5). In the rail they fly out beside the icon (14).
+const tip = document.createElement("div");
+tip.className = "tip"; tip.setAttribute("role", "tooltip"); document.body.append(tip);
+let tipEl = null, tipTimer = 0;
+function hideTip() { clearTimeout(tipTimer); tipEl = null; tip.classList.remove("show"); }
+document.addEventListener("pointerover", e => {
+  const el = e.target.closest("[title], [data-tip]");
+  if (el === tipEl) return;
+  hideTip();
+  if (!el) return;
+  if (el.hasAttribute("title")) { el.dataset.tip = el.title; el.removeAttribute("title"); }
+  if (!el.dataset.tip) return;
+  tipEl = el;
+  const side = !!el.closest(".rail .side");
+  tipTimer = setTimeout(() => {
+    tip.textContent = el.dataset.tip;
+    tip.className = "tip" + (side ? " side" : "");
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    let x, y;
+    if (side) { x = r.right + 8; y = r.top + (r.height - h) / 2; }
+    else {
+      x = Math.min(Math.max(4, r.left + (r.width - w) / 2), innerWidth - w - 4);
+      y = r.bottom + 6 + h > innerHeight - 4 ? r.top - h - 6 : r.bottom + 6;
+    }
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+    void tip.offsetWidth; tip.classList.add("show");
+  }, side ? 120 : 450);
+});
+document.addEventListener("pointerdown", hideTip);
+document.addEventListener("keydown", hideTip);
+
+// App open (13): skeleton first, then the real values count in.
+renderAdapterFacts();
+draft = structuredClone(adapters[sel].cfg);
+for (let k = adapters.filter(a => !hidden.has(a.id)).length; k > 0; k--) { const li = document.createElement("li"); li.className = "skel"; $("list").append(li); }
+document.querySelector(".scroll").classList.add("loading");
+setTimeout(() => { document.querySelector(".scroll").classList.remove("loading"); renderList(true); renderAdapter(true); }, calm.matches ? 0 : 600);
+let railPref = null;
+try { railPref = localStorage.getItem("octet-rail"); } catch {}
+setRail(railPref !== "0", true);
+</script>
+<script type="module">
+// morphicons (MIT) morphs Phosphor's own SVGs, so the icon family stays one.
+import { createMorph, preloadRegion } from "https://esm.sh/morphicons@2.0.0/dom";
+import { svgToIcon } from "https://esm.sh/morphicons@2.0.0/adapters";
+const NS = "http://www.w3.org/2000/svg";
+const names = ["shield-check", "circle-notch", "check", "arrow-clockwise", "dots-three", "x", "arrows-clockwise", "tray-arrow-down", "broom", "list-bullets"];
+const icons = Object.fromEntries(await Promise.all(names.map(async n =>
+  [n, svgToIcon(await fetch(`https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2.1.1/assets/regular/${n}.svg`).then(r => r.text()))])));
+await preloadRegion();
+function morphable(id, start) {
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true"); svg.classList.add("mi");
+  const path = document.createElementNS(NS, "path"); path.setAttribute("fill", "currentColor");
+  svg.append(path);
+  document.getElementById(id).querySelector("i.ph").replaceWith(svg);
+  const m = createMorph(path, icons[start], { reducedMotion: "user" });
+  return name => m.morphTo(icons[name], "snappy");
+}
+const startOf = id => document.getElementById(id).querySelector("i.ph").className.replace("ph ph-", "");
+window.morph = { apply: morphable("apply", "shield-check"), refresh: morphable("refresh", "arrow-clockwise"), more: morphable("more", "dots-three"),
+  "ip-act": morphable("ip-act", startOf("ip-act")), "dns-act": morphable("dns-act", startOf("dns-act")) };
+</script>
+</body>
+</html>
