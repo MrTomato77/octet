@@ -14,8 +14,9 @@
   --side-w: 216px;
   --label-w: 112px;          /* shared by adapter facts and the form */
   --col-gap: 16px;
-  --field-w: 258px;          /* value column: octets 200 + "/ prefix" 58 */
-  --octets-w: 200px;
+  /* value column runs to the right edge: window - rail - padding - label - gap */
+  --field-w: calc(var(--win-w) - 56px - 2 * var(--s6) - var(--label-w) - var(--col-gap));
+  --octets-w: calc(var(--field-w) - 58px);   /* the rest is "/ prefix" or a 40px tile */
   --row-h: 32px; --row-gap: 8px;
   --group-gap: 24px;         /* each side of a divider: 3x the row gap */
   --r-input: 4px; --r-item: 6px;
@@ -209,7 +210,7 @@ button, input, select { font: inherit; color: inherit; }
   padding: 0 var(--s1); border: 1px solid var(--border-strong); border-radius: var(--r-input); background: var(--surface); }
 .ip.short { width: var(--octets-w); }
 .ip:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.ip input { width: 40px; height: 100%; border: 0; background: transparent; text-align: center; outline: 0; padding: 0;
+.ip input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; text-align: center; outline: 0; padding: 0;
   font-variant-numeric: tabular-nums; }
 .ip span.sep { width: 8px; text-align: center; color: var(--muted); }
 .ip.ro { background: transparent; border-color: var(--border); }
@@ -302,7 +303,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .set .stack { display: grid; gap: 0; }
 /* Settings sections: one fixed height so switching tabs never resizes the dialog */
 .panes { min-height: 248px; }
-.pane[hidden] { display: none; }
+.pane[hidden], .set [hidden] { display: none; }
 .pane.in { animation: rise var(--t-base) var(--ease-out); }
 .keys { display: grid; grid-template-columns: auto auto 1fr; gap: var(--s2) 6px; align-items: center; font-size: 13px; }
 .keys > span:last-child, .keys > span:nth-child(3n) { color: var(--muted); padding-left: var(--s2); }
@@ -446,6 +447,7 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 /* Theme switch */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 240ms; }
 /* App open: the form's shape first, values count in after */
+.loading .ext .tag:empty { display: block; }
 .loading :is(.ip, .seg, .slot-btn, .ext .tag, .prefix, .state, #a-name, #a-icon, .desc, .kv .v) {
   color: transparent !important; border-color: transparent !important; outline-color: transparent !important; box-shadow: none !important;
   background-color: var(--hover) !important; background-repeat: no-repeat; background-size: 200% 100%;
@@ -693,18 +695,18 @@ const T = {
     up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes",
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
   },
-  th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", refresh: "อ่านใหม่", release: "ปล่อย DHCP", renew: "ขอ DHCP ใหม่", cycle: "ปล่อยแล้วขอใหม่",
-    hide: "ซ่อนจากรายการ", ncpa: "Network Connections",
+  th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", refresh: "รีเฟรช", release: "Release IP", renew: "Renew IP", cycle: "Release แล้ว Renew",
+    hide: "ซ่อน", ncpa: "Network Connections",
     dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
-    dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "ลงทะเบียนใน DNS", revert: "คืนค่า", apply: "ใช้ค่า",
-    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", admin: "สิทธิ์แอดมิน", adminAsk: "ขอเมื่อใช้", adminAlways: "ตลอด",
-    general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "ใช้ค่าที่แก้", kRefresh: "อ่านอะแดปเตอร์ใหม่",
-    kSide: "กางหรือพับแถบด้านซ้าย", kCopy: "คัดลอกค่าทั้งชุด", kPaste: "วางค่าทั้งชุด",
-    kOctet: "เลื่อนไปช่องตัวเลขถัดไป", kEsc: "ปิดเมนูหรือแถบด้านซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
-    license: "สัญญาอนุญาต", notices: "ไลบรารีที่ใช้", source: "ซอร์สโค้ด", updates: "อัปเดต", releases: "ดูเวอร์ชันใหม่",
-    privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน ส่งแค่ ARP ก่อนใช้ค่าและ ping หลังใช้ค่า", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
-    up: "เชื่อมต่ออยู่", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดใช้งาน", none: "ไม่มี", noChanges: "ไม่มีการเปลี่ยนแปลง",
-    changes: n => `มี ${n} รายการที่ยังไม่ได้ใช้`, applied: n => `ใช้ค่ากับ ${n} แล้ว`, disable: "ปิดอะแดปเตอร์", enable: "เปิดอะแดปเตอร์",
+    dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "Register ใน DNS", revert: "ย้อนกลับ", apply: "บันทึก",
+    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", admin: "สิทธิ์ Admin", adminAsk: "ขอเมื่อต้องใช้", adminAlways: "ทุกครั้ง",
+    general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "บันทึก", kRefresh: "รีเฟรชรายการ",
+    kSide: "ย่อ/ขยายแถบซ้าย", kCopy: "คัดลอกค่าทั้งหมด", kPaste: "วางค่าทั้งหมด",
+    kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนูหรือแถบซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
+    license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
+    privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน มีแค่ ARP เช็ก IP ซ้ำก่อนบันทึก และ ping หลังบันทึก", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
+    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร",
+    changes: n => `แก้ไว้ ${n} จุด ยังไม่ได้บันทึก`, applied: n => `บันทึกค่าของ ${n} แล้ว`, disable: "ปิดการใช้งาน", enable: "เปิดการใช้งาน",
   },
 };
 const t = k => T[lang][k];
@@ -861,7 +863,7 @@ function ipField(host, key, short, ext) {
     inputs.forEach(x => x.classList.toggle("over", +x.value > 255));
     const over = v.some(x => +x > 255);
     box.classList.toggle("over", over);
-    rowMsg(key, over ? L("Each number is 0 to 255", "แต่ละช่องต้องเป็น 0 ถึง 255") : null, "hint");
+    rowMsg(key, over ? L("Each number is 0 to 255", "แต่ละช่องต้องอยู่ระหว่าง 0–255") : null, "hint");
     draft[key] = v.every(x => x === "") ? "" : v.map(x => x === "" ? x : String(+x)).join(".");
     sync(key);
   }
@@ -974,7 +976,7 @@ function sync(from) {
   // Idle: the line explains an adapter that is down or off instead of "No changes".
   else if (adapters[sel].state === "disabled") {
     say(L("Adapter is off", "อะแดปเตอร์ปิดอยู่"), "", "power", true);
-    $("status").title = L("Settings are kept but not in use until the adapter is enabled", "ค่าที่ตั้งไว้ยังอยู่ แต่จะใช้เมื่อเปิดอะแดปเตอร์");
+    $("status").title = L("Settings are kept but not in use until the adapter is enabled", "ค่ายังอยู่ จะมีผลเมื่อเปิดการใช้งาน");
   } else if (adapters[sel].state === "down") {
     say(L("Not connected", "ไม่ได้เชื่อมต่อ"), "", "plugs", true);
     $("status").title = L("Settings apply when it connects", "ค่าจะมีผลเมื่อเชื่อมต่อ");
@@ -1001,7 +1003,7 @@ function renderForm(roll = false) {
   clearMsgs();
   // set address source=static replaces every IPv4 on the adapter
   const extra = adapters[sel].extraIps || [];
-  if (ipEdit && extra.length) rowMsg("address", L(`Also has ${extra.join(", ")}; Apply keeps only this address`, `มี ${extra.join(", ")} ด้วย; ใช้ค่าแล้วจะเหลือแค่ IP นี้`), "hint");
+  if (ipEdit && extra.length) rowMsg("address", L(`Also has ${extra.join(", ")}; Apply keeps only this address`, `มี ${extra.join(", ")} อยู่ด้วย บันทึกแล้วจะเหลือแค่ IP นี้`), "hint");
   sync();
   renderSlots();
 }
@@ -1049,7 +1051,7 @@ function ask(text, yes, ic = "") {
   return new Promise(res => d.addEventListener("close", () => res(d.returnValue === "yes"), { once: true }));
 }
 const discardOk = () => !changed().length ? Promise.resolve(true)
-  : ask(L(`Discard changes to ${adapters[sel].name}?`, `ทิ้งค่าที่แก้ของ ${adapters[sel].name}?`), L("Discard", "ทิ้ง"));
+  : ask(L(`Discard changes to ${adapters[sel].name}?`, `ยกเลิกค่าที่แก้ของ ${adapters[sel].name}?`), L("Discard", "ทิ้ง"));
 // While Windows is being changed, nothing else may touch the form or the list.
 let busyNow = false;
 function lock(on) {
@@ -1160,19 +1162,19 @@ $("apply").onclick = async () => {
   const sent = structuredClone(draft);   // what is applied, whatever happens to the form meanwhile
   clearMsgs();
   const pre = precheck(sent);
-  if (pre) { replay(fields[pre[0]].box, "shake"); rowMsg(pre[0], pre[1]); say(L("Not applied", "ยังไม่ได้ใช้ค่า"), "bad"); return; }
+  if (pre) { replay(fields[pre[0]].box, "shake"); rowMsg(pre[0], pre[1]); say(L("Not applied", "ยังไม่ได้บันทึก"), "bad"); return; }
   if (tauri && !sent.ipAuto && sent.address !== a.cfg.address) {
     // Someone else may already have this address: ask the network before Windows.
-    lock(true); say(L("Checking address…", "กำลังเช็กว่า IP ว่างไหม…"));
+    lock(true); say(L("Checking address…", "กำลังเช็ก IP ซ้ำ…"));
     const owner = await invoke("who_has", { address: sent.address }).catch(() => null);
     lock(false);
-    if (owner && !await ask(L(`${sent.address} is already used by ${owner}. Apply anyway?`, `${sent.address} มีเครื่อง ${owner} ใช้อยู่แล้ว จะใช้ค่าต่อไหม?`), L("Apply", "ใช้ค่า"), "warning")) {
-      rowMsg("address", L(`In use by ${owner}`, `มีเครื่อง ${owner} ใช้อยู่`)); say(L("Not applied", "ยังไม่ได้ใช้ค่า"), "bad"); return;
+    if (owner && !await ask(L(`${sent.address} is already used by ${owner}. Apply anyway?`, `${sent.address} มีเครื่อง ${owner} ใช้อยู่แล้ว ยังจะบันทึกไหม?`), L("Apply", "บันทึก"), "warning")) {
+      rowMsg("address", L(`In use by ${owner}`, `มีเครื่อง ${owner} ใช้อยู่`)); say(L("Not applied", "ยังไม่ได้บันทึก"), "bad"); return;
     }
   }
   lock(true); btn.classList.add("spin"); iconNow("apply", "circle-notch");
   rows.forEach(el => el.classList.add("working"));
-  say(tauri ? L("Waiting for permission…", "รอสิทธิ์ผู้ดูแลระบบ…") : L("Applying…", "กำลังใช้ค่า…"));
+  say(tauri ? L("Waiting for permission…", "รอสิทธิ์ Admin…") : L("Applying…", "กำลังบันทึก…"));
   const work = tauri
     ? change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]) })
         .then(() => null, e => String(e))
@@ -1185,7 +1187,7 @@ $("apply").onclick = async () => {
       if (tauri) await reload().catch(() => {});
       lock(false); iconNow("apply", "shield-check");
       renderAdapterFacts(); renderForm();
-      say(L("Not applied: ", "ใช้ค่าไม่สำเร็จ: ") + err, "bad"); $("status").title = err;
+      say(L("Not applied: ", "บันทึกไม่สำเร็จ: ") + err, "bad"); $("status").title = err;
       return;
     }
     iconNow("apply", "check");
@@ -1250,7 +1252,7 @@ function refresh(quiet) {
       if (before[k] !== a.cfg[k] && (k.startsWith("dns") ? draft.dnsAuto : draft.ipAuto)) flash(fields[k].box);
     if (quiet) return;
     iconNow("refresh", "check");
-    say(L("Adapters refreshed", "อ่านอะแดปเตอร์ใหม่แล้ว"));
+    say(L("Adapters refreshed", "รีเฟรชแล้ว"));
     iconLater("refresh", "arrow-clockwise", 1000);
   }, e => {
     btn.classList.remove("spin"); iconNow("refresh", "arrow-clockwise");
@@ -1293,7 +1295,7 @@ tools.onclick = async e => {
   if (act === "toggle") {
     if (!tauri) { a.state = a.state === "disabled" ? "down" : "disabled"; renderList(); renderAdapterFacts(); return; }
     const on = a.state === "disabled";
-    say(L("Waiting for permission…", "รอสิทธิ์ผู้ดูแลระบบ…")); lock(true);
+    say(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true);
     change({ op: "enable", index: a.index, name: a.name, on }).then(reload).then(() => {
       lock(false); renderList(); renderAdapterFacts(); renderForm();
       say(on ? L("Adapter enabled", "เปิดอะแดปเตอร์แล้ว") : L("Adapter disabled", "ปิดอะแดปเตอร์แล้ว"), "ok");
@@ -1309,7 +1311,7 @@ tools.onclick = async e => {
 function leaseAction(act) {
   const a = adapters[sel];
   if (tauri) {
-    say(act === "release" ? L("Releasing…", "กำลังปล่อย…") : L("Renewing lease…", "กำลังขอ IP ใหม่…"));
+    say(act === "release" ? L("Releasing…", "กำลัง Release…") : L("Renewing lease…", "กำลัง Renew…"));
     lock(true);
     const req = op => change({ op, index: a.index, name: a.name });
     const go = act === "cycle" ? req("release").then(() => req("renew")) : req(act);
@@ -1319,7 +1321,7 @@ function leaseAction(act) {
       if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = c[k];
       if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = c[k];
       renderAdapterFacts(); renderForm(true);
-      say(act === "release" ? L("Lease released", "ปล่อย IP แล้ว")
+      say(act === "release" ? L("Lease released", "Release IP แล้ว")
         : L("Lease renewed", "ได้ IP ใหม่แล้ว") + (adapters[sel].dhcpServer ? " · " + adapters[sel].dhcpServer : ""), "ok");
     }, e => { lock(false); say(String(e), "bad"); });
   }
@@ -1331,9 +1333,9 @@ function leaseAction(act) {
     if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = v[k];
     if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = v[k];
     a.dhcpServer = v.address ? "10.0.0.1" : ""; renderAdapterFacts(); renderForm(true); say(msg); };
-  if (act === "release") put(none, L("Lease released", "ปล่อย IP แล้ว"));
+  if (act === "release") put(none, L("Lease released", "Release IP แล้ว"));
   else if (act === "renew") put(fresh(), L("Lease renewed", "ได้ IP ใหม่แล้ว") + " · 10.0.0.1");
-  else { put(none, L("Releasing…", "กำลังปล่อย…")); setTimeout(() => put(fresh(), L("Lease renewed", "ได้ IP ใหม่แล้ว") + " · 10.0.0.1"), 700); }
+  else { put(none, L("Releasing…", "กำลัง Release…")); setTimeout(() => put(fresh(), L("Lease renewed", "ได้ IP ใหม่แล้ว") + " · 10.0.0.1"), 700); }
 }
 
 // ---------- row buttons ----------
@@ -1352,11 +1354,11 @@ function renderSlots() {
   if (draft.ipAuto) {
     ip.dataset.act = "renew"; slotIcon("ip-act", "arrows-clockwise");
     ip.disabled = !cur.ipAuto;
-    ip.title = cur.ipAuto ? L("Renew lease", "ขอ IP ใหม่") + (a.dhcpServer ? " · " + a.dhcpServer : "") : L("Apply DHCP first, then renew", "ใช้ค่า DHCP ก่อน แล้วค่อยขอ IP ใหม่");
+    ip.title = cur.ipAuto ? L("Renew lease", "Renew IP") + (a.dhcpServer ? " · " + a.dhcpServer : "") : L("Apply DHCP first, then renew", "บันทึกเป็น DHCP ก่อน แล้วค่อย Renew");
   } else {
     ip.dataset.act = "pull"; slotIcon("ip-act", "tray-arrow-down");
     ip.disabled = !cur.address;
-    ip.title = L("Fill with the values Windows has now", "ใส่ค่าที่ Windows ใช้อยู่ตอนนี้");
+    ip.title = L("Fill with the values Windows has now", "ดึงค่าที่ Windows ใช้อยู่");
   }
   ip.setAttribute("aria-label", ip.title);
   if (draft.dnsAuto) { dns.dataset.act = "flush"; slotIcon("dns-act", "broom"); dns.title = L("Flush DNS cache", "ล้างแคช DNS"); dns.removeAttribute("aria-haspopup"); }
@@ -1368,13 +1370,13 @@ function busy(btn, ms, done, motion = "spin") { btn.classList.add(motion); btn.d
 $("ip-act").onclick = () => {
   const btn = $("ip-act"), cur = adapters[sel].cfg;
   if (btn.dataset.act === "renew") {
-    if (!tauri) { say(L("Renewing lease…", "กำลังขอ IP ใหม่…")); busy(btn, 600, () => { leaseAction("renew"); renderSlots(); }); return; }
+    if (!tauri) { say(L("Renewing lease…", "กำลัง Renew…")); busy(btn, 600, () => { leaseAction("renew"); renderSlots(); }); return; }
     btn.classList.add("spin");
     leaseAction("renew").finally(() => { btn.classList.remove("spin"); renderSlots(); });
     return;
   }
   for (const k of ["address", "subnet", "gateway"]) { draft[k] = cur[k]; fields[k].set(cur[k], true, true); }
-  sync(); say(L("Filled with current values", "ใส่ค่าปัจจุบันแล้ว"));
+  sync(); say(L("Filled with current values", "ดึงค่าปัจจุบันแล้ว"));
 };
 function setPresets(open) {
   const menu = $("presets");
@@ -1438,7 +1440,7 @@ function pasteConfig(text) {
   if (c.dns1) { draft.dnsAuto = false; draft.dns1 = c.dns1; draft.dns2 = c.dns2; } else draft.dnsAuto = false;
   renderForm();
   for (const k of ["address", "subnet", "gateway", "dns1", "dns2"]) fields[k].set(draft[k], true, true);
-  sync(); say(L("Pasted a full configuration", "วางค่าทั้งชุดแล้ว"));
+  sync(); say(L("Pasted a full configuration", "วางค่าทั้งหมดแล้ว"));
   return true;
 }
 function configText() {
@@ -1450,7 +1452,7 @@ document.addEventListener("copy", e => {
   if (document.activeElement?.matches("input") && getSelection().toString()) return;
   if (document.activeElement?.matches("input:not([type=checkbox]):not([type=radio])")) return;
   if (!draft) return;
-  e.preventDefault(); e.clipboardData.setData("text/plain", configText()); say(L("Configuration copied", "คัดลอกค่าทั้งชุดแล้ว"), "ok", "check");
+  e.preventDefault(); e.clipboardData.setData("text/plain", configText()); say(L("Configuration copied", "คัดลอกค่าทั้งหมดแล้ว"), "ok", "check");
 });
 document.addEventListener("paste", e => {
   if (document.activeElement?.matches(".ip input, .prefix")) return;   // the field handles it
@@ -1530,7 +1532,7 @@ document.querySelectorAll("input[name=admin]").forEach(x => x.onchange = async (
   try {
     await invoke("set_always_admin", { on });
     if (!on || (await invoke("admin_state")).elevated) return;
-    if (changed().length && !await ask(L("Restart as administrator? Unapplied changes will be lost.", "เปิดใหม่แบบผู้ดูแลระบบ? ค่าที่ยังไม่ได้ใช้จะหายไป"), L("Restart", "เปิดใหม่"))) throw "";
+    if (changed().length && !await ask(L("Restart as administrator? Unapplied changes will be lost.", "เปิดใหม่ด้วยสิทธิ์ Admin? ค่าที่ยังไม่ได้บันทึกจะหายไป"), L("Restart", "เปิดใหม่"))) throw "";
     await invoke("restart_as_admin");
   } catch (e) {
     // UAC declined: keep things as they were.
