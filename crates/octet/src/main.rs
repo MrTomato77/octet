@@ -173,6 +173,10 @@ fn main() {
         }))
         .setup(|app| {
             let _ = APP.set(app.handle().clone());
+            // Taskbar and Alt+Tab take the window's own icon; give it the large one explicitly.
+            if let (Some(w), Ok(icon)) = (app.get_webview_window("main"), tauri::image::Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))) {
+                let _ = w.set_icon(icon);
+            }
             // If the page never calls ready, show the window anyway.
             let handle = app.handle().clone();
             std::thread::spawn(move || {

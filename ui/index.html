@@ -74,7 +74,7 @@ button, input, select { font: inherit; color: inherit; }
   background: var(--bg); border-radius: 8px; overflow: hidden;
   box-shadow: 0 0 0 1px var(--border-strong), 0 16px 48px oklch(0.2 0.02 250 / 0.25); }
 .titlebar { display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3); font-size: 12px; color: var(--muted); background: var(--side); }
-.titlebar i { font-size: 16px; color: var(--accent); }
+.titlebar img { display: block; }
 .body { display: grid; grid-template-columns: 56px 1fr; min-height: 0; }
 
 /* Sidebar */
@@ -254,17 +254,24 @@ button, input, select { font: inherit; color: inherit; }
 .status.bad { color: var(--bad); }
 /* Confirm: a tinted mark, a one-line question, the detail underneath */
 #ask { width: 360px; }
-.dlg-body.ask-body { display: grid; grid-template-columns: auto 1fr; gap: var(--s4); align-items: start; padding-bottom: var(--s4); }
-.ask-ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-size: 22px;
+/* One column: mark and title share the first line, everything below runs the full width */
+.dlg-body.ask-body { display: grid; grid-template-columns: auto 1fr; column-gap: var(--s3); row-gap: 0; align-items: center; padding-bottom: var(--s4); }
+.ask-ic { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; font-size: 18px;
   color: var(--bad); background: color-mix(in oklch, var(--bad) 14%, transparent); }
 .ask-ic[hidden] { display: none; }
-.ask-body:has(.ask-ic[hidden]) { grid-template-columns: 1fr; }
-.ask-copy { display: grid; gap: 6px; min-width: 0; padding-top: 2px; }
+.ask-copy { display: contents; }
+.ask-copy h3 { grid-column: 2; }
+.ask-body:has(.ask-ic[hidden]) .ask-copy h3 { grid-column: 1 / -1; }
+.ask-copy p, .ask-copy dl { grid-column: 1 / -1; margin-top: var(--s3); }
 .ask-copy h3 { font-size: 15px; line-height: 20px; }
-.ask-copy p { margin: 0; font-size: 13px; line-height: 19px; color: var(--muted); }
-.ask-copy code { font: 12px/18px ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--ink);
-  padding: 1px 6px; border-radius: var(--r-input); background: var(--hover); white-space: nowrap; }
-.dlg-foot.ask-foot { border-top: 0; padding: 0 var(--s6) var(--s6); }
+.ask-copy p { margin-bottom: 0; font-size: 13px; line-height: 19px; color: var(--muted); }
+.ask-copy dl { margin-bottom: 0; padding: var(--s2) var(--s3); display: grid; grid-template-columns: auto 1fr; gap: 4px var(--s4);
+  border-radius: var(--r-item); background: var(--hover); font-size: 13px; line-height: 20px; }
+.ask-copy dl[hidden] { display: none; }
+.ask-copy dt { color: var(--muted); }
+.ask-copy dd { margin: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dlg-foot.ask-foot { border-top: 0; padding: var(--s2) var(--s6) var(--s6); display: grid; grid-template-columns: 1fr 1fr; }
+.ask-foot .btn { justify-content: center; }
 .btn.danger { background: var(--bad); border-color: var(--bad); color: var(--bad-ink); font-weight: 600; }
 .btn.danger:hover:not(:disabled) { filter: brightness(1.08); background: var(--bad); }
 .status.ok { color: var(--ok); }
@@ -493,7 +500,7 @@ html.app, html.app body { overflow: hidden; }
 <body>
 
 <div class="window" aria-label="Octet">
-  <div class="titlebar"><i class="ph ph-network"></i>Octet</div>
+  <div class="titlebar"><img src="icon.png" alt="" width="16" height="16">Octet</div>
   <div class="body">
     <nav class="side" aria-label="Adapters">
       <div class="side-head">
@@ -654,7 +661,7 @@ html.app, html.app body { overflow: hidden; }
   <form method="dialog">
     <div class="dlg-body ask-body">
       <span class="ask-ic" id="ask-ic" hidden><i class="ph"></i></span>
-      <div class="ask-copy"><h3 id="ask-text"></h3><p id="ask-more" hidden></p></div>
+      <div class="ask-copy"><h3 id="ask-text"></h3><p id="ask-more" hidden></p><dl id="ask-facts" hidden></dl></div>
     </div>
     <div class="dlg-foot end ask-foot">
       <button class="btn" value="no" id="ask-no">Cancel</button>
@@ -1071,14 +1078,16 @@ function renderAdapter(roll = false) {
   renderForm(roll);
 }
 // In-page confirm: native confirm() blocks and may not show inside the WebView.
-// more: detail line; `backticks` in it become code chips (addresses, MACs). A warning makes Yes red and Cancel the default.
-function ask(text, yes, ic = "", more = "") {
-  const d = $("ask"), m = $("ask-more");
+// more: one plain sentence; facts: [label, value] rows shown as a small table. A warning makes Yes red and Cancel the default.
+function ask(text, yes, ic = "", more = "", facts = []) {
+  const d = $("ask"), m = $("ask-more"), f = $("ask-facts");
   $("ask-ic").hidden = !ic; $("ask-ic").firstElementChild.className = "ph ph-" + ic;
   $("ask-text").textContent = text;
-  m.hidden = !more; m.replaceChildren(...more.split("`").map((part, i) => {
-    if (i % 2 === 0) return part;
-    const c = document.createElement("code"); c.textContent = part; return c;
+  m.hidden = !more; m.textContent = more;
+  f.hidden = !facts.length;
+  f.replaceChildren(...facts.flatMap(([k, v]) => {
+    const dt = document.createElement("dt"), dd = document.createElement("dd");
+    dt.textContent = k; dd.textContent = v; return [dt, dd];
   }));
   $("ask-yes").textContent = yes; $("ask-no").textContent = L("Cancel", "ยกเลิก");
   $("ask-yes").className = "btn " + (ic === "warning" ? "danger" : "primary");
@@ -1207,8 +1216,8 @@ $("apply").onclick = async () => {
     const owner = await invoke("who_has", { address: sent.address }).catch(() => null);
     lock(false);
     if (owner && !await ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Apply anyway", "บันทึกต่อ"), "warning",
-        L(`\`${sent.address}\` answers from \`${owner}\`. Two devices on one address will both lose connection.`,
-          `\`${sent.address}\` ตอบกลับจากเครื่อง \`${owner}\` ถ้าใช้ IP ซ้ำกัน ทั้งสองเครื่องจะใช้เน็ตไม่ได้`))) {
+        L("Another device answered for this address. If both use it, both lose connection.", "มีอุปกรณ์อื่นตอบกลับที่ IP นี้ ถ้าใช้ซ้ำกัน ทั้งสองเครื่องจะต่อเน็ตไม่ได้"),
+        [["IP", sent.address], ["MAC", owner]])) {
       rowMsg("address", L(`In use by ${owner}`, `มีเครื่อง ${owner} ใช้อยู่`)); say(L("Not applied", "ยังไม่ได้บันทึก"), "bad"); return;
     }
   }
@@ -1696,7 +1705,8 @@ setRail(true, true);
 // Demo links: #settings opens Settings, #conflict shows the address-in-use warning.
 if (!tauri && location.hash === "#settings") openSettings();
 if (!tauri && location.hash === "#conflict") ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Apply anyway", "บันทึกต่อ"), "warning",
-  L("`192.168.1.50` answers from `3C-52-82-11-AB-07`. Two devices on one address will both lose connection.", "`192.168.1.50` ตอบกลับจากเครื่อง `3C-52-82-11-AB-07` ถ้าใช้ IP ซ้ำกัน ทั้งสองเครื่องจะใช้เน็ตไม่ได้"));
+  L("Another device answered for this address. If both use it, both lose connection.", "มีอุปกรณ์อื่นตอบกลับที่ IP นี้ ถ้าใช้ซ้ำกัน ทั้งสองเครื่องจะต่อเน็ตไม่ได้"),
+  [["IP", "192.168.1.50"], ["MAC", "3C-52-82-11-AB-07"]]);
 // The window stays hidden until this first frame is drawn (no white flash).
 if (tauri) requestAnimationFrame(() => requestAnimationFrame(() => invoke("ready").catch(() => {})));   // demo link straight to Settings
 // Remembered theme and language, applied without a transition.
