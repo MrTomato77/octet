@@ -29,6 +29,29 @@ pub fn arp(_: Ipv4Addr) -> Option<String> {
     None
 }
 
+/// The name a device on the network goes by (reverse DNS, which on Windows
+/// also asks LLMNR and NetBIOS). None when nobody answers.
+#[cfg(windows)]
+pub fn hostname(ip: Ipv4Addr) -> Option<String> {
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, GetNameInfoW, NI_NAMEREQD, SOCKADDR, SOCKADDR_IN, WSADATA, WSAStartup};
+    unsafe {
+        let mut wsa: WSADATA = std::mem::zeroed();
+        WSAStartup(0x0202, &mut wsa);   // reference-counted; once per call is fine
+        let mut sa: SOCKADDR_IN = std::mem::zeroed();
+        sa.sin_family = AF_INET;
+        sa.sin_addr.S_un.S_addr = ip_u32(ip);
+        let mut host = [0u16; 1025];
+        let r = GetNameInfoW((&sa as *const SOCKADDR_IN).cast::<SOCKADDR>(), size_of::<SOCKADDR_IN>() as i32,
+            host.as_mut_ptr(), host.len() as u32, std::ptr::null_mut(), 0, NI_NAMEREQD as i32);
+        let len = host.iter().position(|&c| c == 0)?;
+        (r == 0 && len > 0).then(|| String::from_utf16_lossy(&host[..len]))
+    }
+}
+#[cfg(not(windows))]
+pub fn hostname(_: Ipv4Addr) -> Option<String> {
+    None
+}
+
 /// One ICMP echo; round-trip milliseconds, or None when there is no reply in `timeout_ms`.
 #[cfg(windows)]
 pub fn ping(ip: Ipv4Addr, timeout_ms: u32) -> Option<u32> {
@@ -87,5 +110,10 @@ mod tests {
     #[test]
     fn loopback_answers_ping() {
         assert!(super::ping(std::net::Ipv4Addr::LOCALHOST, 1000).is_some());
+    }
+
+    #[test]
+    fn loopback_has_a_name() {
+        assert!(super::hostname(std::net::Ipv4Addr::LOCALHOST).is_some());
     }
 }

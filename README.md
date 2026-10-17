@@ -4,18 +4,29 @@ Switch IPv4 and DNS settings on Windows in seconds. A fast, modern take on [Simp
 
 > **Status: 0.1, first test build.** Try it on an adapter you can afford to lose first.
 
+<p align="center">
+  <img src="assets/main.png" width="420" alt="Octet showing a Wi-Fi adapter on DHCP, with its gateway named router.lan">
+  <img src="assets/settings.png" width="420" alt="Octet settings: theme, language, run as admin">
+</p>
+
 ## Download
 
 Get `Octet.exe` from [Releases](https://github.com/MrTomato77/octet/releases). It is one portable file with no installer.
 
 - **Windows 11:** runs as is.
 - **Windows 10:** needs the Microsoft Edge WebView2 Runtime. Most PCs already have it; if Octet doesn't open, install it from Microsoft.
-- **Not code-signed yet:** SmartScreen may warn the first time. Choose *More info*, then *Run anyway*. Each release lists the file's SHA-256 so you can check the download.
+- **Not code-signed yet:** Windows SmartScreen may say *"Windows protected your PC"* the first time. Choose *More info*, then *Run anyway*. Each release has `Octet.exe.sha256` so you can check the download first:
+
+  ```powershell
+  (Get-FileHash .\Octet.exe).Hash
+  ```
 
 ## What it does
 
 - Switch an adapter between DHCP and manual IP / DNS, with live validation and pre-checks (gateway outside the subnet, address equal to the gateway, network or broadcast address).
-- Shows what each address is (private, public, APIPA, CGNAT) and who runs your DNS.
+- Shows what each address is (private, public, APIPA, CGNAT), who runs your DNS, and your gateway's name.
+- Before Apply, checks whether another device already has the new address (ARP). After Apply, pings the gateway and DNS.
+- Follows Windows: cable, Wi-Fi and address changes show up on their own.
 - Release / renew DHCP, flush DNS, enable / disable adapters, DNS provider presets.
 - Copy or paste a whole configuration as one line: `192.168.1.50/24 gw 192.168.1.1 dns 1.1.1.1, 8.8.8.8`.
 - English and Thai.
@@ -23,11 +34,11 @@ Get `Octet.exe` from [Releases](https://github.com/MrTomato77/octet/releases). I
 ## Administrator permission
 
 Octet opens without admin rights. It asks through UAC only when you press Apply, enable / disable an adapter, or release / renew, and only that one change runs elevated (see [SECURITY.md](SECURITY.md)).
-Changing settings many times in a row? Right-click `Octet.exe`, *Run as administrator*, and it won't ask again for that session.
+Changing settings many times in a row? In *Settings*, set *Run as admin* to *Always*: Octet asks once when it starts and not for each change.
 
 ## Privacy
 
-Octet makes no network requests of its own and has no telemetry. Everything it shows comes from Windows (`Get-NetAdapter`, CIM). WebView2, the Microsoft component that draws the window, keeps itself updated through Windows.
+Octet has no telemetry and no server of its own. Everything it shows comes from Windows (`Get-NetAdapter`, CIM). On your own network it sends only what you'd expect: an ARP check before Apply, a ping to the gateway and DNS after it, and a reverse name lookup for the gateway (answered by your DNS server or the router). WebView2, the Microsoft component that draws the window, keeps itself updated through Windows.
 
 ## Build
 

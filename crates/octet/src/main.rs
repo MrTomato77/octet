@@ -67,6 +67,13 @@ async fn ping(address: String) -> Result<Option<u32>, String> {
     blocking(move || Ok(net::ping(ip, 1500))).await
 }
 
+/// The gateway's name, if it gives one.
+#[tauri::command]
+async fn hostname(address: String) -> Result<Option<String>, String> {
+    let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
+    blocking(move || Ok(net::hostname(ip))).await
+}
+
 #[tauri::command]
 fn open_ncpa() -> Result<(), String> {
     hidden("control").arg("ncpa.cpl").spawn().map(|_| ()).map_err(|e| e.to_string())
@@ -168,7 +175,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, open_ncpa, open_link, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, hostname, open_ncpa, open_link, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

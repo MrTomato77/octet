@@ -290,6 +290,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .settings-view.in { animation: rise var(--t-base) var(--ease-out); }
 .settings-view.out { animation: fade-out var(--t-fast) ease-in forwards; }
 #open-settings.on { background: var(--sel-fill); }
+.window:has(#open-settings.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
 #open-settings.on i, #open-settings.on .name { color: var(--sel-ink); }
 /* Settings take effect as you change them, so the dialog only needs a close button */
 .dlg-head { display: flex; align-items: center; justify-content: space-between; margin: -6px -8px 0 0; }
@@ -420,7 +421,9 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 .form > .row-msg { grid-column: 2; min-height: 0; margin-top: -4px; gap: 6px; font-size: 12px; line-height: 16px; color: var(--bad);
   overflow: hidden; animation: msg-in var(--t-base) var(--ease-out); }
 .row-msg i { font-size: 14px; }
-.row-msg.hint { color: var(--muted); }
+.row-msg.hint, .row-msg.host { color: var(--muted); }
+/* The gateway name sits in the gap above the divider, so the form keeps its height */
+.form > .row-msg.host { margin-bottom: calc(-1 * (16px + var(--row-gap))); }
 @keyframes msg-in { from { opacity: 0; max-height: 0; transform: translateY(-4px); } to { max-height: 16px; } }
 /* Live validation: an out-of-range octet turns red while typing */
 .ip.over { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
@@ -620,7 +623,7 @@ html.app, html.app body { overflow: hidden; }
                   <span class="lbl" data-t="updates">Updates</span>
                   <span class="val"><button type="button" class="link" data-link="releases" data-t="releases">See releases</button></span>
                   <span class="lbl" data-t="privacy">Privacy</span>
-                  <span class="val muted" data-t="privacyText">No telemetry. The only traffic Octet sends is an ARP check before Apply and a ping after it.</span>
+                  <span class="val muted" data-t="privacyText">No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway name.</span>
                   <span class="lbl" data-t="credits">Credits</span>
                   <span class="val muted"><span data-t="inspired">Inspired by</span> <button type="button" class="link" data-link="simpleip">Simple IP Config</button></span>
                 </div>
@@ -691,7 +694,7 @@ const T = {
     kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
     kOctet: "Move between octets", kEsc: "Close a menu or the sidebar", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
-    privacy: "Privacy", privacyText: "No telemetry. The only traffic Octet sends is an ARP check before Apply and a ping after it.", credits: "Credits", inspired: "Inspired by",
+    privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway name.", credits: "Credits", inspired: "Inspired by",
     up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes",
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
   },
@@ -704,7 +707,7 @@ const T = {
     kSide: "ย่อ/ขยายแถบซ้าย", kCopy: "คัดลอกค่าทั้งหมด", kPaste: "วางค่าทั้งหมด",
     kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนูหรือแถบซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
-    privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน มีแค่ ARP เช็ก IP ซ้ำก่อนบันทึก และ ping หลังบันทึก", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
+    privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูชื่อ Gateway", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
     up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร",
     changes: n => `แก้ไว้ ${n} จุด ยังไม่ได้บันทึก`, applied: n => `บันทึกค่าของ ${n} แล้ว`, disable: "ปิดการใช้งาน", enable: "เปิดการใช้งาน",
   },
@@ -780,6 +783,7 @@ function updateTags() {
   tag(fields.address, sc && { text: sc[0], title: sc[1] }, sc && sc[0] === "Public" ? "public" : "");
   // The DHCP server is almost always the gateway: mark it there instead of a loose line of text.
   const a = adapters[sel], gw = shown("gateway");
+  if (gw !== a.cfg.gateway) document.querySelector(".row-msg.host")?.remove();   // the name belongs to the old one
   const gsc = scope(gw);
   tag(fields.gateway, a.dhcpServer && gw === a.dhcpServer ? { text: "DHCP", title: "Also the DHCP server that leased this address" }
     : gsc && { text: gsc[0], title: gsc[1] }, gsc && gsc[0] === "Public" ? "public" : "");
@@ -917,7 +921,7 @@ function rowMsg(key, text, kind = "") {
   if (m && m.dataset.text === text) return;
   m?.remove();
   m = document.createElement("div"); m.className = "row-msg " + kind; m.dataset.text = text;
-  m.innerHTML = `<i class="ph ${kind === "hint" ? "ph-info" : "ph-warning-circle"}"></i><span></span>`;
+  m.innerHTML = `<i class="ph ${{ hint: "ph-info", host: "ph-tag-simple" }[kind] || "ph-warning-circle"}"></i><span></span>`;
   m.lastChild.textContent = text;
   host.after(m);
 }
@@ -1004,8 +1008,19 @@ function renderForm(roll = false) {
   // set address source=static replaces every IPv4 on the adapter
   const extra = adapters[sel].extraIps || [];
   if (ipEdit && extra.length) rowMsg("address", L(`Also has ${extra.join(", ")}; Apply keeps only this address`, `มี ${extra.join(", ")} อยู่ด้วย บันทึกแล้วจะเหลือแค่ IP นี้`), "hint");
+  gatewayName();
   sync();
   renderSlots();
+}
+// The gateway's name (reverse DNS / NetBIOS), shown under it while it is the one Windows uses.
+const names = new Map();
+const demoNames = { "10.0.0.1": "router.lan", "192.168.50.254": "fw-office.corp.local" };
+async function gatewayName() {
+  const a = adapters[sel], gw = a?.cfg.gateway;
+  if (!gw || (draft && !draft.ipAuto && draft.gateway !== gw)) return;
+  if (!names.has(gw)) names.set(gw, tauri ? await invoke("hostname", { address: gw }).catch(() => null) : demoNames[gw] ?? null);
+  const n = names.get(gw);
+  if (n && adapters[sel] === a && !document.querySelector(".row-msg")) rowMsg("gateway", n, "host");
 }
 
 function renderAdapterFacts() {
@@ -1653,6 +1668,7 @@ sel = Math.max(0, firstVisible());
   if (err) { say(L("Could not read adapters: ", "อ่านอะแดปเตอร์ไม่ได้: ") + err, "bad"); $("status").title = String(err); }
 });
 setRail(true, true);
+if (!tauri && location.hash === "#settings") openSettings();   // demo link straight to Settings
 // Remembered theme and language, applied without a transition.
 {
   const th = ["light", "dark"].includes(pref("octet-theme")) ? pref("octet-theme") : "system";
