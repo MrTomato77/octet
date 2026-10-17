@@ -196,6 +196,8 @@ button, input, select { font: inherit; color: inherit; }
 .choice { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0 var(--s4);
   color: var(--muted); cursor: pointer; white-space: nowrap; transition: color var(--t-fast) var(--ease-out); }
 .choice:has(input:checked) { color: var(--sel-ink); font-weight: 600; }
+.tabs .choice { gap: 6px; }
+.tabs .choice .ph { font-size: 16px; }
 .choice input { position: absolute; opacity: 0; pointer-events: none; }
 .choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-input); }
 .choice.disabled { color: var(--faint); cursor: not-allowed; }
@@ -249,6 +251,9 @@ button, input, select { font: inherit; color: inherit; }
 .actions { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s6); border-top: 1px solid var(--border); background: var(--surface); }
 .status { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status.bad { color: var(--bad); }
+.dlg-body.ask-body { display: flex; gap: var(--s3); align-items: flex-start; }
+#ask-ic { font-size: 24px; line-height: 1; color: var(--bad); flex: none; }
+.ask-body p { margin: 0; }
 .status.ok { color: var(--ok); }
 .btn { height: 32px; padding: 0 var(--s4); border-radius: var(--r-item); border: 1px solid var(--border-strong); background: var(--surface);
   cursor: pointer; display: inline-flex; align-items: center; gap: var(--s2); white-space: nowrap; }
@@ -562,9 +567,9 @@ html.app, html.app body { overflow: hidden; }
       </div>
       <div class="seg opt tabs" role="tablist" aria-label="Settings sections" style="--n: 3">
         <span class="thumb"></span>
-        <label class="choice"><input type="radio" name="stab" value="general" checked><span data-t="general">General</span></label>
-        <label class="choice"><input type="radio" name="stab" value="keys"><span data-t="keys">Shortcuts</span></label>
-        <label class="choice"><input type="radio" name="stab" value="about"><span data-t="about">About</span></label>
+        <label class="choice"><input type="radio" name="stab" value="general" checked><i class="ph ph-sliders"></i><span data-t="general">General</span></label>
+        <label class="choice"><input type="radio" name="stab" value="keys"><i class="ph ph-keyboard"></i><span data-t="keys">Shortcuts</span></label>
+        <label class="choice"><input type="radio" name="stab" value="about"><i class="ph ph-info"></i><span data-t="about">About</span></label>
       </div>
       <div class="panes">
         <div class="pane set" data-pane="general">
@@ -625,7 +630,7 @@ html.app, html.app body { overflow: hidden; }
 
 <dialog id="ask">
   <form method="dialog">
-    <div class="dlg-body"><p id="ask-text"></p></div>
+    <div class="dlg-body ask-body"><i class="ph" id="ask-ic" hidden></i><p id="ask-text"></p></div>
     <div class="dlg-foot end">
       <button class="btn" value="no" id="ask-no">Cancel</button>
       <button class="btn primary" value="yes" id="ask-yes">Discard</button>
@@ -1029,8 +1034,9 @@ function renderAdapter(roll = false) {
   renderForm(roll);
 }
 // In-page confirm: native confirm() blocks and may not show inside the WebView.
-function ask(text, yes) {
+function ask(text, yes, ic = "") {
   const d = $("ask");
+  $("ask-ic").className = "ph ph-" + ic; $("ask-ic").hidden = !ic;
   $("ask-text").textContent = text; $("ask-yes").textContent = yes; $("ask-no").textContent = L("Cancel", "ยกเลิก");
   d.returnValue = ""; d.showModal();
   const w = document.querySelector(".window").getBoundingClientRect(), r = d.getBoundingClientRect();
@@ -1155,7 +1161,7 @@ $("apply").onclick = async () => {
     lock(true); say(L("Checking address…", "กำลังเช็กว่า IP ว่างไหม…"));
     const owner = await invoke("who_has", { address: sent.address }).catch(() => null);
     lock(false);
-    if (owner && !await ask(L(`${sent.address} is already used by ${owner}. Apply anyway?`, `${sent.address} มีเครื่อง ${owner} ใช้อยู่แล้ว จะใช้ค่าต่อไหม?`), L("Apply", "ใช้ค่า"))) {
+    if (owner && !await ask(L(`${sent.address} is already used by ${owner}. Apply anyway?`, `${sent.address} มีเครื่อง ${owner} ใช้อยู่แล้ว จะใช้ค่าต่อไหม?`), L("Apply", "ใช้ค่า"), "warning")) {
       rowMsg("address", L(`In use by ${owner}`, `มีเครื่อง ${owner} ใช้อยู่`)); say(L("Not applied", "ยังไม่ได้ใช้ค่า"), "bad"); return;
     }
   }
@@ -1194,7 +1200,7 @@ $("apply").onclick = async () => {
         const [gw, dns] = await Promise.all([probe(a.cfg.gateway), probe(a.cfg.dns1 === a.cfg.gateway ? "" : a.cfg.dns1)]);
         const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${ms} ms`;
         const fail = gw === null || dns === null;
-        say([part("Gateway", gw), part(`DNS ${a.cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? undefined : "check");
+        say([part("Gateway", gw), part(`DNS ${a.cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? "wifi-x" : "check-circle");
         return;
       }
       say(t("applied")(a.name) + " · testing…");
