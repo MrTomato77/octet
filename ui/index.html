@@ -581,8 +581,12 @@ html.app, html.app body { overflow: hidden; }
             <label class="choice"><input type="radio" name="lang" value="en" checked><span>English</span></label>
             <label class="choice"><input type="radio" name="lang" value="th"><span>ไทย</span></label>
           </div>
-          <span class="lbl" data-t="admin">Admin</span>
-          <label class="check" data-tip="No UAC prompt for each change; one prompt when Octet starts"><input type="checkbox" id="s-admin"><span data-t="alwaysAdmin">Always run as administrator</span></label>
+          <span class="lbl" data-t="admin">Run as admin</span>
+          <div class="seg opt" role="radiogroup" aria-label="Run as administrator" style="--n: 2">
+            <span class="thumb"></span>
+            <label class="choice" data-tip="UAC prompt for each change"><input type="radio" name="admin" value="ask" checked><span data-t="adminAsk">When needed</span></label>
+            <label class="choice" data-tip="One UAC prompt when Octet starts"><input type="radio" name="admin" value="always"><span data-t="adminAlways">Always</span></label>
+          </div>
           <span class="lbl" data-t="hidden">Hidden</span>
           <div class="stack" id="s-hidden"></div>
         </div>
@@ -670,7 +674,7 @@ const T = {
     hide: "Hide from list", ncpa: "Network Connections",
     dhcp: "DHCP", manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
     dns1: "Preferred", dns2: "Alternate", register: "Register in DNS", revert: "Revert", apply: "Apply",
-    theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark", admin: "Admin", alwaysAdmin: "Always run as administrator",
+    theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark", admin: "Run as admin", adminAsk: "When needed", adminAlways: "Always",
     general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: "Read adapters again",
     kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
     kOctet: "Move between octets", kEsc: "Close a menu or the sidebar", tagline: "IPv4 and DNS settings, in seconds.",
@@ -683,7 +687,7 @@ const T = {
     hide: "ซ่อนจากรายการ", ncpa: "Network Connections",
     dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
     dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "ลงทะเบียนใน DNS", revert: "คืนค่า", apply: "ใช้ค่า",
-    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", admin: "ผู้ดูแล", alwaysAdmin: "เปิดแบบผู้ดูแลระบบเสมอ",
+    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", admin: "สิทธิ์แอดมิน", adminAsk: "ขอเมื่อใช้", adminAlways: "ตลอด",
     general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "ใช้ค่าที่แก้", kRefresh: "อ่านอะแดปเตอร์ใหม่",
     kSide: "กางหรือพับแถบด้านซ้าย", kCopy: "คัดลอกค่าทั้งชุด", kPaste: "วางค่าทั้งชุด",
     kOctet: "เลื่อนไปช่องตัวเลขถัดไป", kEsc: "ปิดเมนูหรือแถบด้านซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
@@ -1491,23 +1495,24 @@ document.querySelectorAll("input[name=lang]").forEach(x => x.onchange = () => {
   });
 });
 // Always run as administrator: saved now, and Octet restarts elevated if it isn't already.
-const adminBox = $("s-admin");
-if (tauri) invoke("admin_state").then(s => adminBox.checked = s.always).catch(() => {});
-else adminBox.checked = pref("octet-admin") === "1";
-adminBox.onchange = async () => {
-  const on = adminBox.checked;
+const showAdmin = on => { document.querySelector(`input[name=admin][value=${on ? "always" : "ask"}]`).checked = true; segIndex("admin"); };
+if (tauri) invoke("admin_state").then(s => showAdmin(s.always)).catch(() => {});
+else showAdmin(pref("octet-admin") === "1");
+document.querySelectorAll("input[name=admin]").forEach(x => x.onchange = async () => {
+  const on = x.value === "always";
+  segIndex("admin");
   if (!tauri) { keep("octet-admin", on ? "1" : "0"); return; }
   try {
     await invoke("set_always_admin", { on });
     if (!on || (await invoke("admin_state")).elevated) return;
-    if (changed().length && !await ask(L("Restart as administrator? Unapplied changes will be lost.", "เปิดใหม่แบบผู้ดูแลระบบ? ค่าที่ยังไม่ได้ใช้จะหายไป"), L("Restart", "เปิดใหม่"))) return;
+    if (changed().length && !await ask(L("Restart as administrator? Unapplied changes will be lost.", "เปิดใหม่แบบผู้ดูแลระบบ? ค่าที่ยังไม่ได้ใช้จะหายไป"), L("Restart", "เปิดใหม่"))) throw "";
     await invoke("restart_as_admin");
   } catch (e) {
     // UAC declined: keep things as they were.
-    adminBox.checked = !on; invoke("set_always_admin", { on: !on }).catch(() => {});
-    say(String(e), "bad");
+    showAdmin(!on); invoke("set_always_admin", { on: !on }).catch(() => {});
+    if (e) say(String(e), "bad");
   }
-};
+});
 // Settings sections slide the tab thumb and bring the new pane in.
 document.querySelectorAll("input[name=stab]").forEach(x => x.onchange = () => {
   segIndex("stab");
