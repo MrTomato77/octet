@@ -19,9 +19,6 @@ fn t(thai: bool, english: &'static str, translated: &'static str) -> &'static st
 enum Symbol {
     Refresh,
     Settings,
-    Manual,
-    Copy,
-    Desktop,
     Preview,
     Wired,
     Wifi,
@@ -33,9 +30,6 @@ fn paint_symbol(ui: &Ui, rect: egui::Rect, symbol: Symbol, color: Color32) {
     let glyph = match symbol {
         Symbol::Settings => '\u{e270}',
         Symbol::Refresh => '\u{e036}',
-        Symbol::Manual => '\u{e3b4}',
-        Symbol::Copy => '\u{e1ca}',
-        Symbol::Desktop => '\u{e560}',
         Symbol::Preview => '\u{e30c}',
         Symbol::Wired => '\u{edde}',
         Symbol::Wifi => '\u{e4ea}',
@@ -72,6 +66,15 @@ fn icon_button(ui: &mut Ui, symbol: Symbol, tooltip: &str) -> egui::Response {
     response.on_hover_text(tooltip)
 }
 
+fn status_dot(ui: &Ui, center: egui::Pos2, connected: bool, p: Palette) {
+    if connected {
+        ui.painter().circle_filled(center, 4.0, p.accent);
+    } else {
+        ui.painter()
+            .circle_stroke(center, 3.5, Stroke::new(1.5, p.muted));
+    }
+}
+
 fn is_wireless(name: &str, description: &str) -> bool {
     let text = format!("{name} {description}").to_lowercase();
     ["wi-fi", "wifi", "wireless", "wlan", "802.11"]
@@ -96,7 +99,7 @@ pub struct SimpleIpApp {
     #[cfg(test)]
     preview_button_rect: egui::Rect,
     #[cfg(test)]
-    aligned_rows: Vec<[egui::Rect; 3]>,
+    aligned_rows: Vec<[egui::Rect; 2]>,
     #[cfg(test)]
     painted_text: Vec<(String, egui::Pos2)>,
 }
@@ -114,6 +117,7 @@ impl SimpleIpApp {
             let mut app = app;
             if let Ok(scenario) = std::env::var("SIMPLE_IP_CAPTURE_SCENARIO") {
                 app.storage = None;
+                app.loading = None; // scenarios use fixed sample data
                 app.session = Session::default();
                 app.session.load_lab_sample();
                 if scenario.contains("dhcp") {
@@ -159,7 +163,7 @@ impl SimpleIpApp {
             focus_field: None,
             storage: None,
             last_persist: Instant::now(),
-            window_size: [700.0, 440.0],
+            window_size: [700.0, 470.0],
             #[cfg(feature = "capture")]
             capture_frames: 0,
             #[cfg(test)]
@@ -340,8 +344,15 @@ impl SimpleIpApp {
                             )
                             .fill(if selected { p.selection } else { p.surface })
                             .stroke(Stroke::new(if selected { 1.0 } else { 0.0 }, p.border))
+                            .right_text(RichText::new("  ").size(13.0))
                             .corner_radius(6)
                             .truncate(),
+                    );
+                    status_dot(
+                        ui,
+                        egui::pos2(response.rect.right() - 12.0, response.rect.center().y),
+                        adapter.connected,
+                        p,
                     );
                     paint_symbol(
                         ui,
@@ -354,8 +365,7 @@ impl SimpleIpApp {
                         color,
                     );
                     let response = response.on_hover_text(format!(
-                        "{}
-{}",
+                        "{}\n{}",
                         adapter.name,
                         if adapter.connected {
                             t(thai, "Link up", "เชื่อมต่ออยู่")
@@ -368,38 +378,50 @@ impl SimpleIpApp {
                     }
                 }
                 ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
-                    let menu = ui.menu_button(
-                        format!("\u{2003}    {}", t(thai, "Settings", "ตั้งค่า")),
-                        |ui| {
-                            let theme = if self.dark {
-                                t(thai, "Light theme", "ธีมสว่าง")
+                    ui.add_space(2.0);
+                    let menu = egui::containers::menu::MenuButton::from_button(
+                        Button::new(())
+                            .left_text(
+                                RichText::new(format!(
+                                    "\u{2003}    {}",
+                                    t(thai, "Settings", "ตั้งค่า")
+                                ))
+                                .size(13.0)
+                                .color(p.ink),
+                            )
+                            .fill(p.surface)
+                            .stroke(Stroke::NONE)
+                            .corner_radius(6)
+                            .min_size(Vec2::new(ui.available_width(), 32.0)),
+                    )
+                    .ui(ui, |ui| {
+                        let theme = if self.dark {
+                            t(thai, "Light theme", "ธีมสว่าง")
+                        } else {
+                            t(thai, "Dark theme", "ธีมมืด")
+                        };
+                        if ui.button(theme).clicked() {
+                            self.dark = !self.dark;
+                            theme::install_style(ui.ctx(), self.dark);
+                            ui.close();
+                        }
+                        if ui
+                            .button(if thai {
+                                "English"
                             } else {
-                                t(thai, "Dark theme", "ธีมมืด")
-                            };
-                            if ui.button(theme).clicked() {
-                                self.dark = !self.dark;
-                                theme::install_style(ui.ctx(), self.dark);
-                                ui.close();
-                            }
-                            if ui
-                                .button(if thai {
-                                    "English"
-                                } else {
-                                    "ภาษาไทย"
-                                })
-                                .clicked()
-                            {
-                                self.thai = !self.thai;
-                                ui.close();
-                            }
-                            if ui.button(t(thai, "Help (F1)", "วิธีใช้ (F1)")).clicked()
-                            {
-                                self.show_help = true;
-                                ui.close();
-                            }
-                        },
-                    );
-                    paint_symbol(ui, menu.response.rect, Symbol::Settings, p.ink);
+                                "ภาษาไทย"
+                            })
+                            .clicked()
+                        {
+                            self.thai = !self.thai;
+                            ui.close();
+                        }
+                        if ui.button(t(thai, "Help (F1)", "วิธีใช้ (F1)")).clicked() {
+                            self.show_help = true;
+                            ui.close();
+                        }
+                    });
+                    paint_symbol(ui, menu.0.rect, Symbol::Settings, p.ink);
                 });
                 if before != self.session.selected_adapter {
                     // Unedited forms follow the new adapter; edits are never discarded silently.
@@ -432,45 +454,36 @@ impl SimpleIpApp {
         });
         let thai = self.thai;
         let adapter = &self.session.adapters[self.session.selected_adapter];
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(format!(
-                    "{} · {} · DHCP {}",
-                    adapter.description,
-                    adapter.mac,
-                    adapter
-                        .dhcp_server
-                        .map_or_else(|| "-".into(), |ip| ip.to_string())
-                ))
+        ui.label(
+            RichText::new(&adapter.description)
                 .size(12.0)
                 .color(p.muted),
+        );
+        ui.add_space(2.0);
+        ui.horizontal(|ui| {
+            let mut detail = |key: &str, value: String| {
+                ui.label(RichText::new(key).size(12.0).color(p.muted));
+                ui.label(RichText::new(value).size(12.0).color(p.ink));
+                ui.add_space(14.0);
+            };
+            detail("MAC", adapter.mac.clone());
+            detail(
+                t(thai, "DHCP server", "DHCP server"),
+                adapter
+                    .dhcp_server
+                    .map_or_else(|| "-".into(), |ip| ip.to_string()),
             );
-            let (status_rect, _) = ui.allocate_exact_size(Vec2::splat(12.0), egui::Sense::hover());
-            if adapter.connected {
-                ui.painter()
-                    .circle_filled(status_rect.center(), 3.5, p.accent);
-            } else {
-                ui.painter()
-                    .circle_stroke(status_rect.center(), 4.0, Stroke::new(1.5, p.muted));
-                ui.painter().line_segment(
-                    [
-                        status_rect.left_top() + egui::vec2(2.0, 2.0),
-                        status_rect.right_bottom() - egui::vec2(2.0, 2.0),
-                    ],
-                    Stroke::new(1.5, p.muted),
-                );
-            }
-            ui.label(
-                RichText::new(if adapter.connected {
-                    t(thai, "Link up", "เชื่อมต่ออยู่")
+            detail(
+                t(thai, "Status", "สถานะ"),
+                if adapter.connected {
+                    t(thai, "Connected", "เชื่อมต่ออยู่")
                 } else {
-                    t(thai, "Link down", "ไม่เชื่อมต่อ")
-                })
-                .size(12.0)
-                .color(p.accent),
+                    t(thai, "Disconnected", "ไม่เชื่อมต่อ")
+                }
+                .into(),
             );
         });
-        ui.add_space(4.0);
+        ui.add_space(8.0);
     }
 
     fn settings_grid(&mut self, ui: &mut Ui, p: Palette) {
@@ -489,118 +502,23 @@ impl SimpleIpApp {
         let gateway = value(adapter.gateway);
         let dns1 = value(adapter.dns.first().copied());
         let dns2 = value(adapter.dns.get(1).copied());
-        let ip_mode = if matches!(adapter.config.ip, simple_ip_core::IpConfig::Dhcp) {
-            "DHCP"
-        } else {
-            t(thai, "Manual", "กำหนดเอง")
-        };
-        let dns_mode = if matches!(adapter.config.dns, simple_ip_core::DnsConfig::Automatic) {
-            t(thai, "Automatic", "อัตโนมัติ")
-        } else {
-            t(thai, "Manual", "กำหนดเอง")
-        };
         let available = ui.available_width();
-        // An IPv4 editor needs ~230 px; wider fields only push the columns apart.
-        let widths = [
-            112.0,
-            130.0,
-            (available - 112.0 - 130.0 - 24.0).clamp(200.0, 240.0),
-        ];
+        // One editable column: the form starts from the current values, so a separate
+        // "current" column only repeated them. Differences are marked with a diamond.
+        let widths = [130.0, (available - 130.0 - 12.0).clamp(220.0, 280.0)];
         let original = self.session.draft().clone();
-        let dirty = self.session.is_dirty();
-        let can_copy = adapter.address.is_some();
-        let mut copy_clicked = false;
+        let mut switched_to_manual = false;
         let issues = self.session.issues.clone();
         let draft = self.session.draft_mut();
         #[cfg(test)]
         let mut row_rects = Vec::new();
         egui::Grid::new("settings_matrix")
-            .num_columns(3)
-            .spacing([12.0, 2.0])
+            .num_columns(2)
+            .spacing([12.0, ROW_GAP])
             .show(ui, |ui| {
-                for (label, width, symbol) in [
-                    ("", widths[0], None),
-                    (
-                        t(thai, "Current", "ค่าปัจจุบัน"),
-                        widths[1],
-                        Some(Symbol::Desktop),
-                    ),
-                    (
-                        t(thai, "Desired", "ค่าที่ต้องการ"),
-                        widths[2],
-                        Some(Symbol::Manual),
-                    ),
-                ] {
-                    let text = if symbol.is_some() {
-                        format!("\u{2003}    {label}")
-                    } else {
-                        label.into()
-                    };
-                    let response = grid_label(
-                        ui,
-                        &text,
-                        width,
-                        if label == t(thai, "Desired", "ค่าที่ต้องการ") {
-                            p.ink
-                        } else {
-                            p.muted
-                        },
-                    );
-                    if let Some(symbol) = symbol {
-                        paint_symbol(ui, response.rect, symbol, p.muted);
-                    }
-                    if label == t(thai, "Current", "ค่าปัจจุบัน") && can_copy
-                    {
-                        // Copies the current column into the desired column as manual values.
-                        let rect = egui::Rect::from_min_size(
-                            egui::pos2(response.rect.left() + width - 30.0, response.rect.top()),
-                            Vec2::new(30.0, response.rect.height()),
-                        );
-                        let copy = ui
-                            .interact(rect, Id::unique("copy_current"), egui::Sense::click())
-                            .on_hover_cursor(egui::CursorIcon::PointingHand)
-                            .on_hover_text(t(
-                                thai,
-                                "Use current values as manual settings",
-                                "ใช้ค่าปัจจุบันเป็นค่ากำหนดเอง",
-                            ));
-                        paint_symbol(
-                            ui,
-                            rect,
-                            Symbol::Copy,
-                            if copy.hovered() { p.primary } else { p.muted },
-                        );
-                        copy_clicked = copy.clicked();
-                    }
-                    if label == t(thai, "Desired", "ค่าที่ต้องการ") && dirty
-                    {
-                        let galley = ui.painter().layout_no_wrap(
-                            t(thai, "Edited", "แก้ไขแล้ว").into(),
-                            FontId::proportional(11.0),
-                            p.primary,
-                        );
-                        let pos = egui::pos2(
-                            response.rect.left() + width - galley.size().x,
-                            response.rect.center().y - galley.size().y / 2.0,
-                        );
-                        ui.painter().galley(pos, galley, p.primary);
-                        paint_symbol(
-                            ui,
-                            egui::Rect::from_min_size(
-                                pos - egui::vec2(29.0, 0.0),
-                                Vec2::new(28.0, response.rect.height()),
-                            ),
-                            Symbol::Manual,
-                            p.primary,
-                        );
-                    }
-                }
-                ui.end_row();
-
                 grid_label(ui, t(thai, "IP mode", "โหมด IP"), widths[0], p.ink);
-                grid_label(ui, ip_mode, widths[1], p.ink);
                 let ip_controls = ui.allocate_ui_with_layout(
-                    Vec2::new(widths[2], ROW_HEIGHT),
+                    Vec2::new(widths[1], ROW_HEIGHT),
                     Layout::left_to_right(Align::Center),
                     |ui| {
                         ui.radio_value(&mut draft.automatic_ip, true, "DHCP");
@@ -614,6 +532,7 @@ impl SimpleIpApp {
                             && !draft.automatic_ip
                         {
                             draft.automatic_dns = false;
+                            switched_to_manual = draft.address.trim().is_empty();
                         }
                     },
                 );
@@ -621,7 +540,7 @@ impl SimpleIpApp {
                     ui,
                     egui::Rect::from_min_size(
                         ip_controls.response.rect.min,
-                        Vec2::new(widths[2], ROW_HEIGHT),
+                        Vec2::new(widths[1], ROW_HEIGHT),
                     ),
                     draft.automatic_ip
                         != matches!(adapter.config.ip, simple_ip_core::IpConfig::Dhcp),
@@ -682,9 +601,8 @@ impl SimpleIpApp {
                 let _ = rects;
 
                 grid_label(ui, t(thai, "DNS mode", "โหมด DNS"), widths[0], p.ink);
-                grid_label(ui, dns_mode, widths[1], p.ink);
                 let dns_controls = ui.allocate_ui_with_layout(
-                    Vec2::new(widths[2], ROW_HEIGHT),
+                    Vec2::new(widths[1], ROW_HEIGHT),
                     Layout::left_to_right(Align::Center),
                     |ui| {
                         ui.add_enabled_ui(draft.automatic_ip, |ui| {
@@ -710,7 +628,7 @@ impl SimpleIpApp {
                     ui,
                     egui::Rect::from_min_size(
                         dns_controls.response.rect.min,
-                        Vec2::new(widths[2], ROW_HEIGHT),
+                        Vec2::new(widths[1], ROW_HEIGHT),
                     ),
                     draft.automatic_dns
                         != matches!(adapter.config.dns, simple_ip_core::DnsConfig::Automatic),
@@ -757,14 +675,9 @@ impl SimpleIpApp {
         {
             self.aligned_rows = row_rects;
         }
-        if copy_clicked {
+        // Switching an empty form to Manual starts from the current addresses.
+        if switched_to_manual {
             self.session.copy_current();
-            self.status = t(
-                thai,
-                "Copied as manual settings. Nothing applied.",
-                "คัดลอกเป็นค่ากำหนดเองแล้ว ยังไม่เปลี่ยนเครือข่าย",
-            )
-            .into();
         }
         if *self.session.draft() != original {
             self.session.draft_changed();
@@ -938,7 +851,7 @@ impl SimpleIpApp {
             ctx.data_mut(|data| data.insert_temp(Id::unique("requested_issue_field"), field));
         }
         if let Some(rect) = ctx.input(|i| i.viewport().inner_rect) {
-            self.window_size = [rect.width().max(700.0), rect.height().max(440.0)];
+            self.window_size = [rect.width().max(700.0), rect.height().max(470.0)];
         }
         self.poll_adapters(&ctx);
         self.shortcuts(&ctx);
@@ -1040,6 +953,7 @@ impl eframe::App for SimpleIpApp {
 }
 
 const ROW_HEIGHT: f32 = 28.0;
+const ROW_GAP: f32 = 8.0;
 const FIELD_FONT: f32 = 14.0;
 
 fn field_differs(id: &str, current: &str, desired: &str, enabled: bool) -> bool {
@@ -1113,30 +1027,21 @@ fn edit_row(
     id: &str,
     value: &mut String,
     enabled: bool,
-    widths: [f32; 3],
+    widths: [f32; 2],
     p: Palette,
     issues: &[simple_ip_core::ValidationIssue],
     thai: bool,
-) -> [egui::Rect; 3] {
+) -> [egui::Rect; 2] {
     let label = grid_label(ui, label, widths[0], p.ink);
-    let current_text = current;
-    let current = grid_label(ui, current_text, widths[1], p.muted);
-    let current = current
-        .interact(egui::Sense::CLICK)
-        .on_hover_cursor(egui::CursorIcon::Copy)
-        .on_hover_text("Click to copy / คลิกเพื่อคัดลอก");
-    if current.clicked() {
-        ui.ctx().copy_text(current_text.to_owned());
-    }
-    let different = field_differs(id, current_text, value, enabled);
+    let different = field_differs(id, current, value, enabled);
     let editor = if enabled {
-        crate::ipv4_input::show(ui, id, value, widths[2], ROW_HEIGHT)
+        crate::ipv4_input::show(ui, id, value, widths[1], ROW_HEIGHT)
             .labelled_by(label.id)
             .on_hover_text(hint)
     } else {
-        // Empty disabled boxes read as missing data; say the value is assigned automatically.
+        // Automatic fields show what Windows currently has, read-only.
         let (rect, response) =
-            ui.allocate_exact_size(Vec2::new(widths[2], ROW_HEIGHT), egui::Sense::hover());
+            ui.allocate_exact_size(Vec2::new(widths[1], ROW_HEIGHT), egui::Sense::click());
         ui.painter().rect_stroke(
             rect,
             4.0,
@@ -1146,11 +1051,23 @@ fn edit_row(
         ui.painter().text(
             rect.left_center() + egui::vec2(10.0, 0.0),
             egui::Align2::LEFT_CENTER,
-            t(thai, "Automatic (DHCP)", "อัตโนมัติ (DHCP)"),
+            current,
             FontId::proportional(FIELD_FONT),
             p.muted,
         );
+        ui.painter().text(
+            rect.right_center() - egui::vec2(10.0, 0.0),
+            egui::Align2::RIGHT_CENTER,
+            t(thai, "Auto", "อัตโนมัติ"),
+            FontId::proportional(12.0),
+            p.muted,
+        );
+        if response.clicked() {
+            ui.ctx().copy_text(current.to_owned());
+        }
         response
+            .on_hover_cursor(egui::CursorIcon::Copy)
+            .on_hover_text(t(thai, "Click to copy", "คลิกเพื่อคัดลอก"))
     };
     focus_input(ui, id, &editor);
     let field = match id {
@@ -1196,51 +1113,15 @@ fn edit_row(
         ));
         editor
             .clone()
-            .on_hover_text("Different from current / ต่างจากค่าปัจจุบัน");
+            .on_hover_text(format!("{}: {current}", t(thai, "Current", "ค่าปัจจุบัน")));
     }
     ui.end_row();
-    [label.rect, current.rect, editor.rect]
+    [label.rect, editor.rect]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn clicking_current_value_emits_clipboard_text_without_mutating_draft() {
-        let ctx = egui::Context::default();
-        let mut app = SimpleIpApp::with_context(&ctx, true, 1.0);
-        app.session.load_lab_sample();
-        let size = Vec2::new(820.0, 620.0);
-        for _ in 0..5 {
-            frame(&ctx, &mut app, size, 1.0, vec![]);
-        }
-        let original = app.session.draft().clone();
-        let position = app.aligned_rows[0][1].center();
-        let mut commands = vec![];
-        for pressed in [true, false] {
-            let input = egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-                events: vec![
-                    egui::Event::PointerMoved(position),
-                    egui::Event::PointerButton {
-                        pos: position,
-                        button: egui::PointerButton::Primary,
-                        pressed,
-                        modifiers: egui::Modifiers::NONE,
-                    },
-                ],
-                ..Default::default()
-            };
-            let mut output = ctx.run_ui(input, |ui| app.render(ui));
-            output.textures_delta.clear();
-            commands.extend(output.platform_output.commands);
-        }
-        assert!(commands.iter().any(
-            |command| matches!(command, egui::OutputCommand::CopyText(text) if text == "192.0.2.24")
-        ));
-        assert_eq!(app.session.draft(), &original);
-    }
 
     #[test]
     fn semantic_prefix_comparison_and_issue_focus() {
@@ -1375,12 +1256,12 @@ mod tests {
                 }
                 assert_eq!(app.aligned_rows.len(), 5);
                 assert!(
-                    app.aligned_rows[4][2].bottom() < app.preview_button_rect.top(),
+                    app.aligned_rows[4][1].bottom() < app.preview_button_rect.top(),
                     "Last row is clipped below the pinned action"
                 );
                 let first = app.aligned_rows[0];
                 for row in &app.aligned_rows {
-                    for column in 0..3 {
+                    for column in 0..2 {
                         assert!(
                             (row[column].left() - first[column].left()).abs() < 1.0,
                             "Column shifted: {row:?}"
@@ -1390,7 +1271,7 @@ mod tests {
                             "Row does not share a text plane: {row:?}"
                         );
                     }
-                    assert!(row[2].right() <= size.x - 8.0);
+                    assert!(row[1].right() <= size.x - 8.0);
                 }
                 let text_pos = |text: &str| {
                     app.painted_text
@@ -1411,12 +1292,7 @@ mod tests {
                         "Painted label is not left aligned: {label}"
                     );
                 }
-                let current = text_pos("192.0.2.24");
                 let desired = text_pos("198");
-                assert!(
-                    (current.y - desired.y).abs() < 1.0,
-                    "Actual text origins are on different planes: {current:?}, {desired:?}"
-                );
                 assert!(
                     app.painted_text
                         .iter()

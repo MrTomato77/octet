@@ -15,7 +15,7 @@ impl Default for State {
             version: 2,
             thai: false,
             dark: false,
-            size: [700.0, 440.0],
+            size: [700.0, 470.0],
         }
     }
 }
@@ -27,10 +27,10 @@ fn decode(bytes: &[u8]) -> Result<State, String> {
         return Err("Unsupported storage version".into());
     }
     if !state.size.iter().all(|v| v.is_finite() && *v > 0.0) {
-        state.size = [700.0, 440.0];
+        state.size = [700.0, 470.0];
     }
     state.size[0] = state.size[0].clamp(700.0, 3840.0);
-    state.size[1] = state.size[1].clamp(440.0, 2160.0);
+    state.size[1] = state.size[1].clamp(470.0, 2160.0);
     Ok(state)
 }
 

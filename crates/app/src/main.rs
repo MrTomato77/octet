@@ -28,7 +28,7 @@ fn main() -> eframe::Result {
                     .filter(|v| (0.75..=2.0).contains(v))
                     .unwrap_or(1.0);
             }
-            "--compact" => size = [700.0, 440.0],
+            "--compact" => size = [700.0, 470.0],
             "--demo" => {}
             _ => {}
         }
@@ -36,7 +36,7 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(size)
-            .with_min_inner_size([700.0, 440.0]),
+            .with_min_inner_size([700.0, 470.0]),
         renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
