@@ -33,7 +33,7 @@
   --hover: oklch(0.915 0.006 250); --select: oklch(0.895 0.008 250);
   --accent: oklch(0.5 0.15 255); --accent-ink: oklch(0.99 0 0); --accent-soft: oklch(0.93 0.035 255);
   --sel-fill: oklch(0.885 0.055 255); --sel-ink: oklch(0.27 0.06 255);
-  --ok: oklch(0.6 0.13 150); --bad: oklch(0.55 0.18 25);
+  --ok: oklch(0.6 0.13 150); --bad: oklch(0.55 0.18 25); --bad-ink: white;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -44,7 +44,7 @@
     --hover: oklch(0.27 0.008 250); --select: oklch(0.3 0.01 250);
     --accent: oklch(0.74 0.12 255); --accent-ink: oklch(0.17 0.02 255); --accent-soft: oklch(0.32 0.05 255);
     --sel-fill: oklch(0.38 0.075 255); --sel-ink: oklch(0.96 0.01 255);
-    --ok: oklch(0.76 0.13 150); --bad: oklch(0.72 0.15 25);
+    --ok: oklch(0.76 0.13 150); --bad: oklch(0.72 0.15 25); --bad-ink: oklch(0.22 0.04 25);
     color-scheme: dark;
   }
 }
@@ -55,7 +55,7 @@
   --hover: oklch(0.27 0.008 250); --select: oklch(0.3 0.01 250);
   --accent: oklch(0.74 0.12 255); --accent-ink: oklch(0.17 0.02 255); --accent-soft: oklch(0.32 0.05 255);
     --sel-fill: oklch(0.38 0.075 255); --sel-ink: oklch(0.96 0.01 255);
-  --ok: oklch(0.76 0.13 150); --bad: oklch(0.72 0.15 25);
+  --ok: oklch(0.76 0.13 150); --bad: oklch(0.72 0.15 25); --bad-ink: oklch(0.22 0.04 25);
   color-scheme: dark;
 }
 
@@ -252,9 +252,21 @@ button, input, select { font: inherit; color: inherit; }
 .actions { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s6); border-top: 1px solid var(--border); background: var(--surface); }
 .status { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status.bad { color: var(--bad); }
-.dlg-body.ask-body { display: flex; gap: var(--s3); align-items: flex-start; }
-#ask-ic { font-size: 24px; line-height: 1; color: var(--bad); flex: none; }
-.ask-body p { margin: 0; }
+/* Confirm: a tinted mark, a one-line question, the detail underneath */
+#ask { width: 360px; }
+.dlg-body.ask-body { display: grid; grid-template-columns: auto 1fr; gap: var(--s4); align-items: start; padding-bottom: var(--s4); }
+.ask-ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-size: 22px;
+  color: var(--bad); background: color-mix(in oklch, var(--bad) 14%, transparent); }
+.ask-ic[hidden] { display: none; }
+.ask-body:has(.ask-ic[hidden]) { grid-template-columns: 1fr; }
+.ask-copy { display: grid; gap: 6px; min-width: 0; padding-top: 2px; }
+.ask-copy h3 { font-size: 15px; line-height: 20px; }
+.ask-copy p { margin: 0; font-size: 13px; line-height: 19px; color: var(--muted); }
+.ask-copy code { font: 12px/18px ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--ink);
+  padding: 1px 6px; border-radius: var(--r-input); background: var(--hover); white-space: nowrap; }
+.dlg-foot.ask-foot { border-top: 0; padding: 0 var(--s6) var(--s6); }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: var(--bad-ink); font-weight: 600; }
+.btn.danger:hover:not(:disabled) { filter: brightness(1.08); background: var(--bad); }
 .status.ok { color: var(--ok); }
 .btn { height: 32px; padding: 0 var(--s4); border-radius: var(--r-item); border: 1px solid var(--border-strong); background: var(--surface);
   cursor: pointer; display: inline-flex; align-items: center; gap: var(--s2); white-space: nowrap; }
@@ -640,8 +652,11 @@ html.app, html.app body { overflow: hidden; }
 
 <dialog id="ask">
   <form method="dialog">
-    <div class="dlg-body ask-body"><i class="ph" id="ask-ic" hidden></i><p id="ask-text"></p></div>
-    <div class="dlg-foot end">
+    <div class="dlg-body ask-body">
+      <span class="ask-ic" id="ask-ic" hidden><i class="ph"></i></span>
+      <div class="ask-copy"><h3 id="ask-text"></h3><p id="ask-more" hidden></p></div>
+    </div>
+    <div class="dlg-foot end ask-foot">
       <button class="btn" value="no" id="ask-no">Cancel</button>
       <button class="btn primary" value="yes" id="ask-yes">Discard</button>
     </div>
@@ -1056,11 +1071,19 @@ function renderAdapter(roll = false) {
   renderForm(roll);
 }
 // In-page confirm: native confirm() blocks and may not show inside the WebView.
-function ask(text, yes, ic = "") {
-  const d = $("ask");
-  $("ask-ic").className = "ph ph-" + ic; $("ask-ic").hidden = !ic;
-  $("ask-text").textContent = text; $("ask-yes").textContent = yes; $("ask-no").textContent = L("Cancel", "ยกเลิก");
+// more: detail line; `backticks` in it become code chips (addresses, MACs). A warning makes Yes red and Cancel the default.
+function ask(text, yes, ic = "", more = "") {
+  const d = $("ask"), m = $("ask-more");
+  $("ask-ic").hidden = !ic; $("ask-ic").firstElementChild.className = "ph ph-" + ic;
+  $("ask-text").textContent = text;
+  m.hidden = !more; m.replaceChildren(...more.split("`").map((part, i) => {
+    if (i % 2 === 0) return part;
+    const c = document.createElement("code"); c.textContent = part; return c;
+  }));
+  $("ask-yes").textContent = yes; $("ask-no").textContent = L("Cancel", "ยกเลิก");
+  $("ask-yes").className = "btn " + (ic === "warning" ? "danger" : "primary");
   d.returnValue = ""; d.showModal();
+  if (ic === "warning") $("ask-no").focus();
   const w = document.querySelector(".window").getBoundingClientRect(), r = d.getBoundingClientRect();
   d.style.left = `${w.left + (w.width - r.width) / 2}px`; d.style.top = `${w.top + (w.height - r.height) / 2}px`;
   return new Promise(res => d.addEventListener("close", () => res(d.returnValue === "yes"), { once: true }));
@@ -1183,7 +1206,9 @@ $("apply").onclick = async () => {
     lock(true); say(L("Checking address…", "กำลังเช็ก IP ซ้ำ…"));
     const owner = await invoke("who_has", { address: sent.address }).catch(() => null);
     lock(false);
-    if (owner && !await ask(L(`${sent.address} is already used by ${owner}. Apply anyway?`, `${sent.address} มีเครื่อง ${owner} ใช้อยู่แล้ว ยังจะบันทึกไหม?`), L("Apply", "บันทึก"), "warning")) {
+    if (owner && !await ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Apply anyway", "บันทึกต่อ"), "warning",
+        L(`\`${sent.address}\` answers from \`${owner}\`. Two devices on one address will both lose connection.`,
+          `\`${sent.address}\` ตอบกลับจากเครื่อง \`${owner}\` ถ้าใช้ IP ซ้ำกัน ทั้งสองเครื่องจะใช้เน็ตไม่ได้`))) {
       rowMsg("address", L(`In use by ${owner}`, `มีเครื่อง ${owner} ใช้อยู่`)); say(L("Not applied", "ยังไม่ได้บันทึก"), "bad"); return;
     }
   }
@@ -1668,7 +1693,10 @@ sel = Math.max(0, firstVisible());
   if (err) { say(L("Could not read adapters: ", "อ่านอะแดปเตอร์ไม่ได้: ") + err, "bad"); $("status").title = String(err); }
 });
 setRail(true, true);
+// Demo links: #settings opens Settings, #conflict shows the address-in-use warning.
 if (!tauri && location.hash === "#settings") openSettings();
+if (!tauri && location.hash === "#conflict") ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Apply anyway", "บันทึกต่อ"), "warning",
+  L("`192.168.1.50` answers from `3C-52-82-11-AB-07`. Two devices on one address will both lose connection.", "`192.168.1.50` ตอบกลับจากเครื่อง `3C-52-82-11-AB-07` ถ้าใช้ IP ซ้ำกัน ทั้งสองเครื่องจะใช้เน็ตไม่ได้"));
 // The window stays hidden until this first frame is drawn (no white flash).
 if (tauri) requestAnimationFrame(() => requestAnimationFrame(() => invoke("ready").catch(() => {})));   // demo link straight to Settings
 // Remembered theme and language, applied without a transition.
