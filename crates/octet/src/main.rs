@@ -137,6 +137,13 @@ fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// The page has painted its first frame: show the window now, so it never opens white.
+#[tauri::command]
+fn ready(window: tauri::WebviewWindow) {
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 
 fn main() {
@@ -166,6 +173,14 @@ fn main() {
         }))
         .setup(|app| {
             let _ = APP.set(app.handle().clone());
+            // If the page never calls ready, show the window anyway.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                if let Some(w) = handle.get_webview_window("main") {
+                    if !w.is_visible().unwrap_or(true) { let _ = w.show(); }
+                }
+            });
             // Windows calls this on its own thread for every interface or address change.
             net::watch(|| {
                 if let Some(app) = APP.get() {
@@ -175,7 +190,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, hostname, open_ncpa, open_link, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, hostname, open_ncpa, open_link, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

@@ -16,7 +16,8 @@
         "height": 510,
         "resizable": false,
         "maximizable": false,
-        "center": true
+        "center": true,
+        "visible": false
       }
     ],
     "security": {

@@ -1668,7 +1668,9 @@ sel = Math.max(0, firstVisible());
   if (err) { say(L("Could not read adapters: ", "อ่านอะแดปเตอร์ไม่ได้: ") + err, "bad"); $("status").title = String(err); }
 });
 setRail(true, true);
-if (!tauri && location.hash === "#settings") openSettings();   // demo link straight to Settings
+if (!tauri && location.hash === "#settings") openSettings();
+// The window stays hidden until this first frame is drawn (no white flash).
+if (tauri) requestAnimationFrame(() => requestAnimationFrame(() => invoke("ready").catch(() => {})));   // demo link straight to Settings
 // Remembered theme and language, applied without a transition.
 {
   const th = ["light", "dark"].includes(pref("octet-theme")) ? pref("octet-theme") : "system";
