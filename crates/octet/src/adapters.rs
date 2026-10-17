@@ -130,8 +130,10 @@ fn parse(json: &[u8]) -> Result<Vec<Adapter>, String> {
             }
         })
         .collect();
-    // Connected adapters first, then by name, so the usual choice is at the top.
-    adapters.sort_by(|a, b| (b.state == "up").cmp(&(a.state == "up")).then(a.name.cmp(&b.name)));
+    // The adapter that reaches the internet (connected, has a gateway) first, then other
+    // connected ones, then by name, so the app opens on the usual choice.
+    let rank = |a: &Adapter| (a.state != "up", a.cfg.gateway.is_empty());
+    adapters.sort_by(|a, b| rank(a).cmp(&rank(b)).then(a.name.cmp(&b.name)));
     Ok(adapters)
 }
 
