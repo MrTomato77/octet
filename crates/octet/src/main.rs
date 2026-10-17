@@ -54,6 +54,20 @@ fn open_ncpa() -> Result<(), String> {
     hidden("control").arg("ncpa.cpl").spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// Opens one of Octet's own pages in the default browser. A fixed list, so the
+/// page can't be made to launch anything else.
+#[tauri::command]
+fn open_link(which: String) -> Result<(), String> {
+    let url = match which.as_str() {
+        "repo" => "https://github.com/MrTomato77/octet",
+        "releases" => "https://github.com/MrTomato77/octet/releases",
+        "notices" => "https://github.com/MrTomato77/octet/blob/main/THIRD-PARTY-NOTICES.md",
+        "simpleip" => "https://github.com/KurtisLiggett/Simple-IP-Config",
+        _ => return Err("Unknown link".into()),
+    };
+    hidden("explorer").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if let [_, flag, request, out] = args.as_slice() {
@@ -62,7 +76,7 @@ fn main() {
         }
     }
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![read_adapters, change, flush_dns, open_ncpa])
+        .invoke_handler(tauri::generate_handler![read_adapters, change, flush_dns, open_ncpa, open_link])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");
 }

@@ -10,7 +10,7 @@
 /* Layout spec. Every size in the window comes from these tokens. */
 :root {
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px;
-  --win-w: 680px; --win-h: 542px;
+  --win-w: 520px; --win-h: 542px;
   --side-w: 216px;
   --label-w: 112px;          /* shared by adapter facts and the form */
   --col-gap: 16px;
@@ -65,28 +65,40 @@ button, input, select { font: inherit; color: inherit; }
 .note { font-size: 12px; color: var(--muted); max-width: var(--win-w); text-align: center; }
 
 /* Window: fixed size, like the real app */
-/* Collapsing the sidebar to a rail shrinks the window instead of leaving the
-   fixed-width form floating in extra space (Tauri: appWindow.setSize). */
-.window.rail { --side-w: 56px; --win-w: 520px; }
+/* The sidebar is a 56px rail. Expanded, it rises above the form (z axis) instead of
+   pushing it or resizing the window; a scrim dims what it covers. */
+.window.rail { --side-w: 56px; }
 .window { width: var(--win-w); height: var(--win-h); display: grid; grid-template-rows: 32px 1fr;
   transition: width var(--t-slow) var(--ease-out);
   background: var(--bg); border-radius: 8px; overflow: hidden;
   box-shadow: 0 0 0 1px var(--border-strong), 0 16px 48px oklch(0.2 0.02 250 / 0.25); }
 .titlebar { display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3); font-size: 12px; color: var(--muted); background: var(--side); }
 .titlebar i { font-size: 16px; color: var(--accent); }
-.body { display: grid; grid-template-columns: var(--side-w) 1fr; min-height: 0; transition: grid-template-columns var(--t-slow) var(--ease-out); }
+.body { display: grid; grid-template-columns: 56px 1fr; min-height: 0; }
 
 /* Sidebar */
-.side { background: var(--side); border-right: 1px solid var(--border); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; overflow: hidden; }
-.side-head { display: flex; align-items: center; gap: var(--s1); padding: var(--s3) var(--s2) var(--s2); }
+.side { background: var(--side); border-right: 1px solid var(--border); display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr); min-height: 0; overflow: hidden;
+  position: relative; z-index: 6; width: var(--side-w);
+  transition: width var(--t-slow) var(--ease-out), box-shadow var(--t-slow) var(--ease-out); }
+.window:not(.rail) .side { box-shadow: 12px 0 32px oklch(0.2 0.02 250 / 0.28); }
+.main::after { content: ""; position: absolute; inset: 0; z-index: 5; background: oklch(0.2 0.02 250 / 0.28);
+  opacity: 0; pointer-events: none; transition: opacity var(--t-slow) var(--ease-out); }
+.window:not(.rail) .main::after { opacity: 1; pointer-events: auto; cursor: pointer; }
+.side-head { display: flex; align-items: center; gap: var(--s1); padding: var(--s3) var(--s2) var(--s2) var(--s3); }
 .side-head h2 { flex: 1; margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
 
 /* Rail: icons only, status dot becomes a badge on the icon, names move to tooltips */
-.rail .side-head { flex-direction: column; }
-.rail .side-head h2, .rail .item .name { display: none; }
-.rail .item { grid-template-columns: 20px; justify-content: center; padding: 0; }
-.rail .side-foot .item { grid-template-columns: 20px; }
-.rail .list .item .dot { position: absolute; left: 21px; top: 22px; width: 7px; height: 7px; box-shadow: 0 0 0 2px var(--side); }
+/* .compact is the icon-only layout. It switches on only after the panel has
+   finished closing, so nothing re-centres inside a still-wide panel and bounces back. */
+.compact .side-head { flex-direction: column; padding-left: var(--s2); }
+.compact .side-head h2, .compact .item .name { display: none; }
+.compact .item { grid-template-columns: 20px; justify-content: center; padding: 0; }
+.compact .side-foot .item { grid-template-columns: 20px; }
+/* The status dot rides the panel edge: one left formula for both states (the badge
+   corner at 40px, the row end at 200px), so it travels with the width, not after it. */
+.list .item .dot { position: absolute; left: calc(100% - 19px); top: 16px; width: 7px; height: 7px;
+  transition: left var(--t-slow) var(--ease-out), top var(--t-slow) var(--ease-out); }
+.rail .list .item .dot { top: 22px; box-shadow: 0 0 0 2px var(--side); }
 .rail .list .item .dot.off { background: var(--side); box-shadow: inset 0 0 0 1.5px var(--faint), 0 0 0 2px var(--side); }
 .rail .list .item[aria-current="true"] .dot { box-shadow: 0 0 0 2px var(--sel-fill); }
 .rail .list .item[aria-current="true"] .dot.off { background: var(--sel-fill); box-shadow: inset 0 0 0 1.5px var(--sel-ink), 0 0 0 2px var(--sel-fill); }
@@ -96,10 +108,14 @@ button, input, select { font: inherit; color: inherit; }
 .icon-btn:focus-visible, .item:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .list { list-style: none; margin: 0; padding: 0 var(--s2); display: grid; gap: 2px; align-content: start; overflow: auto; }
 .item { position: relative; width: 100%; display: grid; grid-template-columns: 20px 1fr 8px; align-items: center; gap: var(--s3);
-  height: 40px; padding: 0 var(--s3); border: 0; border-radius: var(--r-item); background: transparent; text-align: left; cursor: pointer; }
+  height: 40px; padding: 0 var(--s3) 0 10px; border: 0; border-radius: var(--r-item); background: transparent; text-align: left; cursor: pointer; }
 .item:hover { background: var(--hover); }
 .list { position: relative; }
-.list li { position: relative; z-index: 1; }
+.list li { position: relative; z-index: 1; min-width: 0; }
+/* Rows shrink with the panel (their content is clipped), so the dot and the
+   selection block follow the edge all the way instead of stopping at min-content. */
+.list { grid-template-columns: minmax(0, 1fr); }
+.item { min-width: 0; overflow: hidden; }
 /* Selection: one accent block behind the rows that travels to the picked adapter.
    Motion: Motion Reference "tab indicator" (stretch toward the target, then settle on it). */
 .indicator { position: absolute; z-index: 0; left: var(--s2); right: var(--s2); top: 0; height: 40px;
@@ -114,7 +130,11 @@ button, input, select { font: inherit; color: inherit; }
 .item.off .name { color: var(--muted); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 .dot.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--faint); }
-.side-foot { padding: var(--s2); border-top: 1px solid var(--border); }
+.side-foot { padding: 0 var(--s2) var(--s2); display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+/* The line sits above Settings only: below it is 8 + 40 + 8 = 56px, the action bar's height,
+   so it continues the action bar's top border across the window. */
+.side-foot hr { border: 0; border-top: 1px solid var(--border); margin: var(--s1) calc(-1 * var(--s2)) 6px; }
+.item .mi { width: 18px; height: 18px; color: var(--muted); }
 .side-foot .item { grid-template-columns: 20px 1fr; }
 
 /* Main pane */
@@ -124,7 +144,9 @@ button, input, select { font: inherit; color: inherit; }
    Facts are not settings, so they no longer borrow the form's label column. */
 .head { display: grid; grid-template-columns: minmax(0, max-content) auto 1fr auto; align-items: center; column-gap: var(--s3); }
 .head h1 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
-.head h1 i { font-size: 20px; color: var(--muted); }
+.head h1 i { font-size: 20px; color: var(--muted); flex: none; }
+/* Long adapter names stay on one line; the full name is in the tooltip */
+#a-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One hardware line: what the adapter is (left, truncates) and its address (right, never cut). */
 .sub { grid-column: 1 / -1; margin: var(--s1) 0 0; display: flex; align-items: baseline; gap: var(--s6); font-size: 12px; line-height: 16px; color: var(--muted); }
 .desc { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -256,11 +278,38 @@ dialog { width: 400px; max-width: calc(var(--win-w) - 2 * var(--s6)); position: 
 dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .dlg-body { padding: var(--s6); display: grid; gap: var(--s4); }
 .dlg-body h3 { margin: 0; font-size: 16px; font-weight: 600; }
+/* Settings take effect as you change them, so the dialog only needs a close button */
+.dlg-head { display: flex; align-items: center; justify-content: space-between; margin: -6px -8px 0 0; }
 .set { display: grid; grid-template-columns: 96px 1fr; column-gap: var(--col-gap); row-gap: var(--s2); align-items: start; }
 .set .lbl { color: var(--muted); min-height: 32px; display: flex; align-items: center; }
 .set > .check, .set .stack > * { min-height: 32px; }
-.set select { height: 32px; border: 1px solid var(--border-strong); border-radius: var(--r-input); background: var(--surface); padding: 0 var(--s2); }
+/* Settings choices: same sliding thumb as the mode toggles, any number of options */
+.seg.opt { width: 100%; }
+.seg.opt .choice { padding: 0 var(--s2); }
+.seg.opt .thumb { width: calc((100% - 4px) / var(--n)); transform: translateX(calc(var(--k, 0) * 100%)); }
 .set .stack { display: grid; gap: 0; }
+/* Settings sections: one fixed height so switching tabs never resizes the dialog */
+.panes { min-height: 248px; }
+.pane[hidden] { display: none; }
+.pane.in { animation: rise var(--t-base) var(--ease-out); }
+.keys { display: grid; grid-template-columns: auto auto 1fr; gap: var(--s2) 6px; align-items: center; font-size: 13px; }
+.keys > span:last-child, .keys > span:nth-child(3n) { color: var(--muted); padding-left: var(--s2); }
+kbd { font: 12px/20px var(--font); min-width: 24px; padding: 0 6px; text-align: center; border: 1px solid var(--border-strong);
+  border-bottom-width: 2px; border-radius: var(--r-input); background: var(--bg); justify-self: start; }
+.about { display: grid; gap: var(--s4); align-content: start; }
+/* Icon beside two even lines: name + version, then the tagline (kept to one line) */
+.brand { display: grid; grid-template-columns: 40px 1fr; column-gap: var(--s3); row-gap: 2px; align-items: center; font-size: 13px; line-height: 18px; }
+.brand img { grid-row: span 2; border-radius: 8px; }
+.brand-name { display: flex; align-items: center; gap: var(--s2); }
+.brand b { font-size: 15px; line-height: 20px; }
+.brand .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ver { height: 18px; padding: 0 6px; border-radius: var(--r-input); background: var(--hover); color: var(--muted);
+  font-size: 11px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.about .set .lbl, .about .val { min-height: 24px; display: flex; align-items: center; font-size: 13px; }
+.about .val { gap: 4px; flex-wrap: wrap; }
+.link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .dlg-foot { display: flex; justify-content: space-between; gap: var(--s2); padding: var(--s3) var(--s6); border-top: 1px solid var(--border); }
 .link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 13px; }
 
@@ -312,6 +361,16 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 @keyframes menu-in { from { opacity: 0; transform: scale(0.97) translateY(-4px); } }
 dialog[open] { animation: dialog-in var(--t-base) var(--ease-out); }
 dialog[open]::backdrop { animation: fade var(--t-base) var(--ease-out); }
+/* Close as softly as it opened */
+dialog.closing { animation: dialog-out var(--t-fast) ease-in forwards; }
+dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
+@keyframes dialog-out { to { opacity: 0; transform: scale(0.98) translateY(4px); } }
+@keyframes fade-out { to { opacity: 0; } }
+/* Settings rows arrive one after another */
+dialog[open] .set > *, dialog[open] .stack > * { animation: rise var(--t-base) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 30ms + 60ms); }
+/* An adapter brought back from hidden folds out of the list */
+.stack .check.leave { max-height: 32px; animation: leave var(--t-base) var(--ease-out) forwards; overflow: hidden; }
+@keyframes leave { to { opacity: 0; transform: translateX(8px); max-height: 0; min-height: 0; } }
 @keyframes dialog-in { from { opacity: 0; transform: scale(0.98) translateY(6px); } }
 @keyframes fade { from { opacity: 0; } }
 
@@ -387,6 +446,10 @@ html.app body { display: block; padding: 0; background: var(--bg); }
 html.app .window { width: 100vw; height: 100vh; border-radius: 0; box-shadow: none; grid-template-rows: 1fr; }
 html.app .titlebar, html.app .note { display: none; }
 
+/* No scrollbars anywhere: the window is fixed-size and the list scrolls by wheel or keys */
+html, body, .list, .scroll { scrollbar-width: none; }
+html.app, html.app body { overflow: hidden; }
+
 /* Nothing to show (all hidden, or Windows returned no adapters) */
 .window.empty .scroll { visibility: hidden; }
 .prefix.bad { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
@@ -407,10 +470,11 @@ html.app .titlebar, html.app .note { display: none; }
       <div class="side-head">
         <button class="icon-btn" id="collapse" aria-expanded="true" aria-controls="list" title="Collapse sidebar (Ctrl+B)" aria-label="Collapse sidebar"><i class="ph ph-sidebar-simple"></i></button>
         <h2 data-t="adapters">Adapters</h2>
-        <button class="icon-btn" id="refresh" title="Refresh (F5)" aria-label="Refresh"><i class="ph ph-arrow-clockwise"></i></button>
       </div>
       <ul class="list" id="list"></ul>
       <div class="side-foot">
+        <button class="item" id="refresh" title="Refresh (F5)"><i class="ph ph-arrow-clockwise"></i><span class="name" data-t="refresh">Refresh</span></button>
+        <hr>
         <button class="item" id="open-settings" title="Settings"><i class="ph ph-gear-six"></i><span class="name" data-t="settings">Settings</span></button>
       </div>
     </nav>
@@ -489,21 +553,66 @@ html.app .titlebar, html.app .note { display: none; }
 
 <p class="note">Layout demo with sample data. Nothing here touches the network. Try: switch adapters, Manual, typing octets (3 digits or "." moves on, arrow keys cross), the "..." tools menu, Settings.</p>
 
-<dialog id="settings">
+<dialog id="settings" aria-labelledby="s-title">
   <form method="dialog">
     <div class="dlg-body">
-      <h3 data-t="settings">Settings</h3>
-      <div class="set">
-        <span class="lbl" data-t="theme">Theme</span>
-        <select id="s-theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
-        <span class="lbl" data-t="language">Language</span>
-        <select id="s-lang"><option value="en">English</option><option value="th">ไทย</option></select>
-        <span class="lbl" data-t="hidden">Hidden</span>
-        <div class="stack" id="s-hidden"></div>
+      <div class="dlg-head">
+        <h3 id="s-title" data-t="settings">Settings</h3>
+        <button class="icon-btn" value="close" title="Close (Esc)" aria-label="Close"><i class="ph ph-x"></i></button>
       </div>
-    </div>
-    <div class="dlg-foot end">
-      <button class="btn primary" value="close" data-t="done">Done</button>
+      <div class="seg opt tabs" role="tablist" aria-label="Settings sections" style="--n: 3">
+        <span class="thumb"></span>
+        <label class="choice"><input type="radio" name="stab" value="general" checked><span data-t="general">General</span></label>
+        <label class="choice"><input type="radio" name="stab" value="keys"><span data-t="keys">Shortcuts</span></label>
+        <label class="choice"><input type="radio" name="stab" value="about"><span data-t="about">About</span></label>
+      </div>
+      <div class="panes">
+        <div class="pane set" data-pane="general">
+          <span class="lbl" data-t="theme">Theme</span>
+          <div class="seg opt" role="radiogroup" aria-label="Theme" style="--n: 3">
+            <span class="thumb"></span>
+            <label class="choice"><input type="radio" name="theme" value="system" checked><span data-t="system">System</span></label>
+            <label class="choice"><input type="radio" name="theme" value="light"><span data-t="light">Light</span></label>
+            <label class="choice"><input type="radio" name="theme" value="dark"><span data-t="dark">Dark</span></label>
+          </div>
+          <span class="lbl" data-t="language">Language</span>
+          <div class="seg opt" role="radiogroup" aria-label="Language" style="--n: 2">
+            <span class="thumb"></span>
+            <label class="choice"><input type="radio" name="lang" value="en" checked><span>English</span></label>
+            <label class="choice"><input type="radio" name="lang" value="th"><span>ไทย</span></label>
+          </div>
+          <span class="lbl" data-t="hidden">Hidden</span>
+          <div class="stack" id="s-hidden"></div>
+        </div>
+        <div class="pane keys" data-pane="keys" hidden>
+          <kbd>Ctrl</kbd><kbd>Enter</kbd><span data-t="kApply">Apply changes</span>
+          <kbd>F5</kbd><span></span><span data-t="kRefresh">Read adapters again</span>
+          <kbd>Ctrl</kbd><kbd>B</kbd><span data-t="kSide">Expand or collapse the sidebar</span>
+          <kbd>Ctrl</kbd><kbd>C</kbd><span data-t="kCopy">Copy the whole configuration</span>
+          <kbd>Ctrl</kbd><kbd>V</kbd><span data-t="kPaste">Paste a whole configuration</span>
+          <kbd>.</kbd><kbd>&larr; &rarr;</kbd><span data-t="kOctet">Move between octets</span>
+          <kbd>Esc</kbd><span></span><span data-t="kEsc">Close a menu or the sidebar</span>
+        </div>
+        <div class="pane about" data-pane="about" hidden>
+          <div class="brand">
+            <img src="icon.png" alt="" width="40" height="40">
+            <div class="brand-name"><b>Octet</b><span class="ver" id="s-version">0.1.0</span></div>
+            <span class="muted" data-t="tagline">IPv4 and DNS settings, in seconds.</span>
+          </div>
+          <div class="set">
+            <span class="lbl" data-t="license">License</span>
+            <span class="val">MIT · <button type="button" class="link" data-link="notices" data-t="notices">Third-party notices</button></span>
+            <span class="lbl" data-t="source">Source</span>
+            <span class="val"><button type="button" class="link" data-link="repo">github.com/MrTomato77/octet</button></span>
+            <span class="lbl" data-t="updates">Updates</span>
+            <span class="val"><button type="button" class="link" data-link="releases" data-t="releases">See releases</button></span>
+            <span class="lbl" data-t="privacy">Privacy</span>
+            <span class="val muted" data-t="privacyText">No telemetry. Octet makes no network requests of its own.</span>
+            <span class="lbl" data-t="credits">Credits</span>
+            <span class="val muted"><span data-t="inspired">Inspired by</span> <button type="button" class="link" data-link="simpleip">Simple IP Config</button></span>
+          </div>
+        </div>
+      </div>
     </div>
   </form>
 </dialog>
@@ -553,19 +662,29 @@ const change = request => invoke("change", { request });
 let sel = 0, draft = null, lang = "en";
 
 const T = {
-  en: { adapters: "Adapters", settings: "Settings", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
+  en: { adapters: "Adapters", settings: "Settings", refresh: "Refresh", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
     hide: "Hide from list", ncpa: "Network Connections",
     dhcp: "DHCP", manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
     dns1: "Preferred", dns2: "Alternate", register: "Register in DNS", revert: "Revert", apply: "Apply",
-    theme: "Theme", language: "Language", hidden: "Hidden", done: "Done",
+    theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark",
+    general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: "Read adapters again",
+    kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
+    kOctet: "Move between octets", kEsc: "Close a menu or the sidebar", tagline: "IPv4 and DNS settings, in seconds.",
+    license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
+    privacy: "Privacy", privacyText: "No telemetry. Octet makes no network requests of its own.", credits: "Credits", inspired: "Inspired by",
     up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes",
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
     noneHidden: "No hidden adapters" },
-  th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", release: "ปล่อย DHCP", renew: "ขอ DHCP ใหม่", cycle: "ปล่อยแล้วขอใหม่",
+  th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", refresh: "อ่านใหม่", release: "ปล่อย DHCP", renew: "ขอ DHCP ใหม่", cycle: "ปล่อยแล้วขอใหม่",
     hide: "ซ่อนจากรายการ", ncpa: "Network Connections",
     dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
     dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "ลงทะเบียนใน DNS", revert: "คืนค่า", apply: "ใช้ค่า",
-    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", done: "เสร็จ",
+    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด",
+    general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "ใช้ค่าที่แก้", kRefresh: "อ่านอะแดปเตอร์ใหม่",
+    kSide: "กางหรือพับแถบด้านซ้าย", kCopy: "คัดลอกค่าทั้งชุด", kPaste: "วางค่าทั้งชุด",
+    kOctet: "เลื่อนไปช่องตัวเลขถัดไป", kEsc: "ปิดเมนูหรือแถบด้านซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
+    license: "สัญญาอนุญาต", notices: "ไลบรารีที่ใช้", source: "ซอร์สโค้ด", updates: "อัปเดต", releases: "ดูเวอร์ชันใหม่",
+    privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่ต่อเน็ตเอง", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
     up: "เชื่อมต่ออยู่", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดใช้งาน", none: "ไม่มี", noChanges: "ไม่มีการเปลี่ยนแปลง",
     changes: n => `มี ${n} รายการที่ยังไม่ได้ใช้`, applied: n => `ใช้ค่ากับ ${n} แล้ว`, disable: "ปิดอะแดปเตอร์", enable: "เปิดอะแดปเตอร์",
     noneHidden: "ไม่มีอะแดปเตอร์ที่ซ่อน" },
@@ -872,7 +991,7 @@ function renderForm(roll = false) {
 function renderAdapterFacts() {
   const a = adapters[sel];
   if (!a) return;
-  $("a-name").textContent = a.name;
+  $("a-name").textContent = a.name; $("a-name").title = a.name;
   $("a-icon").className = "ph " + kindIcon[kind(a)];
   $("a-icon").title = kindName[kind(a)];
   $("a-desc").textContent = a.desc; $("a-desc").title = a.desc;
@@ -958,7 +1077,7 @@ function renderList(enter = false) {
     b.querySelector(".name").textContent = a.name;
     if (seen[a.id] && seen[a.id] !== a.state && !calm.matches) b.querySelector(".dot").classList.add("pulse");
     seen[a.id] = a.state;
-    b.onclick = () => select(i);
+    b.onclick = () => { select(i); if (!isRail()) setRail(true); };
     li.append(b); ul.append(li);
   });
   placeIndicator(animateNext);
@@ -1298,13 +1417,17 @@ function renderHidden() {
     l.querySelector("input").onchange = () => {
       hidden.delete(a.id); saveHidden();
       if (!draft) { sel = firstVisible(); renderAdapter(); }
-      renderList(); renderHidden();
+      renderList(true);
+      l.classList.add("leave");
+      setTimeout(renderHidden, calm.matches ? 0 : 200);
     };
     box.append(l);
   });
+  box.querySelectorAll(":scope > *").forEach((el, i) => el.style.setProperty("--i", i + 6));
 }
 // A modal centres on the viewport; in Tauri that is the window. The demo page is
 // larger, so centre it on the window explicitly.
+document.querySelectorAll(".set > *").forEach((el, i) => el.style.setProperty("--i", i));
 $("open-settings").onclick = () => {
   renderHidden();
   const dlg = $("settings"); dlg.showModal();
@@ -1312,35 +1435,82 @@ $("open-settings").onclick = () => {
   dlg.style.left = `${w.left + (w.width - d.width) / 2}px`;
   dlg.style.top = `${w.top + (w.height - d.height) / 2}px`;
 };
-$("s-theme").onchange = e => {
-  const v = e.target.value;
-  const go = () => { if (v === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = v; };
-  document.startViewTransition && !calm.matches ? document.startViewTransition(go) : go();
-};
+// Theme and language crossfade the whole window (View Transitions).
+function crossfade(go) {
+  if (!document.startViewTransition || calm.matches) return go();
+  document.startViewTransition(go).ready.catch(() => {});   // skipped when the window is hidden; go still runs
+}
+function segIndex(name) {
+  const inputs = [...document.querySelectorAll(`input[name=${name}]`)];
+  inputs[0].closest(".seg").style.setProperty("--k", inputs.findIndex(x => x.checked));
+}
+document.querySelectorAll("input[name=theme]").forEach(x => x.onchange = () => {
+  segIndex("theme");
+  crossfade(() => { if (x.value === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = x.value; });
+});
 // Language changes words only; edits in progress stay.
-$("s-lang").onchange = e => {
-  lang = e.target.value; document.documentElement.lang = lang; translate(); renderList(); renderHidden();
-  if (draft) { renderAdapterFacts(); renderForm(); } else renderAdapter();
+document.querySelectorAll("input[name=lang]").forEach(x => x.onchange = () => {
+  segIndex("lang");
+  crossfade(() => {
+    lang = x.value; document.documentElement.lang = lang; translate(); renderList(); renderHidden();
+    if (draft) { renderAdapterFacts(); renderForm(); } else renderAdapter();
+  });
+});
+// Settings sections slide the tab thumb and bring the new pane in.
+document.querySelectorAll("input[name=stab]").forEach(x => x.onchange = () => {
+  segIndex("stab");
+  for (const p of document.querySelectorAll(".pane")) {
+    const on = p.dataset.pane === x.value;
+    if (on && p.hidden) { p.hidden = false; replay(p, "in"); } else if (!on) p.hidden = true;
+  }
+});
+tauri?.app.getVersion().then(v => $("s-version").textContent = v).catch(() => {});
+// Links open in the default browser; inside the app only these known pages can be opened.
+const links = {
+  repo: "https://github.com/MrTomato77/octet",
+  releases: "https://github.com/MrTomato77/octet/releases",
+  notices: "https://github.com/MrTomato77/octet/blob/main/THIRD-PARTY-NOTICES.md",
+  simpleip: "https://github.com/KurtisLiggett/Simple-IP-Config",
 };
+document.querySelectorAll("[data-link]").forEach(b => b.onclick = () =>
+  tauri ? invoke("open_link", { which: b.dataset.link }).catch(e => say(String(e), "bad")) : window.open(links[b.dataset.link], "_blank", "noopener"));
+// Dialogs close with a short fade instead of vanishing.
+function shut(d, value) {
+  let done = false;
+  const close = () => { if (done) return; done = true; d.classList.remove("closing"); d.close(value); };
+  d.classList.add("closing");
+  d.addEventListener("animationend", close, { once: true });
+  setTimeout(close, 250);   // a hidden window may never run the animation
+}
+for (const d of document.querySelectorAll("dialog")) {
+  d.querySelector("form").addEventListener("submit", e => { e.preventDefault(); shut(d, e.submitter?.value ?? ""); });
+  d.addEventListener("cancel", e => { e.preventDefault(); shut(d, ""); });
+}
 function translate() { document.querySelectorAll("[data-t]").forEach(el => { const v = T[lang][el.dataset.t]; if (typeof v === "string") el.textContent = v; }); }
-// Sidebar collapse, remembered per machine (storage may be unavailable; the default is the rail)
-function setRail(on, instant) {
+// Sidebar: always opens as the rail; expanded it floats over the form until you pick,
+// click the dimmed form, or press Esc.
+const isRail = () => document.querySelector(".window").classList.contains("rail");
+let compactTimer = 0;
+function setRail(on, instant = false) {
   const win = document.querySelector(".window");
-  if (instant) win.style.transition = "none";
+  clearTimeout(compactTimer);
   win.classList.toggle("rail", on);
+  if (!on) win.classList.remove("compact");
+  else if (instant || calm.matches) win.classList.add("compact");
+  else compactTimer = setTimeout(() => win.classList.add("compact"), 240);
   $("collapse").setAttribute("aria-expanded", !on);
   $("collapse").title = on ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
   $("collapse").setAttribute("aria-label", on ? "Expand sidebar" : "Collapse sidebar");
-  try { localStorage.setItem("octet-rail", on ? "1" : "0"); } catch {}
-  tauri?.window.getCurrentWindow().setSize(new tauri.dpi.LogicalSize(on ? 520 : 680, 510)).catch(() => {});
-  requestAnimationFrame(() => { placeIndicator(); if (instant) win.style.transition = ""; });
+  hideTip();
 }
-$("collapse").onclick = () => setRail(!document.querySelector(".window").classList.contains("rail"));
-document.querySelector(".body").addEventListener("transitionend", placeIndicator);
+$("collapse").onclick = () => setRail(!isRail());
+document.querySelector(".main").addEventListener("click", e => { if (!isRail() && e.target.classList.contains("main")) setRail(true); });
+document.querySelector(".side").addEventListener("transitionend", placeIndicator);
 document.addEventListener("keydown", e => {
   if (e.key.toLowerCase() === "b" && e.ctrlKey) { e.preventDefault(); $("collapse").click(); }
   if (e.key === "F5") { e.preventDefault(); $("refresh").click(); }
   if (e.key === "Escape" && tools.classList.contains("open")) { setTools(false); $("more").focus(); }
+  else if (e.key === "Escape" && !isRail() && !document.querySelector("dialog[open]")) setRail(true);
   if (e.key === "Enter" && e.ctrlKey && !$("apply").disabled) $("apply").click();
 });
 
@@ -1397,9 +1567,7 @@ sel = Math.max(0, firstVisible());
   renderList(true); renderAdapter(true);
   if (err) { say(L("Could not read adapters: ", "อ่านอะแดปเตอร์ไม่ได้: ") + err, "bad"); $("status").title = String(err); }
 });
-let railPref = null;
-try { railPref = localStorage.getItem("octet-rail"); } catch {}
-setRail(railPref !== "0", true);
+setRail(true, true);
 </script>
 <script type="module">
 // morphicons (MIT) morphs Phosphor's own SVGs, so the icon family stays one.
