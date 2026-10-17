@@ -1,0 +1,17 @@
+[package]
+name = "simple-ip-v2"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+capture = ["dep:image"]
+
+[dependencies]
+eframe.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+simple-ip-core = { path = "../core" }
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+

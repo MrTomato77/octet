@@ -1,0 +1,8 @@
+Phosphor Regular icon font
+Source: https://github.com/phosphor-icons/web/tree/master/src/regular
+Font: https://raw.githubusercontent.com/phosphor-icons/web/master/src/regular/Phosphor.ttf
+Glyph map: upstream src/regular/style.css
+License: MIT, see LICENSE-Phosphor.txt
+SHA256: 06B91E022B7EE899A63EFCED879392A74F0BACBDA54E4467E9F663220D173A10
+Retrieved: 2026-10-17. Unmodified font bytes.
+Icons use a dedicated named font family; Noto remains the proportional text font.
