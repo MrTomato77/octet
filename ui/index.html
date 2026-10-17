@@ -283,6 +283,13 @@ dialog { width: 400px; max-width: calc(var(--win-w) - 2 * var(--s6)); position: 
 dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .dlg-body { padding: var(--s6); display: grid; gap: var(--s4); }
 .dlg-body h3 { margin: 0; font-size: 16px; font-weight: 600; }
+/* Settings take the place of the form; the adapter and its edits wait underneath */
+.settings-view { position: absolute; inset: 0; z-index: 4; background: var(--surface); overflow: hidden; align-content: start; }
+.settings-view[hidden] { display: none; }
+.settings-view.in { animation: rise var(--t-base) var(--ease-out); }
+.settings-view.out { animation: fade-out var(--t-fast) ease-in forwards; }
+#open-settings.on { background: var(--sel-fill); }
+#open-settings.on i, #open-settings.on .name { color: var(--sel-ink); }
 /* Settings take effect as you change them, so the dialog only needs a close button */
 .dlg-head { display: flex; align-items: center; justify-content: space-between; margin: -6px -8px 0 0; }
 .set { display: grid; grid-template-columns: 96px 1fr; column-gap: var(--col-gap); row-gap: var(--s2); align-items: start; }
@@ -372,7 +379,7 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 @keyframes dialog-out { to { opacity: 0; transform: scale(0.98) translateY(4px); } }
 @keyframes fade-out { to { opacity: 0; } }
 /* Settings rows arrive one after another */
-dialog[open] .set > *, dialog[open] .stack > * { animation: rise var(--t-base) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 30ms + 60ms); }
+.settings-view.in .set > *, .settings-view.in .stack > * { animation: rise var(--t-base) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 30ms + 60ms); }
 /* An adapter brought back from hidden folds out of the list */
 .stack .check.leave { max-height: 32px; animation: leave var(--t-base) var(--ease-out) forwards; overflow: hidden; }
 @keyframes leave { to { opacity: 0; transform: translateX(8px); max-height: 0; min-height: 0; } }
@@ -552,81 +559,79 @@ html.app, html.app body { overflow: hidden; }
         <button class="btn" id="revert" disabled><i class="ph ph-arrow-counter-clockwise"></i><span data-t="revert">Revert</span></button>
         <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
       </div>
+      <section class="settings-view" id="settings" aria-labelledby="s-title" hidden>
+          <div class="dlg-body">
+            <div class="dlg-head">
+              <h3 id="s-title" data-t="settings">Settings</h3>
+              <button type="button" class="icon-btn" id="s-close" title="Back (Esc)" aria-label="Back"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="seg opt tabs" role="tablist" aria-label="Settings sections" style="--n: 3">
+              <span class="thumb"></span>
+              <label class="choice"><input type="radio" name="stab" value="general" checked><i class="ph ph-sliders"></i><span data-t="general">General</span></label>
+              <label class="choice"><input type="radio" name="stab" value="keys"><i class="ph ph-keyboard"></i><span data-t="keys">Shortcuts</span></label>
+              <label class="choice"><input type="radio" name="stab" value="about"><i class="ph ph-info"></i><span data-t="about">About</span></label>
+            </div>
+            <div class="panes">
+              <div class="pane set" data-pane="general">
+                <span class="lbl" data-t="theme">Theme</span>
+                <div class="seg opt" role="radiogroup" aria-label="Theme" style="--n: 3">
+                  <span class="thumb"></span>
+                  <label class="choice"><input type="radio" name="theme" value="system" checked><span data-t="system">System</span></label>
+                  <label class="choice"><input type="radio" name="theme" value="light"><span data-t="light">Light</span></label>
+                  <label class="choice"><input type="radio" name="theme" value="dark"><span data-t="dark">Dark</span></label>
+                </div>
+                <span class="lbl" data-t="language">Language</span>
+                <div class="seg opt" role="radiogroup" aria-label="Language" style="--n: 2">
+                  <span class="thumb"></span>
+                  <label class="choice"><input type="radio" name="lang" value="en" checked><span>English</span></label>
+                  <label class="choice"><input type="radio" name="lang" value="th"><span>ไทย</span></label>
+                </div>
+                <span class="lbl" data-t="admin">Run as admin</span>
+                <div class="seg opt" role="radiogroup" aria-label="Run as administrator" style="--n: 2">
+                  <span class="thumb"></span>
+                  <label class="choice" data-tip="UAC prompt for each change"><input type="radio" name="admin" value="ask" checked><span data-t="adminAsk">When needed</span></label>
+                  <label class="choice" data-tip="One UAC prompt when Octet starts"><input type="radio" name="admin" value="always"><span data-t="adminAlways">Always</span></label>
+                </div>
+                <span class="lbl" data-t="hidden">Hidden</span>
+                <div class="stack" id="s-hidden"></div>
+              </div>
+              <div class="pane keys" data-pane="keys" hidden>
+                <kbd>Ctrl</kbd><kbd>Enter</kbd><span data-t="kApply">Apply changes</span>
+                <kbd>F5</kbd><span></span><span data-t="kRefresh">Read adapters again</span>
+                <kbd>Ctrl</kbd><kbd>B</kbd><span data-t="kSide">Expand or collapse the sidebar</span>
+                <kbd>Ctrl</kbd><kbd>C</kbd><span data-t="kCopy">Copy the whole configuration</span>
+                <kbd>Ctrl</kbd><kbd>V</kbd><span data-t="kPaste">Paste a whole configuration</span>
+                <kbd>.</kbd><kbd>&larr; &rarr;</kbd><span data-t="kOctet">Move between octets</span>
+                <kbd>Esc</kbd><span></span><span data-t="kEsc">Close a menu or the sidebar</span>
+              </div>
+              <div class="pane about" data-pane="about" hidden>
+                <div class="brand">
+                  <img src="icon.png" alt="" width="40" height="40">
+                  <div class="brand-name"><b>Octet</b><span class="ver" id="s-version">0.1.0</span></div>
+                  <span class="muted" data-t="tagline">IPv4 and DNS settings, in seconds.</span>
+                </div>
+                <div class="set">
+                  <span class="lbl" data-t="license">License</span>
+                  <span class="val">MIT · <button type="button" class="link" data-link="notices" data-t="notices">Third-party notices</button></span>
+                  <span class="lbl" data-t="source">Source</span>
+                  <span class="val"><button type="button" class="link" data-link="repo">github.com/MrTomato77/octet</button></span>
+                  <span class="lbl" data-t="updates">Updates</span>
+                  <span class="val"><button type="button" class="link" data-link="releases" data-t="releases">See releases</button></span>
+                  <span class="lbl" data-t="privacy">Privacy</span>
+                  <span class="val muted" data-t="privacyText">No telemetry. The only traffic Octet sends is an ARP check before Apply and a ping after it.</span>
+                  <span class="lbl" data-t="credits">Credits</span>
+                  <span class="val muted"><span data-t="inspired">Inspired by</span> <button type="button" class="link" data-link="simpleip">Simple IP Config</button></span>
+                </div>
+              </div>
+            </div>
+          </div>
+      </section>
     </section>
   </div>
 </div>
 
 <p class="note">Layout demo with sample data. Nothing here touches the network. Try: switch adapters, Manual, typing octets (3 digits or "." moves on, arrow keys cross), the "..." tools menu, Settings.</p>
 
-<dialog id="settings" aria-labelledby="s-title">
-  <form method="dialog">
-    <div class="dlg-body">
-      <div class="dlg-head">
-        <h3 id="s-title" data-t="settings">Settings</h3>
-        <button class="icon-btn" value="close" title="Close (Esc)" aria-label="Close"><i class="ph ph-x"></i></button>
-      </div>
-      <div class="seg opt tabs" role="tablist" aria-label="Settings sections" style="--n: 3">
-        <span class="thumb"></span>
-        <label class="choice"><input type="radio" name="stab" value="general" checked><i class="ph ph-sliders"></i><span data-t="general">General</span></label>
-        <label class="choice"><input type="radio" name="stab" value="keys"><i class="ph ph-keyboard"></i><span data-t="keys">Shortcuts</span></label>
-        <label class="choice"><input type="radio" name="stab" value="about"><i class="ph ph-info"></i><span data-t="about">About</span></label>
-      </div>
-      <div class="panes">
-        <div class="pane set" data-pane="general">
-          <span class="lbl" data-t="theme">Theme</span>
-          <div class="seg opt" role="radiogroup" aria-label="Theme" style="--n: 3">
-            <span class="thumb"></span>
-            <label class="choice"><input type="radio" name="theme" value="system" checked><span data-t="system">System</span></label>
-            <label class="choice"><input type="radio" name="theme" value="light"><span data-t="light">Light</span></label>
-            <label class="choice"><input type="radio" name="theme" value="dark"><span data-t="dark">Dark</span></label>
-          </div>
-          <span class="lbl" data-t="language">Language</span>
-          <div class="seg opt" role="radiogroup" aria-label="Language" style="--n: 2">
-            <span class="thumb"></span>
-            <label class="choice"><input type="radio" name="lang" value="en" checked><span>English</span></label>
-            <label class="choice"><input type="radio" name="lang" value="th"><span>ไทย</span></label>
-          </div>
-          <span class="lbl" data-t="admin">Run as admin</span>
-          <div class="seg opt" role="radiogroup" aria-label="Run as administrator" style="--n: 2">
-            <span class="thumb"></span>
-            <label class="choice" data-tip="UAC prompt for each change"><input type="radio" name="admin" value="ask" checked><span data-t="adminAsk">When needed</span></label>
-            <label class="choice" data-tip="One UAC prompt when Octet starts"><input type="radio" name="admin" value="always"><span data-t="adminAlways">Always</span></label>
-          </div>
-          <span class="lbl" data-t="hidden">Hidden</span>
-          <div class="stack" id="s-hidden"></div>
-        </div>
-        <div class="pane keys" data-pane="keys" hidden>
-          <kbd>Ctrl</kbd><kbd>Enter</kbd><span data-t="kApply">Apply changes</span>
-          <kbd>F5</kbd><span></span><span data-t="kRefresh">Read adapters again</span>
-          <kbd>Ctrl</kbd><kbd>B</kbd><span data-t="kSide">Expand or collapse the sidebar</span>
-          <kbd>Ctrl</kbd><kbd>C</kbd><span data-t="kCopy">Copy the whole configuration</span>
-          <kbd>Ctrl</kbd><kbd>V</kbd><span data-t="kPaste">Paste a whole configuration</span>
-          <kbd>.</kbd><kbd>&larr; &rarr;</kbd><span data-t="kOctet">Move between octets</span>
-          <kbd>Esc</kbd><span></span><span data-t="kEsc">Close a menu or the sidebar</span>
-        </div>
-        <div class="pane about" data-pane="about" hidden>
-          <div class="brand">
-            <img src="icon.png" alt="" width="40" height="40">
-            <div class="brand-name"><b>Octet</b><span class="ver" id="s-version">0.1.0</span></div>
-            <span class="muted" data-t="tagline">IPv4 and DNS settings, in seconds.</span>
-          </div>
-          <div class="set">
-            <span class="lbl" data-t="license">License</span>
-            <span class="val">MIT · <button type="button" class="link" data-link="notices" data-t="notices">Third-party notices</button></span>
-            <span class="lbl" data-t="source">Source</span>
-            <span class="val"><button type="button" class="link" data-link="repo">github.com/MrTomato77/octet</button></span>
-            <span class="lbl" data-t="updates">Updates</span>
-            <span class="val"><button type="button" class="link" data-link="releases" data-t="releases">See releases</button></span>
-            <span class="lbl" data-t="privacy">Privacy</span>
-            <span class="val muted" data-t="privacyText">No telemetry. The only traffic Octet sends is an ARP check before Apply and a ping after it.</span>
-            <span class="lbl" data-t="credits">Credits</span>
-            <span class="val muted"><span data-t="inspired">Inspired by</span> <button type="button" class="link" data-link="simpleip">Simple IP Config</button></span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </form>
-</dialog>
 
 <dialog id="ask">
   <form method="dialog">
@@ -1058,7 +1063,7 @@ indicator.className = "indicator";
 const calm = matchMedia("(prefers-reduced-motion: reduce)");
 function placeIndicator(animate = false) {
   const cur = $("list").querySelector('.item[aria-current="true"]');
-  indicator.style.opacity = cur ? 1 : 0;
+  indicator.style.opacity = cur && !$("open-settings").classList.contains("on") ? 1 : 0;
   if (!cur) return;
   const to = cur.parentElement.offsetTop, h = cur.offsetHeight;
   const from = indicator.dataset.top === undefined ? to : +indicator.dataset.top;
@@ -1091,7 +1096,7 @@ function renderList(enter = false) {
     b.querySelector(".name").textContent = a.name;
     if (seen[a.id] && seen[a.id] !== a.state && !calm.matches) b.querySelector(".dot").classList.add("pulse");
     seen[a.id] = a.state;
-    b.onclick = () => { select(i); if (!isRail()) setRail(true); };
+    b.onclick = () => { closeSettings(); select(i); if (!isRail()) setRail(true); };
     li.append(b); ul.append(li);
   });
   placeIndicator(animateNext);
@@ -1469,16 +1474,30 @@ function renderHidden() {
   });
   box.querySelectorAll(":scope > *").forEach((el, i) => el.style.setProperty("--i", i + 6));
 }
-// A modal centres on the viewport; in Tauri that is the window. The demo page is
-// larger, so centre it on the window explicitly.
 document.querySelectorAll(".set > *").forEach((el, i) => el.style.setProperty("--i", i));
-$("open-settings").onclick = () => {
-  renderHidden();
-  const dlg = $("settings"); dlg.showModal();
-  const w = document.querySelector(".window").getBoundingClientRect(), d = dlg.getBoundingClientRect();
-  dlg.style.left = `${w.left + (w.width - d.width) / 2}px`;
-  dlg.style.top = `${w.top + (w.height - d.height) / 2}px`;
-};
+const settingsOpen = () => !$("settings").hidden;
+function openSettings() {
+  if (settingsOpen()) return closeSettings();
+  renderHidden(); hideTip(); setTools(false);
+  const v = $("settings");
+  v.classList.remove("out"); v.hidden = false; replay(v, "in");
+  $("open-settings").classList.add("on"); $("open-settings").setAttribute("aria-current", "page");
+  indicator.style.opacity = 0;
+  if (!isRail()) setRail(true);
+}
+function closeSettings() {
+  const v = $("settings");
+  if (v.hidden) return;
+  $("open-settings").classList.remove("on"); $("open-settings").removeAttribute("aria-current");
+  placeIndicator();
+  let done = false;
+  const end = () => { if (done) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };
+  v.classList.add("out");
+  v.addEventListener("animationend", end, { once: true });
+  setTimeout(end, 200);   // a hidden window may never run the animation
+}
+$("open-settings").onclick = openSettings;
+$("s-close").onclick = closeSettings;
 // Theme and language crossfade the whole window (View Transitions).
 function crossfade(go) {
   if (!document.startViewTransition || calm.matches) return go();
@@ -1572,9 +1591,10 @@ document.querySelector(".side").addEventListener("transitionend", placeIndicator
 document.addEventListener("keydown", e => {
   if (e.key.toLowerCase() === "b" && e.ctrlKey) { e.preventDefault(); $("collapse").click(); }
   if (e.key === "F5") { e.preventDefault(); $("refresh").click(); }
+  if (e.key === "Escape" && settingsOpen() && !document.querySelector("dialog[open]")) { closeSettings(); return; }
   if (e.key === "Escape" && tools.classList.contains("open")) { setTools(false); $("more").focus(); }
   else if (e.key === "Escape" && !isRail() && !document.querySelector("dialog[open]")) setRail(true);
-  if (e.key === "Enter" && e.ctrlKey && !$("apply").disabled) $("apply").click();
+  if (e.key === "Enter" && e.ctrlKey && !$("apply").disabled && !settingsOpen()) $("apply").click();
 });
 
 // Tooltips replace native titles. In the rail they fly out beside the icon.
