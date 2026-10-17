@@ -592,7 +592,7 @@ html.app, html.app body { overflow: hidden; }
                   <label class="choice" data-tip="UAC prompt for each change"><input type="radio" name="admin" value="ask" checked><span data-t="adminAsk">When needed</span></label>
                   <label class="choice" data-tip="One UAC prompt when Octet starts"><input type="radio" name="admin" value="always"><span data-t="adminAlways">Always</span></label>
                 </div>
-                <span class="lbl" data-t="hidden">Hidden</span>
+                <span class="lbl" data-t="hidden" id="s-hidden-lbl">Hidden</span>
                 <div class="stack" id="s-hidden"></div>
               </div>
               <div class="pane keys" data-pane="keys" hidden>
@@ -692,7 +692,7 @@ const T = {
     privacy: "Privacy", privacyText: "No telemetry. The only traffic Octet sends is an ARP check before Apply and a ping after it.", credits: "Credits", inspired: "Inspired by",
     up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes",
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
-    noneHidden: "No hidden adapters" },
+  },
   th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", refresh: "อ่านใหม่", release: "ปล่อย DHCP", renew: "ขอ DHCP ใหม่", cycle: "ปล่อยแล้วขอใหม่",
     hide: "ซ่อนจากรายการ", ncpa: "Network Connections",
     dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
@@ -705,7 +705,7 @@ const T = {
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน ส่งแค่ ARP ก่อนใช้ค่าและ ping หลังใช้ค่า", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
     up: "เชื่อมต่ออยู่", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดใช้งาน", none: "ไม่มี", noChanges: "ไม่มีการเปลี่ยนแปลง",
     changes: n => `มี ${n} รายการที่ยังไม่ได้ใช้`, applied: n => `ใช้ค่ากับ ${n} แล้ว`, disable: "ปิดอะแดปเตอร์", enable: "เปิดอะแดปเตอร์",
-    noneHidden: "ไม่มีอะแดปเตอร์ที่ซ่อน" },
+  },
 };
 const t = k => T[lang][k];
 const $ = id => document.getElementById(id);
@@ -1459,7 +1459,7 @@ document.addEventListener("paste", e => {
 
 function renderHidden() {
   const box = $("s-hidden"); box.innerHTML = "";
-  if (!hidden.size) { box.innerHTML = `<span class="check">${t("noneHidden")}</span>`; return; }
+  box.hidden = $("s-hidden-lbl").hidden = !hidden.size;   // nothing hidden: no row at all
   adapters.filter(a => hidden.has(a.id)).forEach(a => {
     const l = document.createElement("label"); l.className = "check";
     l.innerHTML = `<input type="checkbox" checked><span></span>`; l.querySelector("span").textContent = a.name;
