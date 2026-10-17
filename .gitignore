@@ -5,3 +5,7 @@
 
 /source/
 /crates/octet/gen/
+*.exe
+*.log
+.vs/
+.idea/

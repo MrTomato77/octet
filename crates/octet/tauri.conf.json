@@ -3,13 +3,34 @@
   "productName": "Octet",
   "version": "0.1.0",
   "identifier": "io.github.mrtomato77.octet",
-  "build": { "frontendDist": "../../ui" },
+  "build": {
+    "frontendDist": "../../ui"
+  },
   "app": {
     "withGlobalTauri": true,
     "windows": [
-      { "label": "main", "title": "Octet", "width": 520, "height": 510, "resizable": false, "maximizable": false, "center": true }
+      {
+        "label": "main",
+        "title": "Octet",
+        "width": 520,
+        "height": 510,
+        "resizable": false,
+        "maximizable": false,
+        "center": true
+      }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'",
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ]
+    }
   },
-  "bundle": { "active": false, "icon": ["icons/icon.ico", "icons/icon.png"] }
+  "bundle": {
+    "active": false,
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png"
+    ]
+  }
 }

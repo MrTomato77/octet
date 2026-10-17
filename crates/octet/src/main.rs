@@ -4,6 +4,7 @@ mod adapters;
 mod change;
 
 use change::Request;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A child process without a console window flashing up.
 pub fn hidden(program: &str) -> std::process::Command {
@@ -16,20 +17,36 @@ pub fn hidden(program: &str) -> std::process::Command {
     c
 }
 
-#[tauri::command]
-async fn read_adapters() -> Result<Vec<adapters::Adapter>, String> {
-    adapters::read()
+/// Blocking work (PowerShell, UAC, netsh) off the async runtime.
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
+async fn read_adapters() -> Result<Vec<adapters::Adapter>, String> {
+    blocking(adapters::read).await
+}
+
+/// One change at a time: a second click must not raise a second UAC prompt.
+static CHANGING: AtomicBool = AtomicBool::new(false);
+
+#[tauri::command]
 async fn change(request: Request) -> Result<(), String> {
-    change::elevate(&request)
+    if CHANGING.swap(true, Ordering::SeqCst) {
+        return Err("Another change is still running".into());
+    }
+    let result = blocking(move || change::elevate(&request)).await;
+    CHANGING.store(false, Ordering::SeqCst);
+    result
 }
 
 #[tauri::command]
 async fn flush_dns() -> Result<(), String> {
-    let o = hidden("ipconfig").arg("/flushdns").output().map_err(|e| e.to_string())?;
-    if o.status.success() { Ok(()) } else { Err(String::from_utf8_lossy(&o.stdout).trim().to_string()) }
+    blocking(|| {
+        let o = hidden("ipconfig").arg("/flushdns").output().map_err(|e| e.to_string())?;
+        if o.status.success() { Ok(()) } else { Err(change::oem_text(&o.stdout).trim().to_string()) }
+    })
+    .await
 }
 
 #[tauri::command]
@@ -39,9 +56,9 @@ fn open_ncpa() -> Result<(), String> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if let [_, flag, path] = args.as_slice() {
+    if let [_, flag, request, out] = args.as_slice() {
         if flag == "--elevated" {
-            std::process::exit(change::run_elevated(path));
+            std::process::exit(change::run_elevated(request, out));
         }
     }
     tauri::Builder::default()

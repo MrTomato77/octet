@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Octet layout demo</title>
+<title>Octet</title>
 <link rel="stylesheet" href="vendor/phosphor/style.css">
 <script type="importmap">{ "imports": { "morphicons/region": "./vendor/morphicons/region.js" } }</script>
 <style>
@@ -163,7 +163,6 @@ button, input, select { font: inherit; color: inherit; }
 #presets { right: 0; top: 36px; min-width: 168px; }
 #presets.up { top: auto; bottom: 36px; transform-origin: bottom right; }
 #presets button { grid-template-columns: 20px 1fr; }
-#presets .ips { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .plogo { width: 16px; height: 16px; background: var(--muted); -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
 #presets button:disabled { opacity: 0.45; cursor: not-allowed; }
 /* Same width as the subnet octet box, so mode rows and address rows share one edge */
@@ -209,14 +208,13 @@ button, input, select { font: inherit; color: inherit; }
    Every mark gets the same 28px tile so wide and narrow logos read the same size. */
 .ext { flex: none; width: calc(var(--field-w) - var(--octets-w)); display: flex; justify-content: flex-end; }
 /* Every right-column tile is 40x32, the size of the prefix box and the row buttons */
-/* Every right-column tile is 40x32, the size of the prefix box and the row buttons */
 .ext .tag { position: static; right: auto; transform: none; width: 40px; height: var(--row-h); line-height: var(--row-h); padding: 0;
-  text-align: center; font-size: 10px; letter-spacing: -0.01em; overflow: hidden; }
+  text-align: center; font-size: 11px; letter-spacing: -0.02em; overflow: hidden; }
 .ext .tag.logo { position: relative; width: 40px; padding: 0; background: var(--hover); -webkit-mask: none; mask: none; }
 .ext .tag.logo::after { content: ""; position: absolute; inset: 8px 12px; background: var(--muted);
   -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
 /* Empty slot: dashed outline, faint "None" */
-.ext .tag.empty { color: var(--faint); background: transparent; outline: 1px dashed var(--border); outline-offset: -1px; }
+.ext .tag.empty { color: var(--muted); background: transparent; outline: 1px dashed var(--border); outline-offset: -1px; }
 .tag.fresh { animation: rise var(--t-base) var(--ease-out); }
 .subnet { display: flex; align-items: center; gap: 0; }
 .slash { width: 18px; text-align: center; color: var(--muted); }
@@ -303,8 +301,6 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 /* Pop scale: the "changed" mark */
 .ip.changed .diff { animation: pop var(--t-base) var(--ease-back); }
 /* Octets that change from outside (DHCP lease, refresh) drop in one after another */
-.ip input.roll { animation: roll 280ms var(--ease-out) backwards; animation-delay: calc(var(--i) * 45ms); }
-@keyframes roll { from { opacity: 0; transform: translateY(-8px); filter: blur(2px); } }
 @keyframes pop { from { transform: rotate(45deg) scale(0); } }
 /* Nudge: a field that turns invalid */
 .ip.invalid { animation: nudge 280ms var(--ease-out); }
@@ -329,24 +325,24 @@ dialog[open]::backdrop { animation: fade var(--t-base) var(--ease-out); }
 @keyframes shimmer { from { background-position: 150% 0, 0 0; } to { background-position: -50% 0, 0 0; } }
 .list.enter li { animation: rise var(--t-base) var(--ease-out) both; animation-delay: calc(var(--i) * 30ms); }
 
-/* Tooltip (5) and rail flyout (14): one element, fades and slides from its anchor */
+/* Tooltip and rail flyout: one element, fades and slides from its anchor */
 .tip { position: fixed; z-index: 100; max-width: 260px; padding: 4px 8px; border-radius: var(--r-input); pointer-events: none;
   background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border), 0 4px 12px oklch(0.2 0.02 250 / 0.18); font-size: 12px; line-height: 16px; white-space: pre-line;
   opacity: 0; transform: translateY(-3px); transition: opacity var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out); }
 .tip.side { transform: translateX(-6px); }
 .tip.show { opacity: 1; transform: none; }
 
-/* Apply in progress (1) and refresh changes (10): a highlight runs across the row */
+/* Apply in progress and refresh changes: a highlight runs across the row */
 .working, .flash { position: relative; overflow: hidden; }
 .working::after, .flash::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
   background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--accent) 24%, transparent), transparent) 0 0 / 50% 100% no-repeat; }
 .working::after { animation: sweep-row 900ms var(--ease-out) infinite; }
 .flash::after { animation: sweep-row 700ms var(--ease-out); }
 @keyframes sweep-row { from { background-position: -100% 0; } to { background-position: 200% 0; } }
-/* Apply success (2): changed-marks fold away one after another */
+/* Apply success: changed-marks fold away one after another */
 .ip.settle .diff { animation: fold 180ms ease-in forwards; animation-delay: calc(var(--i) * 60ms); }
 @keyframes fold { to { transform: rotate(45deg) scale(0); } }
-/* Apply failure (3): the row shakes, the reason slides out under it */
+/* Apply failure: the row shakes, the reason slides out under it */
 .ip.shake { animation: shake 360ms var(--ease-out); }
 @keyframes shake { 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
 .form > .row-msg { grid-column: 2; min-height: 0; margin-top: -4px; gap: 6px; font-size: 12px; line-height: 16px; color: var(--bad);
@@ -354,31 +350,31 @@ dialog[open]::backdrop { animation: fade var(--t-base) var(--ease-out); }
 .row-msg i { font-size: 14px; }
 .row-msg.hint { color: var(--muted); }
 @keyframes msg-in { from { opacity: 0; max-height: 0; transform: translateY(-4px); } to { max-height: 16px; } }
-/* Live validation (8): an out-of-range octet turns red while typing */
+/* Live validation: an out-of-range octet turns red while typing */
 .ip.over { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
 .ip input.over { color: var(--bad); }
 .main { position: relative; overflow: hidden; min-width: 0; }
 .actions { min-width: 0; }
-/* Copy feedback (6) */
+/* Copy feedback */
 .copy .v.copied { color: var(--ok); }
 .copy .v i { font-size: 12px; margin-right: 4px; }
 .copy .v.in { animation: rise var(--t-fast) var(--ease-out); }
 .status i { margin-right: 4px; }
-/* None tile becomes a real tile (7) */
+/* None tile becomes a real tile */
 .tag.fill { animation: tile-in 220ms var(--ease-out); }
 @keyframes tile-in { from { opacity: 0; transform: scale(0.8); } }
-/* Link change (9): chip crossfades (WAAPI), sidebar dot pulses once */
+/* Link change: chip crossfades (WAAPI), sidebar dot pulses once */
 .dot.pulse { animation: pulse 700ms var(--ease-out); }
 .dot.off.pulse { animation-name: pulse-off; }
 @keyframes pulse { from { outline: 2px solid var(--ok); outline-offset: 0; } to { outline: 2px solid transparent; outline-offset: 7px; } }
 @keyframes pulse-off { from { outline: 2px solid var(--faint); outline-offset: 0; } to { outline: 2px solid transparent; outline-offset: 7px; } }
-/* Down or disabled adapter (11): the status line says why, the form steps back until touched */
+/* Down or disabled adapter: the status line says why, the form steps back until touched */
 .form { transition: opacity var(--t-slow) var(--ease-out); }
 .scroll.dim .form { opacity: 0.55; }
 .scroll.dim .form:hover, .scroll.dim .form:focus-within { opacity: 1; }
-/* Theme switch (12) */
+/* Theme switch */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 240ms; }
-/* App open (13): the form's shape first, values count in after */
+/* App open: the form's shape first, values count in after */
 .loading :is(.ip, .seg, .slot-btn, .ext .tag, .prefix, .state, #a-name, #a-icon, .desc, .kv .v) {
   color: transparent !important; border-color: transparent !important; outline-color: transparent !important; box-shadow: none !important;
   background-color: var(--hover) !important; background-repeat: no-repeat; background-size: 200% 100%;
@@ -391,6 +387,12 @@ html.app body { display: block; padding: 0; background: var(--bg); }
 html.app .window { width: 100vw; height: 100vh; border-radius: 0; box-shadow: none; grid-template-rows: 1fr; }
 html.app .titlebar, html.app .note { display: none; }
 
+/* Nothing to show (all hidden, or Windows returned no adapters) */
+.window.empty .scroll { visibility: hidden; }
+.prefix.bad { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+.dlg-foot.end { justify-content: flex-end; }
+#ask p { margin: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after, ::backdrop { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 }
@@ -398,7 +400,7 @@ html.app .titlebar, html.app .note { display: none; }
 </head>
 <body>
 
-<div class="window" role="application" aria-label="Octet">
+<div class="window" aria-label="Octet">
   <div class="titlebar"><i class="ph ph-network"></i>Octet</div>
   <div class="body">
     <nav class="side" aria-label="Adapters">
@@ -420,7 +422,7 @@ html.app .titlebar, html.app .note { display: none; }
             <h1><i id="a-icon" class="ph ph-wifi-high"></i><span id="a-name"></span></h1>
             <span class="state" id="a-state-chip"><span class="dot" id="a-dot"></span><span id="a-state"></span></span>
             <span></span>
-            <button class="icon-btn" id="more" aria-haspopup="menu" title="Adapter tools" aria-label="Adapter tools"><i class="ph ph-dots-three"></i></button>
+            <button class="icon-btn" id="more" aria-haspopup="menu" aria-expanded="false" title="Adapter tools" aria-label="Adapter tools"><i class="ph ph-dots-three"></i></button>
             <p class="sub">
               <span class="desc" id="a-desc"></span>
               <button class="kv copy" id="mac-kv" title="Click to copy"><span class="k">MAC</span><span class="v" id="a-mac"></span></button>
@@ -496,23 +498,22 @@ html.app .titlebar, html.app .note { display: none; }
         <select id="s-theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
         <span class="lbl" data-t="language">Language</span>
         <select id="s-lang"><option value="en">English</option><option value="th">ไทย</option></select>
-        <span class="lbl" data-t="tray">Tray</span>
-        <div class="stack">
-          <label class="check"><input type="checkbox"><span data-t="startTray">Start in tray</span></label>
-          <label class="check"><input type="checkbox" checked><span data-t="minTray">Minimize to tray</span></label>
-        </div>
         <span class="lbl" data-t="hidden">Hidden</span>
         <div class="stack" id="s-hidden"></div>
-        <span class="lbl" data-t="updates">Updates</span>
-        <label class="check"><input type="checkbox" checked><span data-t="checkUpdates">Check automatically</span></label>
       </div>
     </div>
-    <div class="dlg-foot">
-      <span style="display:flex; gap: var(--s4); align-items:center">
-        <button type="button" class="link" data-t="help">Help (F1)</button>
-        <button type="button" class="link" data-t="about">About</button>
-      </span>
+    <div class="dlg-foot end">
       <button class="btn primary" value="close" data-t="done">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="ask">
+  <form method="dialog">
+    <div class="dlg-body"><p id="ask-text"></p></div>
+    <div class="dlg-foot end">
+      <button class="btn" value="no" id="ask-no">Cancel</button>
+      <button class="btn primary" value="yes" id="ask-yes">Discard</button>
     </div>
   </form>
 </dialog>
@@ -521,47 +522,50 @@ html.app .titlebar, html.app .note { display: none; }
 // Sample adapters modelled on a real read. Mock data only.
 const adapters = [
   { id: 1, name: "Wi-Fi", desc: "Qualcomm FastConnect 7800 Wi-Fi 7 High Band Simultaneous (HBS) Network Adapter",
-    mac: "02-08-64-03-B7-0B", state: "up", dhcpServer: "10.0.0.1",
+    mac: "02-00-00-00-00-01", state: "up", dhcpServer: "10.0.0.1",
     cfg: { ipAuto: true, address: "10.0.1.124", subnet: "255.255.254.0", gateway: "10.0.0.1", dnsAuto: true, dns1: "8.8.8.8", dns2: "8.8.4.4", register: true } },
-  { id: 2, name: "Ethernet", desc: "Realtek USB GbE Family Controller", mac: "00-E0-4C-68-04-66", state: "down", dhcpServer: "",
+  { id: 2, name: "Ethernet", desc: "Realtek USB GbE Family Controller", mac: "02-00-00-00-00-02", state: "down", dhcpServer: "",
     cfg: { ipAuto: false, address: "192.168.50.20", subnet: "255.255.255.0", gateway: "192.168.50.254", dnsAuto: false, dns1: "192.168.50.254", dns2: "1.1.1.1", register: true } },
   { id: 3, name: "Npcap Loopback Adapter", desc: "Npcap Loopback Adapter", mac: "02-00-4C-4F-4F-50", state: "up", dhcpServer: "",
     cfg: { ipAuto: true, address: "169.254.165.178", subnet: "255.255.0.0", gateway: "", dnsAuto: true, dns1: "", dns2: "", register: true } },
-  { id: 5, name: "vEthernet (WSL)", desc: "Hyper-V Virtual Ethernet Adapter", mac: "00-15-5D-A1-3C-02", state: "up", dhcpServer: "",
+  { id: 5, name: "vEthernet (WSL)", desc: "Hyper-V Virtual Ethernet Adapter", mac: "02-00-00-00-00-05", state: "up", dhcpServer: "",
     cfg: { ipAuto: false, address: "172.24.80.1", subnet: "255.255.240.0", gateway: "", dnsAuto: false, dns1: "", dns2: "", register: false } },
   { id: 6, name: "Tailscale", desc: "Tailscale Tunnel", mac: "", state: "up", dhcpServer: "",
     cfg: { ipAuto: false, address: "100.101.5.7", subnet: "255.255.255.255", gateway: "", dnsAuto: false, dns1: "100.100.100.100", dns2: "", register: false } },
-  { id: 4, name: "Bluetooth Network Connection", desc: "Bluetooth Device (Personal Area Network)", mac: "D4-54-8B-1F-22-07", state: "disabled", dhcpServer: "",
+  { id: 4, name: "Bluetooth Network Connection", desc: "Bluetooth Device (Personal Area Network)", mac: "02-00-00-00-00-04", state: "disabled", dhcpServer: "",
     cfg: { ipAuto: true, address: "", subnet: "", gateway: "", dnsAuto: true, dns1: "", dns2: "", register: true } },
 ];
-const hidden = new Set();
+let hidden = new Set();
+try { hidden = new Set(JSON.parse(localStorage.getItem("octet-hidden") || "[]")); } catch {}
+const saveHidden = () => { try { localStorage.setItem("octet-hidden", JSON.stringify([...hidden])); } catch {} };
+const firstVisible = () => adapters.findIndex(a => !hidden.has(a.id));
+const L = (en, th) => lang === "th" ? th : en;
 // Inside Octet, Tauri is here and the sample list above is replaced by this machine's adapters.
 const tauri = window.__TAURI__, invoke = tauri?.core.invoke;
 if (tauri) document.documentElement.classList.add("app");
 async function reload() {
   const id = adapters[sel]?.id;
   adapters.splice(0, adapters.length, ...await invoke("read_adapters"));
-  sel = Math.max(0, adapters.findIndex(a => a.id === id && !hidden.has(a.id)));
+  const i = adapters.findIndex(a => a.id === id && !hidden.has(a.id));
+  sel = i >= 0 ? i : firstVisible();
 }
 const change = request => invoke("change", { request });
 let sel = 0, draft = null, lang = "en";
 
 const T = {
   en: { adapters: "Adapters", settings: "Settings", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
-    hide: "Hide from list", ncpa: "Network Connections", dhcpServer: "DHCP server", state: "State", ipMode: "IP address",
+    hide: "Hide from list", ncpa: "Network Connections",
     dhcp: "DHCP", manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
     dns1: "Preferred", dns2: "Alternate", register: "Register in DNS", revert: "Revert", apply: "Apply",
-    theme: "Theme", language: "Language", tray: "Tray", startTray: "Start in tray", minTray: "Minimize to tray",
-    hidden: "Hidden", updates: "Updates", checkUpdates: "Check automatically", help: "Help (F1)", about: "About", done: "Done",
+    theme: "Theme", language: "Language", hidden: "Hidden", done: "Done",
     up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes",
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
     noneHidden: "No hidden adapters" },
   th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", release: "ปล่อย DHCP", renew: "ขอ DHCP ใหม่", cycle: "ปล่อยแล้วขอใหม่",
-    hide: "ซ่อนจากรายการ", ncpa: "Network Connections", dhcpServer: "DHCP server", state: "สถานะ", ipMode: "IP address",
+    hide: "ซ่อนจากรายการ", ncpa: "Network Connections",
     dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
     dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "ลงทะเบียนใน DNS", revert: "คืนค่า", apply: "ใช้ค่า",
-    theme: "ธีม", language: "ภาษา", tray: "ถาดระบบ", startTray: "เริ่มในถาดระบบ", minTray: "ย่อไปถาดระบบ",
-    hidden: "ที่ซ่อนไว้", updates: "อัปเดต", checkUpdates: "ตรวจอัตโนมัติ", help: "วิธีใช้ (F1)", about: "เกี่ยวกับ", done: "เสร็จ",
+    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", done: "เสร็จ",
     up: "เชื่อมต่ออยู่", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดใช้งาน", none: "ไม่มี", noChanges: "ไม่มีการเปลี่ยนแปลง",
     changes: n => `มี ${n} รายการที่ยังไม่ได้ใช้`, applied: n => `ใช้ค่ากับ ${n} แล้ว`, disable: "ปิดอะแดปเตอร์", enable: "เปิดอะแดปเตอร์",
     noneHidden: "ไม่มีอะแดปเตอร์ที่ซ่อน" },
@@ -570,8 +574,8 @@ const t = k => T[lang][k];
 const $ = id => document.getElementById(id);
 
 // ---------- adapter kind ----------
-// The demo guesses from names; the real app reads Get-NetAdapter (MediaType, Virtual,
-// HardwareInterface, ComponentID) and only falls back to names.
+// Guessed from the name and description. ponytail: name heuristics, read MediaType /
+// HardwareInterface from Get-NetAdapter if a kind is misread.
 function kind(a) {
   const s = `${a.name} ${a.desc}`.toLowerCase();
   if (/loopback/.test(s)) return "loopback";
@@ -606,12 +610,11 @@ const resolvers = [
   [["208.67.222.222", "208.67.220.220"], "OpenDNS (Cisco)", "cisco"],
   [["45.90.28.0", "45.90.30.0"], "NextDNS", "nextdns"],
 ];
-function resolver(v) {
+function resolver(v, gw) {
   if (!validIp(v)) return null;
   const hit = resolvers.find(([ips]) => ips.includes(v));
   if (hit) return { logo: hit[2], title: hit[1] };
   if (v === "100.100.100.100") return { logo: "tailscale", title: "Tailscale MagicDNS" };
-  const gw = adapters[sel].cfg.gateway;
   if (gw && v === gw) return { text: "Router", title: "Your gateway answers DNS" };
   const sc = scope(v)[0];
   if (sc !== "Public") return { text: "Local", title: `${sc} DNS server on your network` };
@@ -641,8 +644,8 @@ function updateTags() {
   const gsc = scope(gw);
   tag(fields.gateway, a.dhcpServer && gw === a.dhcpServer ? { text: "DHCP", title: "Also the DHCP server that leased this address" }
     : gsc && { text: gsc[0], title: gsc[1] }, gsc && gsc[0] === "Public" ? "public" : "");
-  tag(fields.dns1, resolver(shown("dns1")));
-  tag(fields.dns2, resolver(shown("dns2")));
+  tag(fields.dns1, resolver(shown("dns1"), gw));
+  tag(fields.dns2, resolver(shown("dns2"), gw));
 }
 
 // Count-up (Motion Reference): an octet runs from its old number to the new one.
@@ -709,8 +712,10 @@ function ipField(host, key, short, ext) {
     inp.addEventListener("paste", e => {
       const text = e.clipboardData.getData("text").trim();
       if (/\s|\//.test(text) && pasteConfig(text)) { e.preventDefault(); return; }
+      if (!text.includes(".")) return;
+      e.preventDefault();
       const parts = text.split(".");
-      if (parts.length === 4) { e.preventDefault(); parts.forEach((p, j) => inputs[j].value = p.replace(/\D/g, "").slice(0, 3)); write(); }
+      if (parts.length === 4 && parts.every(p => /^\d{1,3}$/.test(p))) { parts.forEach((p, j) => inputs[j].value = String(+p)); write(); }
     });
   });
   function write() {
@@ -719,7 +724,7 @@ function ipField(host, key, short, ext) {
     inputs.forEach(x => x.classList.toggle("over", +x.value > 255));
     const over = v.some(x => +x > 255);
     box.classList.toggle("over", over);
-    rowMsg(key, over ? "Each number is 0 to 255" : null, "hint");
+    rowMsg(key, over ? L("Each number is 0 to 255", "แต่ละช่องต้องเป็น 0 ถึง 255") : null, "hint");
     draft[key] = v.every(x => x === "") ? "" : v.map(x => x === "" ? x : String(+x)).join(".");
     sync(key);
   }
@@ -731,7 +736,7 @@ function ipField(host, key, short, ext) {
         const next = p[j] ?? "";
         x.disabled = !editable;
         if (roll && (x.dataset.final ?? x.value) !== next) countTo(x, next, j * 40);
-        else if (x.dataset.final === undefined) x.value = next;
+        else { x._count = (x._count || 0) + 1; delete x.dataset.final; x.value = next; }
       });
       box.classList.toggle("ro", !editable);
     },
@@ -759,7 +764,9 @@ prefix.addEventListener("keydown", e => {
 prefix.addEventListener("input", () => {
   prefix.value = prefix.value.replace(/\D/g, "");
   const n = +prefix.value;
-  if (prefix.value !== "" && n <= 32) { draft.subnet = masks[n]; fields.subnet.set(draft.subnet, true); }
+  const ok = prefix.value !== "" && n <= 32;
+  prefix.classList.toggle("bad", !ok);
+  if (ok) { draft.subnet = masks[n]; fields.subnet.set(draft.subnet, true); } else draft.subnet = "";
   sync("prefix");
 });
 
@@ -784,7 +791,8 @@ const validIp = v => /^\d{1,3}(\.\d{1,3}){3}$/.test(v) && v.split(".").every(o =
 function problems() {
   const out = [];
   if (!draft.ipAuto) {
-    if (!validIp(draft.address)) out.push(["address", t("ip")]);
+    const p = prefixOf(draft.subnet), host = validIp(draft.address) && p > 0 && p < 31 ? ipNum(draft.address) % 2 ** (32 - p) : 1;
+    if (!validIp(draft.address) || host === 0 || host === 2 ** (32 - p) - 1) out.push(["address", t("ip")]);
     if (prefixOf(draft.subnet) < 1) out.push(["subnet", t("subnet")]);
     if (draft.gateway && !validIp(draft.gateway)) out.push(["gateway", t("gateway")]);
   }
@@ -795,15 +803,16 @@ function problems() {
   return out;
 }
 const keys = ["ipAuto", "address", "subnet", "gateway", "dnsAuto", "dns1", "dns2", "register"];
-const changed = () => keys.filter(k => {
+const changed = () => !draft ? [] : keys.filter(k => {
   const a = adapters[sel].cfg;
   if (draft.ipAuto && ["address", "subnet", "gateway"].includes(k)) return false;
   if (draft.dnsAuto && ["dns1", "dns2"].includes(k)) return false;
   return a[k] !== draft[k];
 });
 
-function say(text, kind = "", ic = "") {
+function say(text, kind = "", ic = "", quiet = false) {
   const st = $("status");
+  st.setAttribute("aria-live", quiet ? "off" : "polite");
   st.removeAttribute("title"); delete st.dataset.tip;
   const fresh = st.textContent !== text;
   st.textContent = text;
@@ -814,7 +823,8 @@ function say(text, kind = "", ic = "") {
 const icon = (button, name) => window.morph?.[button]?.(name);
 
 function sync(from) {
-  const a = adapters[sel].cfg, diff = changed(), bad = problems();
+  if (!draft) return;
+  const diff = changed(), bad = problems();
   for (const k of ["address", "subnet", "gateway", "dns1", "dns2"]) {
     const f = fields[k];
     f.box.classList.toggle("changed", diff.includes(k));
@@ -822,13 +832,17 @@ function sync(from) {
   }
   if (from !== "prefix") { const shownMask = fields.subnet.inputs.map(shownOf).join("."), p = prefixOf(shownMask); prefix.value = p >= 0 ? p : ""; }
   updateTags();
-  if (bad.length && diff.length) say(bad.map(b => b[1]).join(", ") + (lang === "th" ? " ไม่ถูกต้อง" : " needs a valid value"), "bad");
-  else if (diff.length) say(t("changes")(diff.length));
+  if (bad.length && diff.length) say(bad.map(b => b[1]).join(", ") + L(" needs a valid value", " ไม่ถูกต้อง"), "bad");
+  else if (diff.length) say(t("changes")(diff.length), "", "", true);
   // Idle: the line explains an adapter that is down or off instead of "No changes".
-  else if (adapters[sel].state === "disabled") { say("Adapter is off", "", "power"); $("status").title = "Settings are kept but not in use until the adapter is enabled"; }
-  else if (adapters[sel].state === "down") { say("Not connected", "", "plugs"); $("status").title = "Settings apply when it connects"; }
-  else say(t("noChanges"));
-  for (const [id, off] of [["apply", !diff.length || bad.length > 0], ["revert", !diff.length]]) {
+  else if (adapters[sel].state === "disabled") {
+    say(L("Adapter is off", "อะแดปเตอร์ปิดอยู่"), "", "power", true);
+    $("status").title = L("Settings are kept but not in use until the adapter is enabled", "ค่าที่ตั้งไว้ยังอยู่ แต่จะใช้เมื่อเปิดอะแดปเตอร์");
+  } else if (adapters[sel].state === "down") {
+    say(L("Not connected", "ไม่ได้เชื่อมต่อ"), "", "plugs", true);
+    $("status").title = L("Settings apply when it connects", "ค่าจะมีผลเมื่อเชื่อมต่อ");
+  } else say(t("noChanges"), "", "", true);
+  for (const [id, off] of [["apply", busyNow || !diff.length || bad.length > 0], ["revert", busyNow || !diff.length]]) {
     const b = $(id);
     b.disabled = off;
   }
@@ -842,25 +856,27 @@ function renderForm(roll = false) {
   const dnsAuto = document.querySelector("input[name=dnsmode][value=auto]");
   dnsAuto.disabled = !draft.ipAuto;
   $("dns-auto-wrap").classList.toggle("disabled", !draft.ipAuto);
-  $("dns-auto-wrap").title = draft.ipAuto ? "" : "Automatic DNS needs DHCP";
+  $("dns-auto-wrap").title = draft.ipAuto ? "" : L("Automatic DNS needs DHCP", "DNS อัตโนมัติต้องใช้กับ DHCP");
   for (const k of ["address", "subnet", "gateway"]) fields[k].set(ipEdit ? draft[k] : cur[k], ipEdit, roll);
   for (const k of ["dns1", "dns2"]) fields[k].set(dnsEdit ? draft[k] : cur[k], dnsEdit, roll);
   prefix.disabled = !ipEdit;
   renderRegister();
   clearMsgs();
+  // set address source=static replaces every IPv4 on the adapter
+  const extra = adapters[sel].extraIps || [];
+  if (ipEdit && extra.length) rowMsg("address", L(`Also has ${extra.join(", ")}; Apply keeps only this address`, `มี ${extra.join(", ")} ด้วย; ใช้ค่าแล้วจะเหลือแค่ IP นี้`), "hint");
   sync();
   renderSlots();
 }
 
 function renderAdapterFacts() {
   const a = adapters[sel];
+  if (!a) return;
   $("a-name").textContent = a.name;
   $("a-icon").className = "ph " + kindIcon[kind(a)];
   $("a-icon").title = kindName[kind(a)];
   $("a-desc").textContent = a.desc; $("a-desc").title = a.desc;
   $("a-mac").textContent = a.mac;
-  // DHCP server only exists while a lease does; no empty "None" slot.
-  // Only when the DHCP server is not the gateway does it need its own text.
   $("a-state").textContent = t(a.state);
   const chip = $("a-state-chip"), was = chip.dataset.key, now = a.id + ":" + a.state;
   chip.dataset.key = now;
@@ -874,9 +890,34 @@ function renderAdapterFacts() {
   $("toggle-label").textContent = a.state === "disabled" ? t("enable") : t("disable");
 }
 function renderAdapter(roll = false) {
+  const none = !adapters[sel] || hidden.has(adapters[sel].id);
+  document.querySelector(".window").classList.toggle("empty", none);
+  if (none) {
+    draft = null; $("apply").disabled = $("revert").disabled = true;
+    say(L("No adapters to show", "ไม่มีอะแดปเตอร์ให้แสดง"));
+    return;
+  }
   renderAdapterFacts();
   draft = structuredClone(adapters[sel].cfg);
   renderForm(roll);
+}
+// In-page confirm: native confirm() blocks and may not show inside the WebView.
+function ask(text, yes) {
+  const d = $("ask");
+  $("ask-text").textContent = text; $("ask-yes").textContent = yes; $("ask-no").textContent = L("Cancel", "ยกเลิก");
+  d.returnValue = ""; d.showModal();
+  const w = document.querySelector(".window").getBoundingClientRect(), r = d.getBoundingClientRect();
+  d.style.left = `${w.left + (w.width - r.width) / 2}px`; d.style.top = `${w.top + (w.height - r.height) / 2}px`;
+  return new Promise(res => d.addEventListener("close", () => res(d.returnValue === "yes"), { once: true }));
+}
+const discardOk = () => !changed().length ? Promise.resolve(true)
+  : ask(L(`Discard changes to ${adapters[sel].name}?`, `ทิ้งค่าที่แก้ของ ${adapters[sel].name}?`), L("Discard", "ทิ้ง"));
+// While Windows is being changed, nothing else may touch the form or the list.
+let busyNow = false;
+function lock(on) {
+  busyNow = on;
+  for (const el of [document.querySelector(".side"), document.querySelector(".scroll")]) el.inert = on;
+  if (on) $("revert").disabled = $("apply").disabled = true; else sync();
 }
 
 const indicator = document.createElement("span");
@@ -912,6 +953,7 @@ function renderList(enter = false) {
     b.className = "item" + (a.state === "up" ? "" : " off");
     b.setAttribute("aria-current", i === sel);
     b.title = `${a.name}\n${kindName[kind(a)]} · ${t(a.state)}`;
+    b.setAttribute("aria-label", `${a.name}, ${t(a.state)}`);
     b.innerHTML = `<i class="ph ${kindIcon[kind(a)]}"></i><span class="name"></span><span class="dot ${a.state === "up" ? "" : "off"}"></span>`;
     b.querySelector(".name").textContent = a.name;
     if (seen[a.id] && seen[a.id] !== a.state && !calm.matches) b.querySelector(".dot").classList.add("pulse");
@@ -924,9 +966,8 @@ function renderList(enter = false) {
 }
 let animateNext = false;
 const seen = {};   // last state drawn per adapter, so a change can pulse its dot
-function select(i) {
-  if (i === sel) return;
-  if (changed().length && !confirm(lang === "th" ? `ทิ้งค่าที่แก้ของ ${adapters[sel].name}?` : `Discard changes to ${adapters[sel].name}?`)) return;
+async function select(i) {
+  if (i === sel || busyNow || !await discardOk()) return;
   sel = i; animateNext = true; renderList(); renderAdapter();
   const sc = document.querySelector(".scroll");
   sc.classList.remove("swap"); void sc.offsetWidth; sc.classList.add("swap");
@@ -936,6 +977,7 @@ function select(i) {
 document.querySelectorAll("input[name=ipmode]").forEach(r => r.onchange = () => {
   draft.ipAuto = r.value === "auto";
   if (!draft.ipAuto) draft.dnsAuto = false;   // static IP needs static DNS
+  else draft.dnsAuto = adapters[sel].cfg.dnsAuto;   // and back to DHCP restores what Windows has
   renderForm();
   if (!draft.ipAuto) fields.address.inputs[0].focus();
 });
@@ -949,56 +991,65 @@ $("revert").onclick = () => {
   const b = $("revert"); b.classList.remove("rewind"); void b.offsetWidth; b.classList.add("rewind");
   draft = structuredClone(adapters[sel].cfg);
   renderForm(true);
-  say(lang === "th" ? "คืนค่าเดิมแล้ว" : "Back to current values");
+  say(L("Back to current values", "คืนค่าเดิมแล้ว"));
 };
 $("mac-kv").onclick = () => {
   navigator.clipboard?.writeText(adapters[sel].mac).catch(() => {});
   const v = $("a-mac");
   clearTimeout(v._t);
-  v.innerHTML = `<i class="ph ph-check"></i>Copied`; v.classList.add("copied"); replay(v, "in");
+  v.innerHTML = `<i class="ph ph-check"></i>${L("Copied", "คัดลอกแล้ว")}`; v.classList.add("copied"); replay(v, "in");
   v._t = setTimeout(() => { v.classList.remove("copied"); v.textContent = adapters[sel].mac; replay(v, "in"); }, 1200);
 };
-// Demo failures, the kind Windows or a pre-check would reject.
-function demoFailure() {
-  if (draft.ipAuto) return null;
-  if (draft.address === draft.gateway) return ["address", "Same address as the gateway"];
-  const p = prefixOf(draft.subnet);
-  if (draft.gateway && p > 0 && !inNet(draft.gateway, draft.address, p)) return ["gateway", "Gateway is outside this subnet"];
+// Mistakes caught before asking Windows (and before a UAC prompt).
+function precheck(c) {
+  if (c.ipAuto) return null;
+  if (c.address === c.gateway) return ["address", L("Same address as the gateway", "IP ซ้ำกับ Gateway")];
+  const p = prefixOf(c.subnet);
+  if (c.gateway && p > 0 && !inNet(c.gateway, c.address, p)) return ["gateway", L("Gateway is outside this subnet", "Gateway อยู่นอก subnet นี้")];
   return null;
 }
+// Icons return to rest after a moment; a newer action cancels the pending reset.
+const rest = {};
+function iconLater(id, name, ms) { clearTimeout(rest[id]); rest[id] = setTimeout(() => icon(id, name), ms); }
+function iconNow(id, name) { clearTimeout(rest[id]); icon(id, name); }
 function rowsOf(diff) {
   const seg = document.querySelectorAll(".seg");
   return diff.map(k => ({ ipAuto: seg[0], dnsAuto: seg[1] })[k] || fields[k]?.box).filter(Boolean);
 }
 $("apply").onclick = () => {
-  const btn = $("apply"), a = adapters[sel], rows = rowsOf(changed());
-  btn.disabled = true; $("revert").disabled = true; btn.classList.add("spin");
-  icon("apply", "circle-notch"); clearMsgs();
+  if (busyNow || !draft) return;
+  const btn = $("apply"), a = adapters[sel], d = changed(), rows = rowsOf(d), has = ks => d.some(k => ks.includes(k));
+  const sent = structuredClone(draft);   // what is applied, whatever happens to the form meanwhile
+  clearMsgs();
+  const pre = precheck(sent);
+  if (pre) { replay(fields[pre[0]].box, "shake"); rowMsg(pre[0], pre[1]); say(L("Not applied", "ยังไม่ได้ใช้ค่า"), "bad"); return; }
+  lock(true); btn.classList.add("spin"); iconNow("apply", "circle-notch");
   rows.forEach(el => el.classList.add("working"));
-  say(lang === "th" ? "กำลังใช้ค่า…" : "Applying…");
-  const d = changed(), has = ks => d.some(k => ks.includes(k));
+  say(tauri ? L("Waiting for permission…", "รอสิทธิ์ผู้ดูแลระบบ…") : L("Applying…", "กำลังใช้ค่า…"));
   const work = tauri
-    ? change({ op: "apply", name: a.name, cfg: draft, ip: has(["ipAuto", "address", "subnet", "gateway"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]) })
-        .then(() => null, e => [null, String(e)])
-    : new Promise(res => setTimeout(() => res(demoFailure()), 900));
-  work.then(err => {
+    ? change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]) })
+        .then(() => null, e => String(e))
+    : new Promise(res => setTimeout(() => res(null), 900));
+  work.then(async err => {
     rows.forEach(el => el.classList.remove("working"));
     btn.classList.remove("spin");
     if (err) {
-      icon("apply", "shield-check"); sync();
-      if (err[0]) { replay(fields[err[0]].box, "shake"); rowMsg(err[0], err[1]); say("Not applied", "bad"); }
-      else say(err[1], "bad");
+      // Part of it may have gone through: show what Windows has now, keep the edits.
+      if (tauri) await reload().catch(() => {});
+      lock(false); iconNow("apply", "shield-check");
+      renderAdapterFacts(); renderForm();
+      say(L("Not applied: ", "ใช้ค่าไม่สำเร็จ: ") + err, "bad"); $("status").title = err;
       return;
     }
-    icon("apply", "check");
+    iconNow("apply", "check");
     const marks = [...document.querySelectorAll(".ip.changed")];
     marks.forEach((b, i) => { b.style.setProperty("--i", i); b.classList.add("settle"); });
     setTimeout(async () => {
       marks.forEach(b => b.classList.remove("settle"));
-      a.cfg = structuredClone(draft);
+      a.cfg = sent;
       if (tauri) await reload().catch(() => {});   // show what Windows actually took
-      renderAdapter();
-      setTimeout(() => icon("apply", "shield-check"), 1200);
+      lock(false); renderAdapter();
+      iconLater("apply", "shield-check", 1200);
       if (tauri) { say(t("applied")(a.name), "ok", "check"); return; }
       say(t("applied")(a.name) + " · testing…");
       setTimeout(() => say(a.cfg.gateway ? `Gateway ${1 + Math.floor(Math.random() * 4)} ms · DNS ok` : t("applied")(a.name), "ok", "check"), 900);
@@ -1008,13 +1059,13 @@ $("apply").onclick = () => {
 // Refresh: spinner and skeleton rows while reading, then rows arrive in order
 $("refresh").onclick = () => {
   const btn = $("refresh"), ul = $("list");
-  if (btn.classList.contains("spin")) return;
-  btn.classList.add("spin"); icon("refresh", "circle-notch");
+  if (btn.classList.contains("spin") || busyNow) return;
+  btn.classList.add("spin"); iconNow("refresh", "circle-notch");
   const rows = adapters.filter(a => !hidden.has(a.id)).length;
   ul.innerHTML = "";
   for (let k = 0; k < rows; k++) { const li = document.createElement("li"); li.className = "skel"; ul.append(li); }
-  say(lang === "th" ? "กำลังอ่านอะแดปเตอร์…" : "Reading adapters…");
-  const before = structuredClone(adapters[sel].cfg), id = adapters[sel].id;
+  say(L("Reading adapters…", "กำลังอ่านอะแดปเตอร์…"));
+  const before = structuredClone(adapters[sel]?.cfg ?? {}), id = adapters[sel]?.id;
   const work = tauri ? reload() : new Promise(res => setTimeout(() => {
     // Demo: the world moved while we weren't looking (cable plugged, lease changed).
     const a = adapters[sel];
@@ -1023,18 +1074,23 @@ $("refresh").onclick = () => {
     if (a.cfg.ipAuto && a.cfg.address) a.cfg.address = a.cfg.address.replace(/\d+$/, String(100 + Math.floor(Math.random() * 150)));
     res();
   }, 800));
-  work.catch(e => say(String(e), "bad")).then(() => {
+  work.then(() => {
     const a = adapters[sel];
-    if (a.id !== id) { renderList(true); renderAdapter(true); btn.classList.remove("spin"); icon("refresh", "arrow-clockwise"); return; }
+    btn.classList.remove("spin");
+    // The adapter that was open is gone (or nothing was open): start from what is there.
+    if (!a || a.id !== id || !draft) { renderList(true); renderAdapter(true); iconNow("refresh", "arrow-clockwise"); return; }
     // While a group is automatic the draft mirrors Windows.
     if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = a.cfg[k];
     if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = a.cfg[k];
     renderList(true); renderAdapterFacts(); renderForm(true);
     for (const k of ["address", "subnet", "gateway", "dns1", "dns2"])
       if (before[k] !== a.cfg[k] && (k.startsWith("dns") ? draft.dnsAuto : draft.ipAuto)) flash(fields[k].box);
-    btn.classList.remove("spin"); icon("refresh", "check");
-    say(lang === "th" ? "อ่านอะแดปเตอร์ใหม่แล้ว" : "Adapters refreshed");
-    setTimeout(() => icon("refresh", "arrow-clockwise"), 1000);
+    iconNow("refresh", "check");
+    say(L("Adapters refreshed", "อ่านอะแดปเตอร์ใหม่แล้ว"));
+    iconLater("refresh", "arrow-clockwise", 1000);
+  }, e => {
+    btn.classList.remove("spin"); iconNow("refresh", "arrow-clockwise");
+    renderList(); say(String(e), "bad");
   });
 };
 
@@ -1044,41 +1100,60 @@ function setTools(open) {
   tools.classList.toggle("open", open);
   $("more").setAttribute("aria-expanded", open);
   icon("more", open ? "x" : "dots-three");
+  if (open) tools.querySelector("button")?.focus();
 }
+// Menus: arrow keys move between items, Escape closes and goes back to the opener.
+function menuKeys(menu, opener, close) {
+  menu.addEventListener("keydown", e => {
+    const items = [...menu.querySelectorAll("button:not(:disabled)")], i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus(); }
+    else if (e.key === "Escape") { e.stopPropagation(); close(); opener.focus(); }
+  });
+}
+menuKeys(tools, $("more"), () => setTools(false));
 $("more").onclick = e => { e.stopPropagation(); setTools(!tools.classList.contains("open")); };
 document.addEventListener("click", () => setTools(false));
 document.addEventListener("keydown", e => { if (e.key === "Escape") setTools(false); });
-tools.onclick = e => {
-  const act = e.target.closest("button")?.dataset.act; if (!act) return;
+tools.onclick = async e => {
+  const act = e.target.closest("button")?.dataset.act; if (!act || !draft || busyNow) return;
   if (act === "register") { e.stopPropagation(); draft.register = !draft.register; renderRegister(); sync(); return; }   // menu stays open to show the tick
   const a = adapters[sel];
-  if (act === "hide") { hidden.add(a.id); sel = adapters.findIndex(x => !hidden.has(x.id)); renderList(); renderAdapter(); renderHidden(); return; }
+  if (act === "hide") {
+    if (!await discardOk()) return;
+    hidden.add(a.id); saveHidden(); sel = firstVisible(); renderList(); renderAdapter(); renderHidden(); return;
+  }
   if (act === "toggle") {
     if (!tauri) { a.state = a.state === "disabled" ? "down" : "disabled"; renderList(); renderAdapterFacts(); return; }
-    say("Waiting for permission…");
-    change({ op: "enable", name: a.name, on: a.state === "disabled" })
-      .then(reload).then(() => { renderList(); renderAdapterFacts(); }, e => say(String(e), "bad"));
+    const on = a.state === "disabled";
+    say(L("Waiting for permission…", "รอสิทธิ์ผู้ดูแลระบบ…")); lock(true);
+    change({ op: "enable", index: a.index, name: a.name, on }).then(reload).then(() => {
+      lock(false); renderList(); renderAdapterFacts(); renderForm();
+      say(on ? L("Adapter enabled", "เปิดอะแดปเตอร์แล้ว") : L("Adapter disabled", "ปิดอะแดปเตอร์แล้ว"), "ok");
+    }, e => { lock(false); say(String(e), "bad"); });
     return;
   }
   if (act === "ncpa" && tauri) { invoke("open_ncpa").catch(e => say(String(e), "bad")); return; }
   if (["release", "renew", "cycle"].includes(act) && a.cfg.ipAuto) { leaseAction(act); return; }
-  say({ release: "Not a DHCP adapter", renew: "Not a DHCP adapter", cycle: "Not a DHCP adapter", ncpa: "Opens ncpa.cpl (demo)" }[act]);
+  say(act === "ncpa" ? "Opens ncpa.cpl (demo)" : L("Not a DHCP adapter", "อะแดปเตอร์นี้ไม่ได้ใช้ DHCP"));
 };
 
 // ---------- DHCP lease (demo: a random address from the same scope) ----------
 function leaseAction(act) {
   const a = adapters[sel];
   if (tauri) {
-    say(act === "release" ? "Releasing…" : "Renewing lease…");
-    const go = act === "cycle" ? change({ op: "release", name: a.name }).then(() => change({ op: "renew", name: a.name }))
-      : change({ op: act, name: a.name });
+    say(act === "release" ? L("Releasing…", "กำลังปล่อย…") : L("Renewing lease…", "กำลังขอ IP ใหม่…"));
+    lock(true);
+    const req = op => change({ op, index: a.index, name: a.name });
+    const go = act === "cycle" ? req("release").then(() => req("renew")) : req(act);
     return go.then(reload).then(() => {
+      lock(false);
       const c = adapters[sel].cfg;
       if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = c[k];
       if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = c[k];
       renderAdapterFacts(); renderForm(true);
-      say(act === "release" ? "Lease released" : "Lease renewed" + (adapters[sel].dhcpServer ? " from " + adapters[sel].dhcpServer : ""), "ok");
-    }, e => say(String(e), "bad"));
+      say(act === "release" ? L("Lease released", "ปล่อย IP แล้ว")
+        : L("Lease renewed", "ได้ IP ใหม่แล้ว") + (adapters[sel].dhcpServer ? " · " + adapters[sel].dhcpServer : ""), "ok");
+    }, e => { lock(false); say(String(e), "bad"); });
   }
   const fresh = () => { const o = 100 + Math.floor(Math.random() * 150); return { address: `10.0.1.${o}`, subnet: "255.255.254.0", gateway: "10.0.0.1", dns1: "8.8.8.8", dns2: "8.8.4.4" }; };
   const none = { address: "", subnet: "", gateway: "", dns1: "", dns2: "" };
@@ -1088,9 +1163,9 @@ function leaseAction(act) {
     if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = v[k];
     if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = v[k];
     a.dhcpServer = v.address ? "10.0.0.1" : ""; renderAdapterFacts(); renderForm(true); say(msg); };
-  if (act === "release") put(none, "Lease released");
-  else if (act === "renew") put(fresh(), "Lease renewed from 10.0.0.1");
-  else { put(none, "Releasing…"); setTimeout(() => put(fresh(), "Lease renewed from 10.0.0.1"), 700); }
+  if (act === "release") put(none, L("Lease released", "ปล่อย IP แล้ว"));
+  else if (act === "renew") put(fresh(), L("Lease renewed", "ได้ IP ใหม่แล้ว") + " · 10.0.0.1");
+  else { put(none, L("Releasing…", "กำลังปล่อย…")); setTimeout(() => put(fresh(), L("Lease renewed", "ได้ IP ใหม่แล้ว") + " · 10.0.0.1"), 700); }
 }
 
 // ---------- row buttons ----------
@@ -1109,30 +1184,36 @@ function renderSlots() {
   if (draft.ipAuto) {
     ip.dataset.act = "renew"; slotIcon("ip-act", "arrows-clockwise");
     ip.disabled = !cur.ipAuto;
-    ip.title = cur.ipAuto ? `Renew lease${a.dhcpServer ? " from " + a.dhcpServer : ""}` : "Apply DHCP first, then renew";
+    ip.title = cur.ipAuto ? L("Renew lease", "ขอ IP ใหม่") + (a.dhcpServer ? " · " + a.dhcpServer : "") : L("Apply DHCP first, then renew", "ใช้ค่า DHCP ก่อน แล้วค่อยขอ IP ใหม่");
   } else {
     ip.dataset.act = "pull"; slotIcon("ip-act", "tray-arrow-down");
     ip.disabled = !cur.address;
-    ip.title = "Fill with the values Windows has now";
+    ip.title = L("Fill with the values Windows has now", "ใส่ค่าที่ Windows ใช้อยู่ตอนนี้");
   }
   ip.setAttribute("aria-label", ip.title);
-  if (draft.dnsAuto) { dns.dataset.act = "flush"; slotIcon("dns-act", "broom"); dns.title = "Flush DNS cache"; }
-  else { dns.dataset.act = "presets"; slotIcon("dns-act", "list-bullets"); dns.title = "Choose a DNS provider"; }
+  if (draft.dnsAuto) { dns.dataset.act = "flush"; slotIcon("dns-act", "broom"); dns.title = L("Flush DNS cache", "ล้างแคช DNS"); dns.removeAttribute("aria-haspopup"); }
+  else { dns.dataset.act = "presets"; slotIcon("dns-act", "list-bullets"); dns.title = L("Choose a DNS provider", "เลือกผู้ให้บริการ DNS"); dns.setAttribute("aria-haspopup", "menu"); }
   dns.setAttribute("aria-label", dns.title);
   setPresets(false);
 }
 function busy(btn, ms, done, motion = "spin") { btn.classList.add(motion); btn.disabled = true; setTimeout(() => { btn.classList.remove(motion); btn.disabled = false; done(); }, ms); }
 $("ip-act").onclick = () => {
   const btn = $("ip-act"), cur = adapters[sel].cfg;
-  if (btn.dataset.act === "renew") { say("Renewing lease…"); busy(btn, 600, () => { leaseAction("renew"); renderSlots(); }); return; }
+  if (btn.dataset.act === "renew") {
+    if (!tauri) { say(L("Renewing lease…", "กำลังขอ IP ใหม่…")); busy(btn, 600, () => { leaseAction("renew"); renderSlots(); }); return; }
+    btn.classList.add("spin");
+    leaseAction("renew").finally(() => { btn.classList.remove("spin"); renderSlots(); });
+    return;
+  }
   for (const k of ["address", "subnet", "gateway"]) { draft[k] = cur[k]; fields[k].set(cur[k], true, true); }
-  sync(); say("Filled with current values");
+  sync(); say(L("Filled with current values", "ใส่ค่าปัจจุบันแล้ว"));
 };
 function setPresets(open) {
   const menu = $("presets");
   menu.classList.toggle("open", open);
   menu.classList.remove("up");
-  $("dns-act").setAttribute("aria-expanded", open);
+  if ($("dns-act").dataset.act === "presets") $("dns-act").setAttribute("aria-expanded", open);
+  else $("dns-act").removeAttribute("aria-expanded");
   if (!open) return;
   const gw = draft.gateway || adapters[sel].cfg.gateway;
   menu.innerHTML = "";
@@ -1142,25 +1223,27 @@ function setPresets(open) {
     b.innerHTML = p.logo ? `<span class="plogo" style="--logo:url(vendor/logos/${p.logo}.svg)"></span>` : `<i class="ph ${p.icon}"></i>`;
     b.insertAdjacentHTML("beforeend", `<span></span>`);
     b.children[1].textContent = p.name;
-    b.title = p.off ? "No gateway" : p.ips.filter(Boolean).join(", ");
+    b.title = p.off ? L("No gateway", "ไม่มี Gateway") : p.ips.filter(Boolean).join(", ");
     b.onclick = e => {
       e.stopPropagation();
       [draft.dns1, draft.dns2] = p.ips;
       fields.dns1.set(draft.dns1, true, true); fields.dns2.set(draft.dns2, true, true);
-      setPresets(false); sync(); say(`DNS set to ${p.name}`);
+      setPresets(false); sync(); say(L(`DNS set to ${p.name}`, `ตั้ง DNS เป็น ${p.name}`)); $("dns-act").focus();
     };
     menu.append(b);
   }
   const limit = document.querySelector(".actions").getBoundingClientRect().top;
   if (menu.getBoundingClientRect().bottom > limit - 4) menu.classList.add("up");
+  menu.querySelector("button:not(:disabled)")?.focus();
 }
+menuKeys($("presets"), $("dns-act"), () => setPresets(false));
 $("dns-act").onclick = e => {
   e.stopPropagation();
   const btn = $("dns-act");
   if (btn.dataset.act === "flush") {
-    say("Flushing DNS cache…");
+    say(L("Flushing DNS cache…", "กำลังล้างแคช DNS…"));
     const work = tauri ? invoke("flush_dns").then(() => null, e => String(e)) : Promise.resolve(null);
-    busy(btn, 800, () => work.then(err => err ? say(err, "bad") : say("DNS cache flushed", "ok")), "sweep");
+    busy(btn, 800, () => work.then(err => err ? say(err, "bad") : say(L("DNS cache flushed", "ล้างแคช DNS แล้ว"), "ok")), "sweep");
     return;
   }
   setPresets(!$("presets").classList.contains("open"));
@@ -1182,12 +1265,12 @@ function parseConfig(text) {
 }
 function pasteConfig(text) {
   const c = parseConfig(text);
-  if (!c) return false;
+  if (!c || !draft || busyNow) return false;
   draft.ipAuto = false; Object.assign(draft, { address: c.address, subnet: c.subnet, gateway: c.gateway });
   if (c.dns1) { draft.dnsAuto = false; draft.dns1 = c.dns1; draft.dns2 = c.dns2; } else draft.dnsAuto = false;
   renderForm();
   for (const k of ["address", "subnet", "gateway", "dns1", "dns2"]) fields[k].set(draft[k], true, true);
-  sync(); say("Pasted a full configuration");
+  sync(); say(L("Pasted a full configuration", "วางค่าทั้งชุดแล้ว"));
   return true;
 }
 function configText() {
@@ -1198,7 +1281,8 @@ function configText() {
 document.addEventListener("copy", e => {
   if (document.activeElement?.matches("input") && getSelection().toString()) return;
   if (document.activeElement?.matches("input:not([type=checkbox]):not([type=radio])")) return;
-  e.preventDefault(); e.clipboardData.setData("text/plain", configText()); say("Configuration copied", "ok", "check");
+  if (!draft) return;
+  e.preventDefault(); e.clipboardData.setData("text/plain", configText()); say(L("Configuration copied", "คัดลอกค่าทั้งชุดแล้ว"), "ok", "check");
 });
 document.addEventListener("paste", e => {
   if (document.activeElement?.matches(".ip input, .prefix")) return;   // the field handles it
@@ -1211,7 +1295,11 @@ function renderHidden() {
   adapters.filter(a => hidden.has(a.id)).forEach(a => {
     const l = document.createElement("label"); l.className = "check";
     l.innerHTML = `<input type="checkbox" checked><span></span>`; l.querySelector("span").textContent = a.name;
-    l.querySelector("input").onchange = () => { hidden.delete(a.id); renderList(); renderHidden(); };
+    l.querySelector("input").onchange = () => {
+      hidden.delete(a.id); saveHidden();
+      if (!draft) { sel = firstVisible(); renderAdapter(); }
+      renderList(); renderHidden();
+    };
     box.append(l);
   });
 }
@@ -1229,9 +1317,13 @@ $("s-theme").onchange = e => {
   const go = () => { if (v === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = v; };
   document.startViewTransition && !calm.matches ? document.startViewTransition(go) : go();
 };
-$("s-lang").onchange = e => { lang = e.target.value; document.documentElement.lang = lang; translate(); renderList(); renderAdapter(); renderHidden(); };
+// Language changes words only; edits in progress stay.
+$("s-lang").onchange = e => {
+  lang = e.target.value; document.documentElement.lang = lang; translate(); renderList(); renderHidden();
+  if (draft) { renderAdapterFacts(); renderForm(); } else renderAdapter();
+};
 function translate() { document.querySelectorAll("[data-t]").forEach(el => { const v = T[lang][el.dataset.t]; if (typeof v === "string") el.textContent = v; }); }
-// Sidebar collapse, remembered per machine (storage may be unavailable; the default is expanded)
+// Sidebar collapse, remembered per machine (storage may be unavailable; the default is the rail)
 function setRail(on, instant) {
   const win = document.querySelector(".window");
   if (instant) win.style.transition = "none";
@@ -1240,7 +1332,7 @@ function setRail(on, instant) {
   $("collapse").title = on ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
   $("collapse").setAttribute("aria-label", on ? "Expand sidebar" : "Collapse sidebar");
   try { localStorage.setItem("octet-rail", on ? "1" : "0"); } catch {}
-  tauri?.window.getCurrentWindow().setSize(new tauri.dpi.LogicalSize(on ? 520 : 680, 510));
+  tauri?.window.getCurrentWindow().setSize(new tauri.dpi.LogicalSize(on ? 520 : 680, 510)).catch(() => {});
   requestAnimationFrame(() => { placeIndicator(); if (instant) win.style.transition = ""; });
 }
 $("collapse").onclick = () => setRail(!document.querySelector(".window").classList.contains("rail"));
@@ -1248,26 +1340,33 @@ document.querySelector(".body").addEventListener("transitionend", placeIndicator
 document.addEventListener("keydown", e => {
   if (e.key.toLowerCase() === "b" && e.ctrlKey) { e.preventDefault(); $("collapse").click(); }
   if (e.key === "F5") { e.preventDefault(); $("refresh").click(); }
+  if (e.key === "Escape" && tools.classList.contains("open")) { setTools(false); $("more").focus(); }
   if (e.key === "Enter" && e.ctrlKey && !$("apply").disabled) $("apply").click();
 });
 
-// Tooltips replace native titles (5). In the rail they fly out beside the icon (14).
+// Tooltips replace native titles. In the rail they fly out beside the icon.
+// They show on hover and on keyboard focus, and are linked with aria-describedby.
 const tip = document.createElement("div");
-tip.className = "tip"; tip.setAttribute("role", "tooltip"); document.body.append(tip);
+tip.className = "tip"; tip.id = "tip"; tip.setAttribute("role", "tooltip"); document.body.append(tip);
 let tipEl = null, tipTimer = 0;
-function hideTip() { clearTimeout(tipTimer); tipEl = null; tip.classList.remove("show"); }
-document.addEventListener("pointerover", e => {
-  const el = e.target.closest("[title], [data-tip]");
+function hideTip() { clearTimeout(tipTimer); tipEl?.removeAttribute("aria-describedby"); tipEl = null; tip.classList.remove("show"); }
+function showTip(target, delayed) {
+  const el = target?.closest?.("[title], [data-tip]");
   if (el === tipEl) return;
   hideTip();
   if (!el) return;
-  if (el.hasAttribute("title")) { el.dataset.tip = el.title; el.removeAttribute("title"); }
+  if (el.hasAttribute("title")) {
+    // An icon-only control named only by its title keeps that name.
+    if (!el.getAttribute("aria-label") && !el.textContent.trim()) el.setAttribute("aria-label", el.title);
+    el.dataset.tip = el.title; el.removeAttribute("title");
+  }
   if (!el.dataset.tip) return;
   tipEl = el;
   const side = !!el.closest(".rail .side");
   tipTimer = setTimeout(() => {
     tip.textContent = el.dataset.tip;
     tip.className = "tip" + (side ? " side" : "");
+    el.setAttribute("aria-describedby", "tip");
     const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
     let x, y;
     if (side) { x = r.right + 8; y = r.top + (r.height - h) / 2; }
@@ -1277,20 +1376,26 @@ document.addEventListener("pointerover", e => {
     }
     tip.style.left = x + "px"; tip.style.top = y + "px";
     void tip.offsetWidth; tip.classList.add("show");
-  }, side ? 120 : 450);
-});
+  }, side ? 120 : delayed ? 450 : 200);
+}
+document.addEventListener("pointerover", e => showTip(e.target, true));
+document.addEventListener("focusin", e => { if (e.target.matches?.(":focus-visible")) showTip(e.target, false); });
+document.addEventListener("focusout", hideTip);
 document.addEventListener("pointerdown", hideTip);
-document.addEventListener("keydown", hideTip);
+document.addEventListener("keydown", e => { if (e.key === "Escape") hideTip(); });
 
-// App open (13): skeleton first, then the real values count in.
+// App open: skeleton first, then the real values count in.
 renderAdapterFacts();
 draft = structuredClone(adapters[sel].cfg);
 for (let k = adapters.filter(a => !hidden.has(a.id)).length; k > 0; k--) { const li = document.createElement("li"); li.className = "skel"; $("list").append(li); }
 document.querySelector(".scroll").classList.add("loading");
-(tauri ? reload().catch(e => e) : new Promise(res => setTimeout(res, calm.matches ? 0 : 600))).then(err => {
+sel = Math.max(0, firstVisible());
+(tauri ? reload().then(() => null, e => e) : new Promise(res => setTimeout(res, calm.matches ? 0 : 600))).then(err => {
+  // Never fall back to the sample list inside the app: its names would hit real adapters.
+  if (err) { adapters.length = 0; sel = -1; }
   document.querySelector(".scroll").classList.remove("loading");
   renderList(true); renderAdapter(true);
-  if (err) say("Could not read adapters, showing sample data: " + err, "bad");
+  if (err) { say(L("Could not read adapters: ", "อ่านอะแดปเตอร์ไม่ได้: ") + err, "bad"); $("status").title = String(err); }
 });
 let railPref = null;
 try { railPref = localStorage.getItem("octet-rail"); } catch {}

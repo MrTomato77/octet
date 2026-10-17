@@ -1,0 +1,25 @@
+# Builds Octet.exe on GitHub's Windows runners for every v* tag and attaches it,
+# its SHA-256 and the third-party notices to a draft release.
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show            # installs the toolchain pinned in rust-toolchain.toml
+      - run: cargo test -p octet
+      - run: cargo build --release -p octet
+      - shell: pwsh
+        run: |
+          Copy-Item target/release/octet.exe Octet.exe
+          $hash = (Get-FileHash Octet.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  Octet.exe" | Out-File -Encoding ascii Octet.exe.sha256
+          gh release create $env:GITHUB_REF_NAME --draft --title "Octet $($env:GITHUB_REF_NAME.TrimStart('v'))" `
+            --notes "SHA-256 of Octet.exe: ``$hash``" Octet.exe Octet.exe.sha256 THIRD-PARTY-NOTICES.md
+        env:
+          GH_TOKEN: ${{ github.token }}

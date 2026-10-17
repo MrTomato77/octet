@@ -2082,20 +2082,11 @@ dependencies = [
 name = "octet"
 version = "0.1.0"
 dependencies = [
- "octet-core",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
- "uuid",
-]
-
-[[package]]
-name = "octet-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
