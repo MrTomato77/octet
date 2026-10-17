@@ -130,8 +130,13 @@ pub fn oem_text(bytes: &[u8]) -> String {
 
 /// Unelevated side: validate, then start the elevated copy and wait for it.
 pub fn elevate(r: &Request) -> Result<(), String> {
-    if commands(r)?.is_empty() {
+    let cmds = commands(r)?;
+    if cmds.is_empty() {
         return Ok(());
+    }
+    // Already running as administrator (the "Always run as administrator" setting): no UAC.
+    if crate::net::elevated() {
+        return run(cmds);
     }
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let out = std::env::temp_dir().join(format!("octet-{}-{nanos}.out", std::process::id()));
@@ -139,7 +144,7 @@ pub fn elevate(r: &Request) -> Result<(), String> {
     // The request travels on the command line, so nothing can swap it between the
     // UAC prompt and the elevated copy reading it. The .out file only carries error text.
     let params = format!("--elevated {} \"{}\"", hex(&serde_json::to_vec(r).map_err(|e| e.to_string())?), out.display());
-    let code = run_as_admin(&exe, &params)?;
+    let code = run_as_admin(&exe, &params, true)?.unwrap_or(1);
     let detail = std::fs::read_to_string(&out).unwrap_or_default();
     let _ = std::fs::remove_file(&out);
     match code {
@@ -149,8 +154,9 @@ pub fn elevate(r: &Request) -> Result<(), String> {
     }
 }
 
+/// Starts `exe` through UAC. With `wait`, returns its exit code once it ends.
 #[cfg(windows)]
-fn run_as_admin(exe: &std::path::Path, params: &str) -> Result<u32, String> {
+pub fn run_as_admin(exe: &std::path::Path, params: &str, wait: bool) -> Result<Option<u32>, String> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{CloseHandle, ERROR_CANCELLED, GetLastError};
     use windows_sys::Win32::System::Threading::{GetExitCodeProcess, INFINITE, WaitForSingleObject};
@@ -160,7 +166,7 @@ fn run_as_admin(exe: &std::path::Path, params: &str) -> Result<u32, String> {
     unsafe {
         let mut info: SHELLEXECUTEINFOW = std::mem::zeroed();
         info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
-        info.fMask = SEE_MASK_NOCLOSEPROCESS;
+        info.fMask = if wait { SEE_MASK_NOCLOSEPROCESS } else { 0 };
         info.lpVerb = verb.as_ptr();
         info.lpFile = file.as_ptr();
         info.lpParameters = args.as_ptr();
@@ -172,16 +178,19 @@ fn run_as_admin(exe: &std::path::Path, params: &str) -> Result<u32, String> {
                 format!("Could not start the elevated helper (error {})", GetLastError())
             });
         }
+        if !wait {
+            return Ok(None);
+        }
         WaitForSingleObject(info.hProcess, INFINITE);
         let mut code = 1u32;
         GetExitCodeProcess(info.hProcess, &mut code);
         CloseHandle(info.hProcess);
-        Ok(code)
+        Ok(Some(code))
     }
 }
 
 #[cfg(not(windows))]
-fn run_as_admin(_: &std::path::Path, _: &str) -> Result<u32, String> {
+pub fn run_as_admin(_: &std::path::Path, _: &str, _: bool) -> Result<Option<u32>, String> {
     Err("Octet only changes settings on Windows".into())
 }
 
@@ -195,22 +204,23 @@ pub fn run_elevated(request_hex: &str, out: &str) -> i32 {
         Some(r) => r,
         None => return fail("Could not read the change request".into()),
     };
-    let cmds = match commands(&req) {
-        Ok(c) => c,
-        Err(e) => return fail(e),
-    };
+    match commands(&req).and_then(run) {
+        Ok(()) => 0,
+        Err(e) => fail(e),
+    }
+}
+
+/// Runs validated commands in order; stops at the first failure with its output.
+fn run(cmds: Vec<Vec<String>>) -> Result<(), String> {
     for c in cmds {
-        match crate::hidden(&c[0]).args(&c[1..]).output() {
-            Ok(o) if o.status.success() => {}
-            Ok(o) => {
-                let text = format!("{}{}", oem_text(&o.stdout), oem_text(&o.stderr));
-                let text = text.trim();
-                return fail(if text.is_empty() { format!("{} failed", c.join(" ")) } else { text.to_string() });
-            }
-            Err(e) => return fail(e.to_string()),
+        let o = crate::hidden(&c[0]).args(&c[1..]).output().map_err(|e| e.to_string())?;
+        if !o.status.success() {
+            let text = format!("{}{}", oem_text(&o.stdout), oem_text(&o.stderr));
+            let text = text.trim();
+            return Err(if text.is_empty() { format!("{} failed", c.join(" ")) } else { text.to_string() });
         }
     }
-    0
+    Ok(())
 }
 
 #[cfg(test)]

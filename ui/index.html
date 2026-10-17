@@ -581,6 +581,8 @@ html.app, html.app body { overflow: hidden; }
             <label class="choice"><input type="radio" name="lang" value="en" checked><span>English</span></label>
             <label class="choice"><input type="radio" name="lang" value="th"><span>ไทย</span></label>
           </div>
+          <span class="lbl" data-t="admin">Admin</span>
+          <label class="check" data-tip="No UAC prompt for each change; one prompt when Octet starts"><input type="checkbox" id="s-admin"><span data-t="alwaysAdmin">Always run as administrator</span></label>
           <span class="lbl" data-t="hidden">Hidden</span>
           <div class="stack" id="s-hidden"></div>
         </div>
@@ -607,7 +609,7 @@ html.app, html.app body { overflow: hidden; }
             <span class="lbl" data-t="updates">Updates</span>
             <span class="val"><button type="button" class="link" data-link="releases" data-t="releases">See releases</button></span>
             <span class="lbl" data-t="privacy">Privacy</span>
-            <span class="val muted" data-t="privacyText">No telemetry. Octet makes no network requests of its own.</span>
+            <span class="val muted" data-t="privacyText">No telemetry. The only traffic Octet sends is an ARP check before Apply and a ping after it.</span>
             <span class="lbl" data-t="credits">Credits</span>
             <span class="val muted"><span data-t="inspired">Inspired by</span> <button type="button" class="link" data-link="simpleip">Simple IP Config</button></span>
           </div>
@@ -659,19 +661,21 @@ async function reload() {
   sel = i >= 0 ? i : firstVisible();
 }
 const change = request => invoke("change", { request });
-let sel = 0, draft = null, lang = "en";
+const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const keep = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+let sel = 0, draft = null, lang = pref("octet-lang") || (navigator.language.startsWith("th") ? "th" : "en");
 
 const T = {
   en: { adapters: "Adapters", settings: "Settings", refresh: "Refresh", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
     hide: "Hide from list", ncpa: "Network Connections",
     dhcp: "DHCP", manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
     dns1: "Preferred", dns2: "Alternate", register: "Register in DNS", revert: "Revert", apply: "Apply",
-    theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark",
+    theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark", admin: "Admin", alwaysAdmin: "Always run as administrator",
     general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: "Read adapters again",
     kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
     kOctet: "Move between octets", kEsc: "Close a menu or the sidebar", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
-    privacy: "Privacy", privacyText: "No telemetry. Octet makes no network requests of its own.", credits: "Credits", inspired: "Inspired by",
+    privacy: "Privacy", privacyText: "No telemetry. The only traffic Octet sends is an ARP check before Apply and a ping after it.", credits: "Credits", inspired: "Inspired by",
     up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes",
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
     noneHidden: "No hidden adapters" },
@@ -679,12 +683,12 @@ const T = {
     hide: "ซ่อนจากรายการ", ncpa: "Network Connections",
     dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
     dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "ลงทะเบียนใน DNS", revert: "คืนค่า", apply: "ใช้ค่า",
-    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด",
+    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", admin: "ผู้ดูแล", alwaysAdmin: "เปิดแบบผู้ดูแลระบบเสมอ",
     general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "ใช้ค่าที่แก้", kRefresh: "อ่านอะแดปเตอร์ใหม่",
     kSide: "กางหรือพับแถบด้านซ้าย", kCopy: "คัดลอกค่าทั้งชุด", kPaste: "วางค่าทั้งชุด",
     kOctet: "เลื่อนไปช่องตัวเลขถัดไป", kEsc: "ปิดเมนูหรือแถบด้านซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "สัญญาอนุญาต", notices: "ไลบรารีที่ใช้", source: "ซอร์สโค้ด", updates: "อัปเดต", releases: "ดูเวอร์ชันใหม่",
-    privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่ต่อเน็ตเอง", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
+    privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน ส่งแค่ ARP ก่อนใช้ค่าและ ping หลังใช้ค่า", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
     up: "เชื่อมต่ออยู่", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดใช้งาน", none: "ไม่มี", noChanges: "ไม่มีการเปลี่ยนแปลง",
     changes: n => `มี ${n} รายการที่ยังไม่ได้ใช้`, applied: n => `ใช้ค่ากับ ${n} แล้ว`, disable: "ปิดอะแดปเตอร์", enable: "เปิดอะแดปเตอร์",
     noneHidden: "ไม่มีอะแดปเตอร์ที่ซ่อน" },
@@ -1135,13 +1139,22 @@ function rowsOf(diff) {
   const seg = document.querySelectorAll(".seg");
   return diff.map(k => ({ ipAuto: seg[0], dnsAuto: seg[1] })[k] || fields[k]?.box).filter(Boolean);
 }
-$("apply").onclick = () => {
+$("apply").onclick = async () => {
   if (busyNow || !draft) return;
   const btn = $("apply"), a = adapters[sel], d = changed(), rows = rowsOf(d), has = ks => d.some(k => ks.includes(k));
   const sent = structuredClone(draft);   // what is applied, whatever happens to the form meanwhile
   clearMsgs();
   const pre = precheck(sent);
   if (pre) { replay(fields[pre[0]].box, "shake"); rowMsg(pre[0], pre[1]); say(L("Not applied", "ยังไม่ได้ใช้ค่า"), "bad"); return; }
+  if (tauri && !sent.ipAuto && sent.address !== a.cfg.address) {
+    // Someone else may already have this address: ask the network before Windows.
+    lock(true); say(L("Checking address…", "กำลังเช็กว่า IP ว่างไหม…"));
+    const owner = await invoke("who_has", { address: sent.address }).catch(() => null);
+    lock(false);
+    if (owner && !await ask(L(`${sent.address} is already used by ${owner}. Apply anyway?`, `${sent.address} มีเครื่อง ${owner} ใช้อยู่แล้ว จะใช้ค่าต่อไหม?`), L("Apply", "ใช้ค่า"))) {
+      rowMsg("address", L(`In use by ${owner}`, `มีเครื่อง ${owner} ใช้อยู่`)); say(L("Not applied", "ยังไม่ได้ใช้ค่า"), "bad"); return;
+    }
+  }
   lock(true); btn.classList.add("spin"); iconNow("apply", "circle-notch");
   rows.forEach(el => el.classList.add("working"));
   say(tauri ? L("Waiting for permission…", "รอสิทธิ์ผู้ดูแลระบบ…") : L("Applying…", "กำลังใช้ค่า…"));
@@ -1169,21 +1182,37 @@ $("apply").onclick = () => {
       if (tauri) await reload().catch(() => {});   // show what Windows actually took
       lock(false); renderAdapter();
       iconLater("apply", "shield-check", 1200);
-      if (tauri) { say(t("applied")(a.name), "ok", "check"); return; }
+      if (tauri) {
+        if (!a.cfg.gateway && !a.cfg.dns1) { say(t("applied")(a.name), "ok", "check"); return; }
+        say(t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…"));
+        await new Promise(res => setTimeout(res, 1000));   // let the new address settle
+        const probe = ip => ip ? invoke("ping", { address: ip }).catch(() => null) : Promise.resolve(undefined);
+        const [gw, dns] = await Promise.all([probe(a.cfg.gateway), probe(a.cfg.dns1 === a.cfg.gateway ? "" : a.cfg.dns1)]);
+        const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${ms} ms`;
+        const fail = gw === null || dns === null;
+        say([part("Gateway", gw), part(`DNS ${a.cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? undefined : "check");
+        return;
+      }
       say(t("applied")(a.name) + " · testing…");
       setTimeout(() => say(a.cfg.gateway ? `Gateway ${1 + Math.floor(Math.random() * 4)} ms · DNS ok` : t("applied")(a.name), "ok", "check"), 900);
     }, calm.matches ? 0 : 180 + marks.length * 60);
   });
 };
 // Refresh: spinner and skeleton rows while reading, then rows arrive in order
-$("refresh").onclick = () => {
+let lastRead = Date.now();
+$("refresh").onclick = () => refresh(false);
+function refresh(quiet) {
   const btn = $("refresh"), ul = $("list");
-  if (btn.classList.contains("spin") || busyNow) return;
-  btn.classList.add("spin"); iconNow("refresh", "circle-notch");
-  const rows = adapters.filter(a => !hidden.has(a.id)).length;
-  ul.innerHTML = "";
-  for (let k = 0; k < rows; k++) { const li = document.createElement("li"); li.className = "skel"; ul.append(li); }
-  say(L("Reading adapters…", "กำลังอ่านอะแดปเตอร์…"));
+  if (btn.classList.contains("spin") || busyNow || (quiet && document.querySelector("dialog[open]"))) return;
+  lastRead = Date.now();
+  btn.classList.add("spin");
+  if (!quiet) {
+    iconNow("refresh", "circle-notch");
+    const rows = adapters.filter(a => !hidden.has(a.id)).length;
+    ul.innerHTML = "";
+    for (let k = 0; k < rows; k++) { const li = document.createElement("li"); li.className = "skel"; ul.append(li); }
+    say(L("Reading adapters…", "กำลังอ่านอะแดปเตอร์…"));
+  }
   const before = structuredClone(adapters[sel]?.cfg ?? {}), id = adapters[sel]?.id;
   const work = tauri ? reload() : new Promise(res => setTimeout(() => {
     // Demo: the world moved while we weren't looking (cable plugged, lease changed).
@@ -1197,21 +1226,26 @@ $("refresh").onclick = () => {
     const a = adapters[sel];
     btn.classList.remove("spin");
     // The adapter that was open is gone (or nothing was open): start from what is there.
-    if (!a || a.id !== id || !draft) { renderList(true); renderAdapter(true); iconNow("refresh", "arrow-clockwise"); return; }
+    if (!a || a.id !== id || !draft) { renderList(!quiet); renderAdapter(!quiet); if (!quiet) iconNow("refresh", "arrow-clockwise"); return; }
     // While a group is automatic the draft mirrors Windows.
     if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = a.cfg[k];
     if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = a.cfg[k];
-    renderList(true); renderAdapterFacts(); renderForm(true);
+    renderList(!quiet); renderAdapterFacts(); renderForm(!quiet);
     for (const k of ["address", "subnet", "gateway", "dns1", "dns2"])
       if (before[k] !== a.cfg[k] && (k.startsWith("dns") ? draft.dnsAuto : draft.ipAuto)) flash(fields[k].box);
+    if (quiet) return;
     iconNow("refresh", "check");
     say(L("Adapters refreshed", "อ่านอะแดปเตอร์ใหม่แล้ว"));
     iconLater("refresh", "arrow-clockwise", 1000);
   }, e => {
     btn.classList.remove("spin"); iconNow("refresh", "arrow-clockwise");
-    renderList(); say(String(e), "bad");
+    renderList(); if (!quiet) say(String(e), "bad");
   });
-};
+}
+// Windows reports cable, Wi-Fi and address changes; coming back to the window re-reads too.
+let netTimer = 0;
+tauri?.event.listen("net-changed", () => { clearTimeout(netTimer); netTimer = setTimeout(() => refresh(true), 600); });
+if (tauri) addEventListener("focus", () => { if (Date.now() - lastRead > 2000) refresh(true); });
 
 const tools = $("tools");
 function setTools(open) {
@@ -1445,17 +1479,35 @@ function segIndex(name) {
   inputs[0].closest(".seg").style.setProperty("--k", inputs.findIndex(x => x.checked));
 }
 document.querySelectorAll("input[name=theme]").forEach(x => x.onchange = () => {
-  segIndex("theme");
+  segIndex("theme"); keep("octet-theme", x.value);
   crossfade(() => { if (x.value === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = x.value; });
 });
 // Language changes words only; edits in progress stay.
 document.querySelectorAll("input[name=lang]").forEach(x => x.onchange = () => {
-  segIndex("lang");
+  segIndex("lang"); keep("octet-lang", x.value);
   crossfade(() => {
     lang = x.value; document.documentElement.lang = lang; translate(); renderList(); renderHidden();
     if (draft) { renderAdapterFacts(); renderForm(); } else renderAdapter();
   });
 });
+// Always run as administrator: saved now, and Octet restarts elevated if it isn't already.
+const adminBox = $("s-admin");
+if (tauri) invoke("admin_state").then(s => adminBox.checked = s.always).catch(() => {});
+else adminBox.checked = pref("octet-admin") === "1";
+adminBox.onchange = async () => {
+  const on = adminBox.checked;
+  if (!tauri) { keep("octet-admin", on ? "1" : "0"); return; }
+  try {
+    await invoke("set_always_admin", { on });
+    if (!on || (await invoke("admin_state")).elevated) return;
+    if (changed().length && !await ask(L("Restart as administrator? Unapplied changes will be lost.", "เปิดใหม่แบบผู้ดูแลระบบ? ค่าที่ยังไม่ได้ใช้จะหายไป"), L("Restart", "เปิดใหม่"))) return;
+    await invoke("restart_as_admin");
+  } catch (e) {
+    // UAC declined: keep things as they were.
+    adminBox.checked = !on; invoke("set_always_admin", { on: !on }).catch(() => {});
+    say(String(e), "bad");
+  }
+};
 // Settings sections slide the tab thumb and bring the new pane in.
 document.querySelectorAll("input[name=stab]").forEach(x => x.onchange = () => {
   segIndex("stab");
@@ -1568,6 +1620,15 @@ sel = Math.max(0, firstVisible());
   if (err) { say(L("Could not read adapters: ", "อ่านอะแดปเตอร์ไม่ได้: ") + err, "bad"); $("status").title = String(err); }
 });
 setRail(true, true);
+// Remembered theme and language, applied without a transition.
+{
+  const th = ["light", "dark"].includes(pref("octet-theme")) ? pref("octet-theme") : "system";
+  if (th !== "system") document.documentElement.dataset.theme = th;
+  document.querySelector(`input[name=theme][value=${th}]`).checked = true;
+  document.querySelector(`input[name=lang][value=${lang}]`).checked = true;
+  segIndex("theme"); segIndex("lang");
+  document.documentElement.lang = lang; translate();
+}
 </script>
 <script type="module">
 // morphicons (MIT) morphs Phosphor's own SVGs, so the icon family stays one.
