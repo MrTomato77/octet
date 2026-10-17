@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Octet layout demo</title>
-<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<link rel="stylesheet" href="vendor/phosphor/style.css">
+<script type="importmap">{ "imports": { "morphicons/region": "./vendor/morphicons/region.js" } }</script>
 <style>
 /* Layout spec. Every size in the window comes from these tokens. */
 :root {
@@ -385,6 +386,11 @@ dialog[open]::backdrop { animation: fade var(--t-base) var(--ease-out); }
   animation: shimmer 1100ms linear infinite; }
 .loading :is(.ip, .seg, .slot-btn) > *, .loading .tag::after { visibility: hidden; }
 
+/* Inside Octet (Tauri) the page is the window: no demo frame, titlebar or note */
+html.app body { display: block; padding: 0; background: var(--bg); }
+html.app .window { width: 100vw; height: 100vh; border-radius: 0; box-shadow: none; grid-template-rows: 1fr; }
+html.app .titlebar, html.app .note { display: none; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after, ::backdrop { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 }
@@ -529,6 +535,15 @@ const adapters = [
     cfg: { ipAuto: true, address: "", subnet: "", gateway: "", dnsAuto: true, dns1: "", dns2: "", register: true } },
 ];
 const hidden = new Set();
+// Inside Octet, Tauri is here and the sample list above is replaced by this machine's adapters.
+const tauri = window.__TAURI__, invoke = tauri?.core.invoke;
+if (tauri) document.documentElement.classList.add("app");
+async function reload() {
+  const id = adapters[sel]?.id;
+  adapters.splice(0, adapters.length, ...await invoke("read_adapters"));
+  sel = Math.max(0, adapters.findIndex(a => a.id === id && !hidden.has(a.id)));
+}
+const change = request => invoke("change", { request });
 let sel = 0, draft = null, lang = "en";
 
 const T = {
@@ -612,7 +627,7 @@ function tag(field, info, cls) {
   el.className = "tag" + (cls ? " " + cls : "");
   el.textContent = ""; el.style.removeProperty("--logo"); el.title = "";
   if (!info) return;
-  if (info.logo) { el.classList.add("logo"); el.style.setProperty("--logo", `url(https://cdn.simpleicons.org/${info.logo})`); }
+  if (info.logo) { el.classList.add("logo"); el.style.setProperty("--logo", `url(vendor/logos/${info.logo}.svg)`); }
   else el.textContent = info.text;
   el.title = info.title || "";
   void el.offsetWidth; el.classList.add(wasEmpty && cls !== "empty" ? "fill" : "fresh");
@@ -961,28 +976,34 @@ $("apply").onclick = () => {
   icon("apply", "circle-notch"); clearMsgs();
   rows.forEach(el => el.classList.add("working"));
   say(lang === "th" ? "กำลังใช้ค่า…" : "Applying…");
-  setTimeout(() => {
+  const d = changed(), has = ks => d.some(k => ks.includes(k));
+  const work = tauri
+    ? change({ op: "apply", name: a.name, cfg: draft, ip: has(["ipAuto", "address", "subnet", "gateway"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]) })
+        .then(() => null, e => [null, String(e)])
+    : new Promise(res => setTimeout(() => res(demoFailure()), 900));
+  work.then(err => {
     rows.forEach(el => el.classList.remove("working"));
     btn.classList.remove("spin");
-    const err = demoFailure();
     if (err) {
       icon("apply", "shield-check"); sync();
-      replay(fields[err[0]].box, "shake"); rowMsg(err[0], err[1]);
-      say("Not applied", "bad");
+      if (err[0]) { replay(fields[err[0]].box, "shake"); rowMsg(err[0], err[1]); say("Not applied", "bad"); }
+      else say(err[1], "bad");
       return;
     }
     icon("apply", "check");
     const marks = [...document.querySelectorAll(".ip.changed")];
     marks.forEach((b, i) => { b.style.setProperty("--i", i); b.classList.add("settle"); });
-    setTimeout(() => {
+    setTimeout(async () => {
       marks.forEach(b => b.classList.remove("settle"));
       a.cfg = structuredClone(draft);
+      if (tauri) await reload().catch(() => {});   // show what Windows actually took
       renderAdapter();
+      setTimeout(() => icon("apply", "shield-check"), 1200);
+      if (tauri) { say(t("applied")(a.name), "ok", "check"); return; }
       say(t("applied")(a.name) + " · testing…");
       setTimeout(() => say(a.cfg.gateway ? `Gateway ${1 + Math.floor(Math.random() * 4)} ms · DNS ok` : t("applied")(a.name), "ok", "check"), 900);
-      setTimeout(() => icon("apply", "shield-check"), 1200);
     }, calm.matches ? 0 : 180 + marks.length * 60);
-  }, 900);
+  });
 };
 // Refresh: spinner and skeleton rows while reading, then rows arrive in order
 $("refresh").onclick = () => {
@@ -993,22 +1014,28 @@ $("refresh").onclick = () => {
   ul.innerHTML = "";
   for (let k = 0; k < rows; k++) { const li = document.createElement("li"); li.className = "skel"; ul.append(li); }
   say(lang === "th" ? "กำลังอ่านอะแดปเตอร์…" : "Reading adapters…");
-  setTimeout(() => {
+  const before = structuredClone(adapters[sel].cfg), id = adapters[sel].id;
+  const work = tauri ? reload() : new Promise(res => setTimeout(() => {
     // Demo: the world moved while we weren't looking (cable plugged, lease changed).
-    const a = adapters[sel], before = structuredClone(a.cfg);
+    const a = adapters[sel];
     const eth = adapters.find(x => x.name === "Ethernet");
     if (eth.state !== "disabled") eth.state = eth.state === "up" ? "down" : "up";
-    if (a.cfg.ipAuto && a.cfg.address) {
-      a.cfg.address = a.cfg.address.replace(/\d+$/, String(100 + Math.floor(Math.random() * 150)));
-      if (draft.ipAuto) draft.address = a.cfg.address;
-    }
+    if (a.cfg.ipAuto && a.cfg.address) a.cfg.address = a.cfg.address.replace(/\d+$/, String(100 + Math.floor(Math.random() * 150)));
+    res();
+  }, 800));
+  work.catch(e => say(String(e), "bad")).then(() => {
+    const a = adapters[sel];
+    if (a.id !== id) { renderList(true); renderAdapter(true); btn.classList.remove("spin"); icon("refresh", "arrow-clockwise"); return; }
+    // While a group is automatic the draft mirrors Windows.
+    if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = a.cfg[k];
+    if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = a.cfg[k];
     renderList(true); renderAdapterFacts(); renderForm(true);
     for (const k of ["address", "subnet", "gateway", "dns1", "dns2"])
       if (before[k] !== a.cfg[k] && (k.startsWith("dns") ? draft.dnsAuto : draft.ipAuto)) flash(fields[k].box);
     btn.classList.remove("spin"); icon("refresh", "check");
     say(lang === "th" ? "อ่านอะแดปเตอร์ใหม่แล้ว" : "Adapters refreshed");
     setTimeout(() => icon("refresh", "arrow-clockwise"), 1000);
-  }, 800);
+  });
 };
 
 const tools = $("tools");
@@ -1026,7 +1053,14 @@ tools.onclick = e => {
   if (act === "register") { e.stopPropagation(); draft.register = !draft.register; renderRegister(); sync(); return; }   // menu stays open to show the tick
   const a = adapters[sel];
   if (act === "hide") { hidden.add(a.id); sel = adapters.findIndex(x => !hidden.has(x.id)); renderList(); renderAdapter(); renderHidden(); return; }
-  if (act === "toggle") { a.state = a.state === "disabled" ? "down" : "disabled"; renderList(); renderAdapterFacts(); return; }
+  if (act === "toggle") {
+    if (!tauri) { a.state = a.state === "disabled" ? "down" : "disabled"; renderList(); renderAdapterFacts(); return; }
+    say("Waiting for permission…");
+    change({ op: "enable", name: a.name, on: a.state === "disabled" })
+      .then(reload).then(() => { renderList(); renderAdapterFacts(); }, e => say(String(e), "bad"));
+    return;
+  }
+  if (act === "ncpa" && tauri) { invoke("open_ncpa").catch(e => say(String(e), "bad")); return; }
   if (["release", "renew", "cycle"].includes(act) && a.cfg.ipAuto) { leaseAction(act); return; }
   say({ release: "Not a DHCP adapter", renew: "Not a DHCP adapter", cycle: "Not a DHCP adapter", ncpa: "Opens ncpa.cpl (demo)" }[act]);
 };
@@ -1034,6 +1068,18 @@ tools.onclick = e => {
 // ---------- DHCP lease (demo: a random address from the same scope) ----------
 function leaseAction(act) {
   const a = adapters[sel];
+  if (tauri) {
+    say(act === "release" ? "Releasing…" : "Renewing lease…");
+    const go = act === "cycle" ? change({ op: "release", name: a.name }).then(() => change({ op: "renew", name: a.name }))
+      : change({ op: act, name: a.name });
+    return go.then(reload).then(() => {
+      const c = adapters[sel].cfg;
+      if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = c[k];
+      if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = c[k];
+      renderAdapterFacts(); renderForm(true);
+      say(act === "release" ? "Lease released" : "Lease renewed" + (adapters[sel].dhcpServer ? " from " + adapters[sel].dhcpServer : ""), "ok");
+    }, e => say(String(e), "bad"));
+  }
   const fresh = () => { const o = 100 + Math.floor(Math.random() * 150); return { address: `10.0.1.${o}`, subnet: "255.255.254.0", gateway: "10.0.0.1", dns1: "8.8.8.8", dns2: "8.8.4.4" }; };
   const none = { address: "", subnet: "", gateway: "", dns1: "", dns2: "" };
   const put = (v, msg) => {
@@ -1093,7 +1139,7 @@ function setPresets(open) {
   for (const p of [...presets, { name: "Router", icon: "ph-house", ips: [gw, ""], off: !validIp(gw || "") }]) {
     const b = document.createElement("button");
     b.setAttribute("role", "menuitem"); b.disabled = !!p.off;
-    b.innerHTML = p.logo ? `<span class="plogo" style="--logo:url(https://cdn.simpleicons.org/${p.logo})"></span>` : `<i class="ph ${p.icon}"></i>`;
+    b.innerHTML = p.logo ? `<span class="plogo" style="--logo:url(vendor/logos/${p.logo}.svg)"></span>` : `<i class="ph ${p.icon}"></i>`;
     b.insertAdjacentHTML("beforeend", `<span></span>`);
     b.children[1].textContent = p.name;
     b.title = p.off ? "No gateway" : p.ips.filter(Boolean).join(", ");
@@ -1111,7 +1157,12 @@ function setPresets(open) {
 $("dns-act").onclick = e => {
   e.stopPropagation();
   const btn = $("dns-act");
-  if (btn.dataset.act === "flush") { say("Flushing DNS cache…"); busy(btn, 800, () => say("DNS cache flushed", "ok"), "sweep"); return; }
+  if (btn.dataset.act === "flush") {
+    say("Flushing DNS cache…");
+    const work = tauri ? invoke("flush_dns").then(() => null, e => String(e)) : Promise.resolve(null);
+    busy(btn, 800, () => work.then(err => err ? say(err, "bad") : say("DNS cache flushed", "ok")), "sweep");
+    return;
+  }
   setPresets(!$("presets").classList.contains("open"));
 };
 document.addEventListener("click", () => setPresets(false));
@@ -1189,6 +1240,7 @@ function setRail(on, instant) {
   $("collapse").title = on ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
   $("collapse").setAttribute("aria-label", on ? "Expand sidebar" : "Collapse sidebar");
   try { localStorage.setItem("octet-rail", on ? "1" : "0"); } catch {}
+  tauri?.window.getCurrentWindow().setSize(new tauri.dpi.LogicalSize(on ? 520 : 680, 510));
   requestAnimationFrame(() => { placeIndicator(); if (instant) win.style.transition = ""; });
 }
 $("collapse").onclick = () => setRail(!document.querySelector(".window").classList.contains("rail"));
@@ -1235,19 +1287,24 @@ renderAdapterFacts();
 draft = structuredClone(adapters[sel].cfg);
 for (let k = adapters.filter(a => !hidden.has(a.id)).length; k > 0; k--) { const li = document.createElement("li"); li.className = "skel"; $("list").append(li); }
 document.querySelector(".scroll").classList.add("loading");
-setTimeout(() => { document.querySelector(".scroll").classList.remove("loading"); renderList(true); renderAdapter(true); }, calm.matches ? 0 : 600);
+(tauri ? reload().catch(e => e) : new Promise(res => setTimeout(res, calm.matches ? 0 : 600))).then(err => {
+  document.querySelector(".scroll").classList.remove("loading");
+  renderList(true); renderAdapter(true);
+  if (err) say("Could not read adapters, showing sample data: " + err, "bad");
+});
 let railPref = null;
 try { railPref = localStorage.getItem("octet-rail"); } catch {}
 setRail(railPref !== "0", true);
 </script>
 <script type="module">
 // morphicons (MIT) morphs Phosphor's own SVGs, so the icon family stays one.
-import { createMorph, preloadRegion } from "https://esm.sh/morphicons@2.0.0/dom";
-import { svgToIcon } from "https://esm.sh/morphicons@2.0.0/adapters";
+import { createMorph, preloadRegion } from "./vendor/morphicons/dom.js";
+import { svgToIcon } from "./vendor/morphicons/adapters.js";
+import svgs from "./vendor/icons.js";
 const NS = "http://www.w3.org/2000/svg";
 const names = ["shield-check", "circle-notch", "check", "arrow-clockwise", "dots-three", "x", "arrows-clockwise", "tray-arrow-down", "broom", "list-bullets"];
 const icons = Object.fromEntries(await Promise.all(names.map(async n =>
-  [n, svgToIcon(await fetch(`https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2.1.1/assets/regular/${n}.svg`).then(r => r.text()))])));
+  [n, svgToIcon(svgs[n])])));
 await preloadRegion();
 function morphable(id, start) {
   const svg = document.createElementNS(NS, "svg");

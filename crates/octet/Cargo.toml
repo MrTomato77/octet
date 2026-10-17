@@ -1,0 +1,17 @@
+[package]
+name = "octet"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Switch IPv4 and DNS settings on Windows in seconds."
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+octet-core = { path = "../core" }

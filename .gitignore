@@ -4,3 +4,4 @@
 *.pdb
 
 /source/
+/crates/octet/gen/

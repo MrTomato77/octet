@@ -1,5 +1,5 @@
 [package]
-name = "simple-ip-core"
+name = "octet-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
