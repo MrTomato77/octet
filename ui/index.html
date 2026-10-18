@@ -219,7 +219,7 @@ button, input, select { font: inherit; color: inherit; }
 
 /* IPv4 input: four octets in fixed columns, identical in every row */
 .ip { position: relative; display: flex; align-items: center; width: var(--field-w); height: var(--row-h);
-  padding: 0 var(--s1); border: 1px solid var(--border-strong); border-radius: var(--r-input); background: var(--surface); }
+  padding: 0 18px; border: 1px solid var(--border-strong); border-radius: var(--r-input); background: var(--surface); }   /* side room for the changed mark, kept even so octets stay centred */
 .ip.short { width: var(--octets-w); }
 .ip:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .ip input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; text-align: center; outline: 0; padding: 0;
@@ -228,7 +228,7 @@ button, input, select { font: inherit; color: inherit; }
 .ip.ro { background: transparent; border-color: var(--border); }
 .ip.ro input { color: var(--muted); }
 .ip.invalid { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
-.diff { position: absolute; right: 10px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; transform: rotate(45deg);
+.diff { position: absolute; right: 6px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; transform: rotate(45deg);
   background: var(--accent); border-radius: 1px; display: none; }
 .ip.changed .diff { display: block; }
 /* Tail of the box: what kind of address this is (IP) or who runs it (DNS) */
