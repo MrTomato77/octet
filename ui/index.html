@@ -1158,13 +1158,17 @@ function placeIndicator(animate = false) {
   ], { duration: 320 });
 }
 function renderList(enter = false) {
-  const ul = $("list"); ul.innerHTML = ""; ul.append(indicator);
+  const ul = $("list");
+  // FLIP: remember where each adapter sat, so a re-sort (turned on or off) slides rows to their new place.
+  const was = new Map([...ul.querySelectorAll("li[data-id]")].map(li => [li.dataset.id, li.offsetTop]));
+  ul.innerHTML = ""; ul.append(indicator);
   ul.classList.toggle("enter", enter);
   let n = 0;
   adapters.forEach((a, i) => {
     if (hidden.has(a.id)) return;
     const li = document.createElement("li");
     li.style.setProperty("--i", n++);
+    li.dataset.id = a.id;
     const b = document.createElement("button");
     b.className = "item" + (a.state === "up" ? "" : " off");
     b.setAttribute("aria-current", i === sel);
@@ -1183,7 +1187,12 @@ function renderList(enter = false) {
     b.onclick = () => { closeSettings(); select(i); if (!isRail()) setRail(true); };
     li.append(b); ul.append(li);
   });
-  placeIndicator(animateNext);
+  let moved = false;
+  if (!enter && !calm.matches) for (const li of ul.querySelectorAll("li[data-id]")) {
+    const dy = (was.get(li.dataset.id) ?? li.offsetTop) - li.offsetTop;
+    if (dy) { moved = true; li.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }); }
+  }
+  placeIndicator(animateNext || moved);   // the selection highlight travels with its row
   animateNext = false;
 }
 let animateNext = false;
@@ -1373,7 +1382,13 @@ tools.onclick = async e => {
     hidden.add(a.id); saveHidden(); sel = firstVisible(); renderList(); renderAdapter(); renderHidden(); return;
   }
   if (act === "toggle") {
-    if (!tauri) { a.state = a.state === "disabled" ? "down" : "disabled"; renderList(); renderAdapterFacts(); return; }
+    if (!tauri) {
+      a.state = a.state === "disabled" ? "down" : "disabled";
+      // Same order the app reads them in (adapters.rs): online with gateway, online, down, disabled; by name.
+      const rank = x => [x.state !== "up", !x.cfg.gateway, x.state === "disabled"].map(Number).join("") + x.name;
+      adapters.sort((x, y) => rank(x).localeCompare(rank(y))); sel = adapters.indexOf(a);
+      renderList(); renderAdapterFacts(); return;
+    }
     const on = a.state === "disabled";
     say(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true);
     change({ op: "enable", index: a.index, name: a.name, on }).then(reload).then(() => {
