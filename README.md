@@ -22,7 +22,7 @@ Get `Octet.exe` from [Releases](https://github.com/MrTomato77/octet/releases). I
 
 - Switch an adapter between DHCP and manual IP / DNS, with live validation and pre-checks (gateway outside the subnet, address equal to the gateway, network or broadcast address).
 - Shows what each address is (private, public, APIPA, CGNAT), who runs your DNS, and your gateway's name.
-- Before Apply, checks whether another device already has the new address (ARP). After Apply, pings the gateway and DNS.
+- Before Apply, checks whether another device already has the new address (ARP), and names its maker from the MAC. After Apply, pings the gateway and DNS.
 - Follows Windows: cable, Wi-Fi and address changes show up on their own.
 - Release / renew DHCP, flush DNS, enable / disable adapters, DNS provider presets.
 - Copy or paste a whole configuration as one line: `192.168.1.50/24 gw 192.168.1.1 dns 1.1.1.1, 8.8.8.8`.
@@ -35,7 +35,7 @@ Changing settings many times in a row? In *Settings*, set *Run as admin* to *Alw
 
 ## Privacy
 
-Octet has no telemetry and no server of its own. Everything it shows comes from Windows (`Get-NetAdapter`, CIM). On your own network it sends only what you'd expect: an ARP check before Apply, a ping to the gateway and DNS after it, and a reverse name lookup for the gateway (answered by your DNS server or the router). WebView2, the Microsoft component that draws the window, keeps itself updated through Windows.
+Octet has no telemetry and no server of its own. Everything it shows comes from Windows itself (IP Helper and the registry). On your own network it sends only what you'd expect: an ARP check before Apply, a ping to the gateway and DNS after it, and for the gateway a reverse name lookup (answered by your DNS server or the router) and an ARP request. Device makers come from the IEEE list built into the app; MAC addresses are never looked up online. WebView2, the Microsoft component that draws the window, keeps itself updated through Windows.
 
 ## Build
 

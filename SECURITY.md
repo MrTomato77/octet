@@ -12,4 +12,4 @@ https://github.com/MrTomato77/octet. Please don't open a public issue for it.
   It receives one request on its command line, validates it again, runs `netsh` or `ipconfig`
   directly (no shell), and exits.
 - Only fixed command shapes are possible; addresses are parsed as IPv4 before use.
-- Octet has no server of its own and no telemetry. It sends only an ARP check before Apply, a ping to the gateway and DNS after it, and a reverse name lookup for the gateway (through your configured DNS).
+- Octet has no server of its own and no telemetry. It sends only an ARP check before Apply, a ping to the gateway and DNS after it, and for the gateway a reverse name lookup (through your configured DNS) and an ARP request. Device makers come from the IEEE list built into the app, never from an online lookup.

@@ -52,6 +52,18 @@ pub fn hostname(_: Ipv4Addr) -> Option<String> {
     None
 }
 
+/// Who made the network card, from the first 3 bytes of its MAC ("00-11-32-.." -> "Synology").
+/// The IEEE list is built into the exe (data/oui.txt), so nothing is looked up online.
+pub fn vendor(mac: &str) -> Option<&'static str> {
+    static OUI: &str = include_str!("../data/oui.txt");
+    let key: String = mac.chars().filter(char::is_ascii_hexdigit).take(6).collect::<String>().to_ascii_uppercase();
+    if key.len() < 6 {
+        return None;
+    }
+    // ponytail: linear scan of ~40k lines (about a millisecond); a sorted index if it ever runs in a loop.
+    OUI.lines().find_map(|l| l.strip_prefix(key.as_str())?.strip_prefix('\t'))
+}
+
 /// Empties the DNS client cache, as `ipconfig /flushdns` does (it calls this same function),
 /// without starting a process: under 1 ms instead of ~45 ms.
 #[cfg(windows)]
@@ -132,6 +144,14 @@ mod tests {
         let t = std::time::Instant::now();
         assert!(super::flush_dns());
         println!("TIME flush_dns ms: {:.2}", t.elapsed().as_secs_f64() * 1000.0);
+    }
+
+    #[test]
+    fn names_card_makers() {
+        assert_eq!(super::vendor("00-11-32-AB-CD-EF"), Some("Synology"));
+        assert_eq!(super::vendor("b8:27:eb:00:00:01"), Some("Raspberry Pi Foundation"));
+        assert_eq!(super::vendor("02-00-00-00-00-01"), None);
+        assert_eq!(super::vendor(""), None);
     }
 
     #[test]

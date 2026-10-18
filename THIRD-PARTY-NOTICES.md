@@ -8,6 +8,10 @@ Octet is MIT licensed (see LICENSE). It bundles the following.
 - **morphicons** 2.0.0, MIT, Copyright (c) 2026 Guillermo. Full text: ui/vendor/morphicons/LICENSE.
 - **Simple Icons** 16.35.0 (DNS provider logos), CC0-1.0. Full text: ui/vendor/logos/LICENSE.md. The logos are trademarks of their owners (Google, Cloudflare, Quad9, AdGuard, Cisco, NextDNS, Tailscale); they are shown only to identify which DNS service an address belongs to and imply no endorsement.
 
+## Data
+
+- **IEEE MA-L registry** (crates/octet/data/oui.txt), the public list of MAC address prefixes and the organizations they are assigned to, from https://standards-oui.ieee.org/. Names are shortened (legal suffixes dropped) by crates/octet/data/oui.py.
+
 ## Rust crates compiled into Octet.exe
 
 Grouped by license as declared by each crate. License texts are in each crate's source on crates.io.

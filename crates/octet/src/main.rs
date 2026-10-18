@@ -70,6 +70,12 @@ async fn hostname(address: String) -> Result<Option<String>, String> {
     blocking(move || Ok(net::hostname(ip))).await
 }
 
+/// Who made the card behind a MAC, from the built-in IEEE list.
+#[tauri::command]
+fn vendor(mac: String) -> Option<&'static str> {
+    net::vendor(&mac)
+}
+
 #[tauri::command]
 fn open_ncpa() -> Result<(), String> {
     hidden("control").arg("ncpa.cpl").spawn().map(|_| ()).map_err(|e| e.to_string())
@@ -191,7 +197,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, hostname, open_ncpa, open_link, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, hostname, vendor, open_ncpa, open_link, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");
