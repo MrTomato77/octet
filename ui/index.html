@@ -464,10 +464,6 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 .dot.off.pulse { animation-name: pulse-off; }
 @keyframes pulse { from { outline: 2px solid var(--ok); outline-offset: 0; } to { outline: 2px solid transparent; outline-offset: 7px; } }
 @keyframes pulse-off { from { outline: 2px solid var(--faint); outline-offset: 0; } to { outline: 2px solid transparent; outline-offset: 7px; } }
-/* Down or disabled adapter: the status line says why, the form steps back until touched */
-.form { transition: opacity var(--t-slow) var(--ease-out); }
-.scroll.dim .form { opacity: 0.55; }
-.scroll.dim .form:hover, .scroll.dim .form:focus-within { opacity: 1; }
 /* Theme switch */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 240ms; }
 /* App open: the form's shape first, values count in after */
@@ -846,11 +842,9 @@ function countTo(x, next, delay) {
   const finish = () => { if (x._count === token) { x.value = next; delete x.dataset.final; } };
   if (calm.matches || x.value === next) { finish(); return; }
   if (to === null || !/^\d+$/.test(x.value)) {
-    // Number to blank or blank to number (adapter off/on): nothing to count, so crossfade the octet.
-    x.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, delay, easing: "ease-in", fill: "backwards" }).onfinish = () => {
-      finish(); x.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
-    };
-    setTimeout(finish, delay + 400);
+    // Number to blank or blank to number (adapter off/on): nothing to count. One way only, never out-and-back.
+    if (to === null) { x.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, delay, easing: "ease-in" }).onfinish = finish; setTimeout(finish, delay + 300); }
+    else { finish(); x.animate([{ opacity: 0, transform: "translateY(3px)" }, { opacity: 1, transform: "none" }], { duration: 260, delay, easing: "ease-out", fill: "backwards" }); }
     return;
   }
   const dur = 700, start = performance.now() + delay;
@@ -1089,8 +1083,6 @@ function renderAdapterFacts() {
   if (was && was !== now && was.split(":")[0] === String(a.id) && !calm.matches) {
     chip.animate([{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
   }
-  const off = a.state !== "up";
-  document.querySelector(".scroll").classList.toggle("dim", off);
   if (draft) sync();
   $("a-state-chip").className = "state" + (a.state === "up" ? "" : " off");
   $("a-dot").className = "dot" + (a.state === "up" ? "" : " off");
