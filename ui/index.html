@@ -1303,15 +1303,13 @@ $("apply").onclick = async () => {
 let lastRead = Date.now();
 $("refresh").onclick = () => refresh(false);
 function refresh(quiet) {
-  const btn = $("refresh"), ul = $("list");
+  const btn = $("refresh");
   if (btn.classList.contains("spin") || busyNow || (quiet && document.querySelector("dialog[open]"))) return;
   lastRead = Date.now();
   btn.classList.add("spin");
   if (!quiet) {
+    // A read takes ~16 ms: the rows stay put (no skeleton) and only what changed moves.
     iconNow("refresh", "circle-notch");
-    const rows = adapters.filter(a => !hidden.has(a.id)).length;
-    ul.innerHTML = "";
-    for (let k = 0; k < rows; k++) { const li = document.createElement("li"); li.className = "skel"; ul.append(li); }
     say(L("Reading adapters…", "กำลังอ่านอะแดปเตอร์…"));
   }
   const id = adapters[sel]?.id;
@@ -1322,16 +1320,16 @@ function refresh(quiet) {
     if (eth.state !== "disabled") eth.state = eth.state === "up" ? "down" : "up";
     if (a.cfg.ipAuto && a.cfg.address) a.cfg.address = a.cfg.address.replace(/\d+$/, String(100 + Math.floor(Math.random() * 150)));
     res();
-  }, 800));
+  }, 300));   // the app reads in ~16 ms; a short pause keeps the spinner visible
   work.then(() => {
     const a = adapters[sel];
     btn.classList.remove("spin");
     // The adapter that was open is gone (or nothing was open): start from what is there.
-    if (!a || a.id !== id || !draft) { renderList(!quiet); renderAdapter(!quiet); if (!quiet) iconNow("refresh", "arrow-clockwise"); return; }
+    if (!a || a.id !== id || !draft) { renderList(); renderAdapter(true); if (!quiet) iconNow("refresh", "arrow-clockwise"); return; }
     // While a group is automatic the draft mirrors Windows.
     if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = a.cfg[k];
     if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = a.cfg[k];
-    renderList(!quiet); renderAdapterFacts(); renderForm(true);   // values that changed roll; the rest stay still
+    renderList(); renderAdapterFacts(); renderForm(true);   // values that changed roll; the rest stay still
     if (quiet) return;
     iconNow("refresh", "check");
     say(L("Adapters refreshed", "รีเฟรชแล้ว"));
