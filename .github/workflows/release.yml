@@ -7,6 +7,8 @@ on:
     # Pushes to main test and build only (no release). They also keep the dependency cache warm:
     # a cache saved on main is readable by every tag, while one saved on a tag is not.
     branches: [main]
+    # Docs and screenshots don't change the exe. (Path filters never apply to tag pushes.)
+    paths-ignore: ["**.md", "assets/**"]
 permissions:
   contents: write
 jobs:
