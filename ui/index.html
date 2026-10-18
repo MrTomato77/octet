@@ -229,7 +229,6 @@ button, input, select { font: inherit; color: inherit; }
 .tag.logo { width: 16px; height: 16px; padding: 0; background: currentColor;
   -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
 .tag.public { color: var(--accent); }
-.tag.warn { color: var(--bad); font-weight: 600; background: color-mix(in oklch, var(--bad) 14%, transparent); }
 /* The changed-mark takes the far right; the tag steps aside for it */
 .ip.changed .tag { right: 27px; }
 .tag { transition: right var(--t-fast) var(--ease-out); }
@@ -725,6 +724,7 @@ async function reload() {
   adapters.splice(0, adapters.length, ...await invoke("read_adapters"));
   const i = adapters.findIndex(a => a.id === id && !hidden.has(a.id));
   sel = i >= 0 ? i : firstVisible();
+  keep("octet-rows", adapters.filter(a => !hidden.has(a.id)).length);   // next launch draws this many skeleton rows
 }
 const change = request => net("change", { request });
 const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -826,10 +826,8 @@ function tag(field, info, cls) {
 }
 function updateTags() {
   const shown = k => fields[k].inputs.map(shownOf).join(".");
-  const sc = scope(shown("address")), extra = draft && !draft.ipAuto ? adapters[sel].extraIps || [] : [];
-  // Manual IP replaces every address on the adapter: say so where it happens.
-  if (extra.length) tag(fields.address, { text: `+${extra.length}`, title: L(`Also has ${extra.join(", ")}. Apply keeps only this address.`, `มี ${extra.join(", ")} อยู่ด้วย บันทึกแล้วจะเหลือแค่ IP นี้`) }, "warn");
-  else tag(fields.address, sc && { text: sc[0], title: sc[1] }, sc && sc[0] === "Public" ? "public" : "");
+  const sc = scope(shown("address"));
+  tag(fields.address, sc && { text: sc[0], title: sc[1] }, sc && sc[0] === "Public" ? "public" : "");
   // The DHCP server is almost always the gateway: mark it there instead of a loose line of text.
   const a = adapters[sel], gw = shown("gateway");
   if (gw !== a.cfg.gateway) $("gw-name").textContent = "";   // the name belongs to the old one
@@ -1010,7 +1008,7 @@ const icon = (button, name) => window.morph?.[button]?.(name);
 
 function sync(from) {
   if (!draft) return;
-  const diff = changed(), bad = problems();
+  const diff = changed(), bad = problems(), extra = !draft.ipAuto ? adapters[sel].extraIps || [] : [];
   for (const k of ["address", "subnet", "gateway", "dns1", "dns2"]) {
     const f = fields[k];
     f.box.classList.toggle("changed", diff.includes(k));
@@ -1020,6 +1018,11 @@ function sync(from) {
   updateTags();
   if (document.querySelector(".ip.over")) say(L("Each number is 0 to 255", "แต่ละช่องต้องอยู่ระหว่าง 0–255"), "bad");
   else if (bad.length && diff.length) say(bad.map(b => b[1]).join(", ") + L(" needs a valid value", " ไม่ถูกต้อง"), "bad");
+  // Manual IP replaces every address on the adapter: the line says which ones go.
+  else if (extra.length) {
+    say(L(`Apply removes ${extra.join(", ")}`, `บันทึกแล้วจะลบ ${extra.join(", ")}`), "", "info", true);
+    $("status").title = L(`This adapter also has ${extra.join(", ")}. A manual IP keeps only the address above.`, `อะแดปเตอร์นี้มี ${extra.join(", ")} อยู่ด้วย ถ้าตั้ง IP เอง จะเหลือแค่ IP ข้างบน`);
+  }
   else if (diff.length) say(t("changes")(diff.length), "", "", true);
   // Idle: the line explains an adapter that is down or off instead of "No changes".
   else if (adapters[sel].state === "disabled") {
@@ -1708,7 +1711,8 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") hideTip(); }
 // App open: skeleton first, then the real values count in.
 renderAdapterFacts();
 draft = structuredClone(adapters[sel].cfg);
-for (let k = adapters.filter(a => !hidden.has(a.id)).length; k > 0; k--) { const li = document.createElement("li"); li.className = "skel"; $("list").append(li); }
+// As many skeleton rows as the list had last time (the sample list only stands in for the demo).
+for (let k = tauri ? +(pref("octet-rows") ?? 3) : adapters.filter(a => !hidden.has(a.id)).length; k > 0; k--) { const li = document.createElement("li"); li.className = "skel"; $("list").append(li); }
 document.querySelector(".scroll").classList.add("loading");
 sel = Math.max(0, firstVisible());
 (tauri ? reload().then(() => null, e => e) : new Promise(res => setTimeout(res, calm.matches ? 0 : 600))).then(err => {
