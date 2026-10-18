@@ -75,6 +75,9 @@ button, input, select { font: inherit; color: inherit; }
   box-shadow: 0 0 0 1px var(--border-strong), 0 16px 48px oklch(0.2 0.02 250 / 0.25); }
 .titlebar { display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3); font-size: 12px; color: var(--muted); background: var(--side); }
 .titlebar img { display: block; }
+/* Demo-only scenario picker under the window */
+.demo-pick { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s4); font-size: 13px; color: var(--muted); }
+.demo-pick select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-input); padding: 4px 8px; }
 .body { display: grid; grid-template-columns: 56px 1fr; min-height: 0; }
 
 /* Sidebar */
@@ -439,7 +442,8 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 @keyframes shake { 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
 .form > .row-msg { grid-column: 2; min-height: 0; margin-top: -4px; gap: 6px; font-size: 12px; line-height: 16px; color: var(--bad);
   overflow: hidden; animation: msg-in var(--t-base) var(--ease-out); }
-.row-msg i { font-size: 14px; }
+.row-msg i { font-size: 14px; flex: none; }
+.form > .row-msg span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-msg.hint { color: var(--muted); }
 /* The gateway's name sits under its label, inside the row, so the grid keeps its rhythm */
 .form > .gw-lbl { line-height: 18px; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; }
@@ -682,7 +686,7 @@ const adapters = [
     cfg: { ipAuto: false, address: "192.168.50.20", subnet: "255.255.255.0", gateway: "192.168.50.254", dnsAuto: false, dns1: "192.168.50.254", dns2: "1.1.1.1", register: true } },
   { id: 3, name: "Npcap Loopback Adapter", desc: "Npcap Loopback Adapter", mac: "02-00-4C-4F-4F-50", state: "up", dhcpServer: "",
     cfg: { ipAuto: true, address: "169.254.165.178", subnet: "255.255.0.0", gateway: "", dnsAuto: true, dns1: "", dns2: "", register: true } },
-  { id: 5, name: "vEthernet (WSL)", desc: "Hyper-V Virtual Ethernet Adapter", mac: "02-00-00-00-00-05", state: "up", dhcpServer: "",
+  { id: 5, name: "vEthernet (WSL)", desc: "Hyper-V Virtual Ethernet Adapter", mac: "02-00-00-00-00-05", state: "up", dhcpServer: "", extraIps: ["172.24.80.2"],
     cfg: { ipAuto: false, address: "172.24.80.1", subnet: "255.255.240.0", gateway: "", dnsAuto: false, dns1: "", dns2: "", register: false } },
   { id: 6, name: "Tailscale", desc: "Tailscale Tunnel", mac: "", state: "up", dhcpServer: "",
     cfg: { ipAuto: false, address: "100.101.5.7", subnet: "255.255.255.255", gateway: "", dnsAuto: false, dns1: "100.100.100.100", dns2: "", register: false } },
@@ -697,13 +701,33 @@ const L = (en, th) => lang === "th" ? th : en;
 // Inside Octet, Tauri is here and the sample list above is replaced by this machine's adapters.
 const tauri = window.__TAURI__, invoke = tauri?.core.invoke;
 if (tauri) document.documentElement.classList.add("app");
+// Demo stand-in for the Rust side, so the demo runs the same code paths as the app.
+// The scenario picker below the window changes what it answers.
+const demo = {
+  outcome: "ok",            // ok | cancel | fail
+  pingFail: false,
+  taken: { "10.0.1.50": ["3C-52-82-11-AB-07", "printer-2f.local"] },
+  names: { "10.0.0.1": "router.lan", "192.168.50.254": "fw-office.corp.local" },
+};
+const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
+  if (cmd === "who_has") return res(demo.taken[a.address]?.[0] ?? null);
+  if (cmd === "hostname") return res(demo.names[a.address] ?? demo.taken[a.address]?.[1] ?? null);
+  if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" ? null : 2 + Math.floor(Math.random() * 14));
+  if (cmd === "change") {
+    if (demo.outcome === "cancel") return rej("Cancelled");
+    if (demo.outcome === "fail") return rej("The object already exists.");
+    return res();
+  }
+  rej(`demo: ${cmd}`);
+}, cmd === "change" ? 900 : 300));
+const net = (cmd, args) => tauri ? invoke(cmd, args) : demoInvoke(cmd, args);
 async function reload() {
   const id = adapters[sel]?.id;
   adapters.splice(0, adapters.length, ...await invoke("read_adapters"));
   const i = adapters.findIndex(a => a.id === id && !hidden.has(a.id));
   sel = i >= 0 ? i : firstVisible();
 }
-const change = request => invoke("change", { request });
+const change = request => net("change", { request });
 const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const keep = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 let sel = 0, draft = null, lang = pref("octet-lang") || (navigator.language.startsWith("th") ? "th" : "en");
@@ -946,7 +970,7 @@ function rowMsg(key, text, kind = "") {
   m?.remove();
   m = document.createElement("div"); m.className = "row-msg " + kind; m.dataset.text = text;
   m.innerHTML = `<i class="ph ${{ hint: "ph-info" }[kind] || "ph-warning-circle"}"></i><span></span>`;
-  m.lastChild.textContent = text;
+  m.lastChild.textContent = text; m.title = text;
   host.after(m);
 }
 const clearMsgs = () => document.querySelectorAll(".row-msg").forEach(m => m.remove());
@@ -1031,18 +1055,17 @@ function renderForm(roll = false) {
   clearMsgs();
   // set address source=static replaces every IPv4 on the adapter
   const extra = adapters[sel].extraIps || [];
-  if (ipEdit && extra.length) rowMsg("address", L(`Also has ${extra.join(", ")}; Apply keeps only this address`, `มี ${extra.join(", ")} อยู่ด้วย บันทึกแล้วจะเหลือแค่ IP นี้`), "hint");
+  if (ipEdit && extra.length) rowMsg("address", L(`${extra.join(", ")} will be removed on Apply`, `บันทึกแล้ว ${extra.join(", ")} จะถูกลบ`), "hint");
   $("gw-name").textContent = ""; gatewayName();
   sync();
   renderSlots();
 }
 // The gateway's name (reverse DNS / NetBIOS), shown under it while it is the one Windows uses.
 const names = new Map();
-const demoNames = { "10.0.0.1": "router.lan", "192.168.50.254": "fw-office.corp.local" };
 async function gatewayName() {
   const a = adapters[sel], gw = a?.cfg.gateway;
   if (!gw || (draft && !draft.ipAuto && draft.gateway !== gw)) return;
-  if (!names.has(gw)) names.set(gw, tauri ? await invoke("hostname", { address: gw }).catch(() => null) : demoNames[gw] ?? null);
+  if (!names.has(gw)) names.set(gw, await net("hostname", { address: gw }).catch(() => null));
   const n = names.get(gw);
   if (n && adapters[sel] === a) { $("gw-name").textContent = n; $("gw-name").title = n; }
 }
@@ -1213,24 +1236,24 @@ $("apply").onclick = async () => {
   clearMsgs();
   const pre = precheck(sent);
   if (pre) { replay(fields[pre[0]].box, "shake"); rowMsg(pre[0], pre[1]); say(L("Not applied", "ยังไม่ได้บันทึก"), "bad"); return; }
-  if (tauri && !sent.ipAuto && sent.address !== a.cfg.address) {
+  if (!sent.ipAuto && sent.address !== a.cfg.address) {
     // Someone else may already have this address: ask the network before Windows.
     lock(true); say(L("Checking address…", "กำลังเช็ก IP ซ้ำ…"));
-    const owner = await invoke("who_has", { address: sent.address }).catch(() => null);
+    const owner = await net("who_has", { address: sent.address }).catch(() => null);
+    // Its name helps tell a printer from a server; give up after 1.5 s.
+    const name = owner && await Promise.race([net("hostname", { address: sent.address }).catch(() => null), new Promise(res => setTimeout(res, 1500, null))]);
     lock(false);
     if (owner && !await ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Apply anyway", "บันทึกต่อ"), "warning",
         L("Another device answered for this address. If both use it, both lose connection.", "มีอุปกรณ์อื่นตอบกลับที่ IP นี้ ถ้าใช้ซ้ำกัน ทั้งสองเครื่องจะต่อเน็ตไม่ได้"),
-        [["IP", sent.address], ["MAC", owner]])) {
+        [["IP", sent.address], ...(name ? [[L("Name", "ชื่อ"), name]] : []), ["MAC", owner]])) {
       rowMsg("address", L(`In use by ${owner}`, `มีเครื่อง ${owner} ใช้อยู่`)); say(L("Not applied", "ยังไม่ได้บันทึก"), "bad"); return;
     }
   }
   lock(true); btn.classList.add("spin"); iconNow("apply", "circle-notch");
   rows.forEach(el => el.classList.add("working"));
-  say(tauri ? L("Waiting for permission…", "รอสิทธิ์ Admin…") : L("Applying…", "กำลังบันทึก…"));
-  const work = tauri
-    ? change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]) })
-        .then(() => null, e => String(e))
-    : new Promise(res => setTimeout(() => res(null), 900));
+  say(L("Waiting for permission…", "รอสิทธิ์ Admin…"));
+  const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]) })
+    .then(() => null, e => String(e));
   work.then(async err => {
     rows.forEach(el => el.classList.remove("working"));
     btn.classList.remove("spin");
@@ -1239,7 +1262,8 @@ $("apply").onclick = async () => {
       if (tauri) await reload().catch(() => {});
       lock(false); iconNow("apply", "shield-check");
       renderAdapterFacts(); renderForm();
-      say(L("Not applied: ", "บันทึกไม่สำเร็จ: ") + err, "bad"); $("status").title = err;
+      if (err === "Cancelled") say(L("Permission declined, nothing changed", "ไม่ได้ให้สิทธิ์ Admin จึงยังไม่ได้เปลี่ยนอะไร"), "", "shield-slash");
+      else { say(L("Not applied: ", "บันทึกไม่สำเร็จ: ") + err, "bad"); $("status").title = err; }
       return;
     }
     iconNow("apply", "check");
@@ -1251,19 +1275,14 @@ $("apply").onclick = async () => {
       if (tauri) await reload().catch(() => {});   // show what Windows actually took
       lock(false); renderAdapter();
       iconLater("apply", "shield-check", 1200);
-      if (tauri) {
-        if (!a.cfg.gateway && !a.cfg.dns1) { say(t("applied")(a.name), "ok", "check"); return; }
-        say(t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…"));
-        await new Promise(res => setTimeout(res, 1000));   // let the new address settle
-        const probe = ip => ip ? invoke("ping", { address: ip }).catch(() => null) : Promise.resolve(undefined);
-        const [gw, dns] = await Promise.all([probe(a.cfg.gateway), probe(a.cfg.dns1 === a.cfg.gateway ? "" : a.cfg.dns1)]);
-        const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${ms} ms`;
-        const fail = gw === null || dns === null;
-        say([part("Gateway", gw), part(`DNS ${a.cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? "wifi-x" : "check-circle");
-        return;
-      }
-      say(t("applied")(a.name) + " · testing…");
-      setTimeout(() => say(a.cfg.gateway ? `Gateway ${1 + Math.floor(Math.random() * 4)} ms · DNS ok` : t("applied")(a.name), "ok", "check"), 900);
+      if (!a.cfg.gateway && !a.cfg.dns1) { say(t("applied")(a.name), "ok", "check"); return; }
+      say(t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…"));
+      await new Promise(res => setTimeout(res, 1000));   // let the new address settle
+      const probe = ip => ip ? net("ping", { address: ip }).catch(() => null) : Promise.resolve(undefined);
+      const [gw, dns] = await Promise.all([probe(a.cfg.gateway), probe(a.cfg.dns1 === a.cfg.gateway ? "" : a.cfg.dns1)]);
+      const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${ms} ms`;
+      const fail = gw === null || dns === null;
+      say([part("Gateway", gw), part(`DNS ${a.cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? "wifi-x" : "check-circle");
     }, calm.matches ? 0 : 180 + marks.length * 60);
   });
 };
@@ -1584,7 +1603,7 @@ document.querySelectorAll("input[name=admin]").forEach(x => x.onchange = async (
   try {
     await invoke("set_always_admin", { on });
     if (!on || (await invoke("admin_state")).elevated) return;
-    if (changed().length && !await ask(L("Restart as administrator? Unapplied changes will be lost.", "เปิดใหม่ด้วยสิทธิ์ Admin? ค่าที่ยังไม่ได้บันทึกจะหายไป"), L("Restart", "เปิดใหม่"))) throw "";
+    if (changed().length && !await ask(L("Restart as administrator?", "เปิดใหม่ด้วยสิทธิ์ Admin?"), L("Restart", "เปิดใหม่"), "", L("Changes you haven't applied will be lost.", "ค่าที่แก้ไว้แต่ยังไม่ได้บันทึกจะหายไป"))) throw "";
     await invoke("restart_as_admin");
   } catch (e) {
     // UAC declined: keep things as they were.
@@ -1705,13 +1724,63 @@ sel = Math.max(0, firstVisible());
   if (err) { say(L("Could not read adapters: ", "อ่านอะแดปเตอร์ไม่ได้: ") + err, "bad"); $("status").title = String(err); }
 });
 setRail(true, true);
-// Demo links: #settings opens Settings, #conflict shows the address-in-use warning.
-if (!tauri && location.hash === "#settings") openSettings();
-if (!tauri && location.hash === "#conflict") ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Apply anyway", "บันทึกต่อ"), "warning",
-  L("Another device answered for this address. If both use it, both lose connection.", "มีอุปกรณ์อื่นตอบกลับที่ IP นี้ ถ้าใช้ซ้ำกัน ทั้งสองเครื่องจะต่อเน็ตไม่ได้"),
-  [["IP", "192.168.1.50"], ["MAC", "3C-52-82-11-AB-07"]]);
 // The window stays hidden until this first frame is drawn (no white flash).
-if (tauri) requestAnimationFrame(() => requestAnimationFrame(() => invoke("ready").catch(() => {})));   // demo link straight to Settings
+if (tauri) requestAnimationFrame(() => requestAnimationFrame(() => invoke("ready").catch(() => {})));
+// Demo: every state the app can show, reached through the real code paths. #<scenario> links straight to one.
+const scenarios = {
+  "Adapters": {
+    connected: ["Connected, DHCP, named gateway", () => go(0)],
+    static: ["Manual IP and DNS", () => go(4)],
+    down: ["Cable unplugged", () => go(1)],
+    disabled: ["Adapter turned off", () => go(5)],
+    apipa: ["No DHCP answer (APIPA)", () => go(2)],
+    extra: ["Several IPs on one adapter", async () => { await go(3); pick("ipmode", "manual"); }],
+    loading: ["Loading (skeleton)", () => document.querySelector(".scroll").classList.add("loading")],
+    empty: ["Every adapter hidden", () => { adapters.forEach(a => hidden.add(a.id)); sel = -1; renderList(); renderAdapter(); }],
+    readfail: ["Could not read adapters", () => { adapters.length = 0; sel = -1; renderList(); renderAdapter(); say(L("Could not read adapters: ", "อ่านอะแดปเตอร์ไม่ได้: ") + "Access is denied.", "bad"); }],
+  },
+  "Before Apply": {
+    edited: ["Unapplied changes", () => edit({ address: "10.0.1.60" })],
+    invalid: ["Octet out of range", () => edit({ address: "10.0.1.260" })],
+    samegw: ["Address equals gateway", () => edit({ address: "10.0.0.1" }, true)],
+    outside: ["Gateway outside the subnet", () => edit({ gateway: "192.168.1.1" }, true)],
+    conflict: ["Address already in use", () => edit({ address: "10.0.1.50" }, true)],
+    discard: ["Discard changes?", async () => { await edit({ address: "10.0.1.60" }); select(4); }],
+  },
+  "After Apply": {
+    applied: ["Applied, gateway and DNS answer", () => edit({ address: "10.0.1.60" }, true)],
+    noping: ["Applied, gateway not answering", () => { demo.pingFail = true; return edit({ address: "10.0.1.60" }, true); }],
+    cancel: ["UAC prompt declined", () => { demo.outcome = "cancel"; return edit({ address: "10.0.1.60" }, true); }],
+    fail: ["Windows refused the change", () => { demo.outcome = "fail"; return edit({ address: "10.0.1.60" }, true); }],
+  },
+  "Settings": {
+    general: ["General", () => openSettings()],
+    keys: ["Shortcuts", () => { openSettings(); pick("stab", "keys"); }],
+    about: ["About", () => { openSettings(); pick("stab", "about"); }],
+    admin: ["Restart as administrator?", () => ask(L("Restart as administrator?", "เปิดใหม่ด้วยสิทธิ์ Admin?"), L("Restart", "เปิดใหม่"), "", L("Changes you haven't applied will be lost.", "ค่าที่แก้ไว้แต่ยังไม่ได้บันทึกจะหายไป"))],
+  },
+};
+function pick(name, value) { const x = document.querySelector(`input[name=${name}][value=${value}]`); x.checked = true; x.dispatchEvent(new Event("change")); }
+async function go(i) { closeSettings(); if (sel !== i) await select(i); }
+async function edit(changes, apply = false) {
+  await go(0);
+  draft = { ...structuredClone(adapters[0].cfg), ipAuto: false, dnsAuto: false, ...changes };
+  renderForm();
+  if (apply) setTimeout(() => $("apply").click(), 400);
+}
+if (!tauri) {
+  const box = document.createElement("label");
+  box.className = "demo-pick";
+  box.innerHTML = `<span>Scenario</span><select><option value="">Sample data</option>${Object.entries(scenarios).map(([g, list]) =>
+    `<optgroup label="${g}">${Object.entries(list).map(([k, [name]]) => `<option value="${k}">${name}</option>`).join("")}</optgroup>`).join("")}</select>`;
+  document.querySelector(".note").before(box);
+  const sel_ = box.querySelector("select");
+  const all = Object.assign({}, ...Object.values(scenarios));
+  // Each scenario starts from a fresh page, so one never leaks into the next.
+  sel_.onchange = () => { location.hash = sel_.value; location.reload(); };
+  const want = location.hash.slice(1);
+  if (all[want]) { sel_.value = want; setTimeout(all[want][1], calm.matches ? 50 : 700); }
+}
 // Remembered theme and language, applied without a transition.
 {
   const th = ["light", "dark"].includes(pref("octet-theme")) ? pref("octet-theme") : "system";
