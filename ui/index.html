@@ -437,7 +437,7 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 .list.enter li { animation: rise var(--t-base) var(--ease-out) both; animation-delay: calc(var(--i) * 30ms); }
 
 /* Tooltip and rail flyout: one element, fades and slides from its anchor */
-.tip { position: fixed; z-index: 100; max-width: 260px; padding: 4px 8px; border-radius: var(--r-input); pointer-events: none;
+.tip { position: fixed; z-index: 100; width: max-content; max-width: 260px; padding: 4px 8px; border-radius: var(--r-input); pointer-events: none;
   background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border), 0 4px 12px oklch(0.2 0.02 250 / 0.18); font-size: 12px; line-height: 16px; white-space: pre-line;
   opacity: 0; transform: translateY(-3px); transition: opacity var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out); }
 .tip.side { transform: translateX(-6px); }
