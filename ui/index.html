@@ -172,8 +172,9 @@ button, input, select { font: inherit; color: inherit; }
 .kv { display: inline-flex; gap: var(--s2); font-variant-numeric: tabular-nums; }
 .kv .k { color: var(--muted); }
 .kv i.k { font-size: 14px; align-self: center; transform: translateY(0.57px); }   /* glyph sits 0.57px above the digits; measured */
-/* Every MAC is 17 characters: a fixed box, so switching adapters never stretches it. */
-#a-mac { display: inline-block; min-width: 17ch; text-align: right; }
+/* Every pair of a MAC in its own fixed cell (as the octets of an IP field), so switching adapters never stretches it */
+#a-mac b { display: inline-block; width: 2.3ch; text-align: center; font-weight: inherit; }
+#mac-kv { gap: 5px; }
 .kv[hidden] { display: none; }
 .copy { border: 0; background: none; padding: 0; cursor: copy; border-radius: 2px; }
 .copy:hover .v { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
@@ -1118,24 +1119,31 @@ async function gatewayName() {
 // Text whose length changes: crossfade. The old words fade out on a ghost laid over the box while the
 // new ones fade in and the box eases to its new width, so neighbours glide and the text is never blank.
 // Empty boxes (first paint) just take their text.
-function retext(el, text, resize = true) {
+// `build` turns the text into nodes when it needs structure (the MAC's fixed-width pairs).
+function retext(el, text, resize = true, build = null) {
+  const put = (node, t) => build ? node.replaceChildren(...build(t)) : node.textContent = t;
   el.querySelector(".ghost")?.remove();
   if (el.textContent === text) return;
-  const old = el.textContent, from = el.getBoundingClientRect().width;
-  el.textContent = text;
+  const old = el.textContent, oldNodes = [...el.childNodes].map(n => n.cloneNode(true)), from = el.getBoundingClientRect().width;
+  put(el, text);
   if (!old || calm.matches || !el.offsetParent) return;
   const to = el.getBoundingClientRect().width, ease = "cubic-bezier(0.22, 1, 0.36, 1)";
   const ghost = document.createElement("span");
-  ghost.className = "ghost"; ghost.textContent = old; ghost.setAttribute("aria-hidden", "true");
+  ghost.className = "ghost"; ghost.replaceChildren(...oldNodes); ghost.setAttribute("aria-hidden", "true");
   const now = document.createElement("span");
-  now.textContent = text;
+  put(now, text);
   el.replaceChildren(now, ghost);
   if (resize) el.animate([{ width: from + "px" }, { width: to + "px" }], { duration: 300, easing: ease });
   ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: "ease-in", fill: "forwards" })
     .onfinish = () => ghost.remove();   // the in-span stays until its own fade ends
   now.animate([{ opacity: 0 }, { opacity: 0, offset: 0.2 }, { opacity: 1 }],
-    { duration: 340, easing: "ease-out" }).onfinish = () => { if (now.isConnected) el.textContent = text; };   // back to plain text
+    { duration: 340, easing: "ease-out" }).onfinish = () => { if (now.isConnected) put(el, text); };   // back to plain text
 }
+// A MAC as six fixed-width pairs, like the octets of an IP field: its width never changes.
+const macPairs = t => t ? t.split(":").flatMap((p, i) => {
+  const b = document.createElement("b"); b.textContent = p;
+  return i ? [":", b] : [b];
+}) : [];
 function renderAdapterFacts() {
   const a = adapters[sel];
   if (!a) return;
@@ -1146,7 +1154,7 @@ function renderAdapterFacts() {
   $("a-icon").className = "ph " + kindIcon[kind(a)];
   $("a-icon").title = kindName[kind(a)];
   retext($("a-desc"), a.desc); $("a-desc").title = a.desc;
-  retext($("a-mac"), a.mac, false);   // always 17 characters: crossfade in place
+  retext($("a-mac"), a.mac.replaceAll("-", ":"), false, macPairs);   // always 17 characters: crossfade in place
   $("mac-kv").hidden = !a.mac;   // a disabled adapter reports none
   retext($("a-state"), t(a.state));
   if (draft) sync();
@@ -1286,11 +1294,12 @@ $("revert").onclick = () => {
   say(L("Back to current values", "คืนค่าเดิมแล้ว"));
 };
 $("mac-kv").onclick = () => {
-  navigator.clipboard?.writeText(adapters[sel].mac).catch(() => {});
+  const mac = adapters[sel].mac.replaceAll("-", ":");   // copied as shown
+  navigator.clipboard?.writeText(mac).catch(() => {});
   const v = $("a-mac");
   clearTimeout(v._t);
   v.innerHTML = `<i class="ph ph-check"></i>${L("Copied", "คัดลอกแล้ว")}`; v.classList.add("copied"); replay(v, "in");
-  v._t = setTimeout(() => { v.classList.remove("copied"); v.textContent = adapters[sel].mac; replay(v, "in"); }, 1200);
+  v._t = setTimeout(() => { v.classList.remove("copied"); v.replaceChildren(...macPairs(mac)); replay(v, "in"); }, 1200);
 };
 // Mistakes caught before asking Windows (and before a UAC prompt).
 function precheck(c) {
