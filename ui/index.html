@@ -1076,11 +1076,16 @@ function renderAdapterFacts() {
   $("a-icon").title = kindName[kind(a)];
   $("a-desc").textContent = a.desc; $("a-desc").title = a.desc;
   $("a-mac").textContent = a.mac;
+  $("mac-kv").hidden = !a.mac;   // a disabled adapter reports none
   $("a-state").textContent = t(a.state);
   const chip = $("a-state-chip"), was = chip.dataset.key, now = a.id + ":" + a.state;
   chip.dataset.key = now;
-  if (was && was !== now && was.split(":")[0] === String(a.id) && !calm.matches)
+  if (was && was !== now && was.split(":")[0] === String(a.id) && !calm.matches) {
     chip.animate([{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
+    // Turned on or off: the values change under the user, so ease them in instead of swapping.
+    document.querySelector(".form").animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }],
+      { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+  }
   const off = a.state !== "up";
   document.querySelector(".scroll").classList.toggle("dim", off);
   if (draft) sync();
