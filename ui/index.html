@@ -150,6 +150,8 @@ button, input, select { font: inherit; color: inherit; }
 .head h1 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .head h1 i { font-size: 20px; color: var(--muted); flex: none; }
 /* Long adapter names stay on one line; the full name is in the tooltip */
+.ghost { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: none; }
+#a-name, #a-desc, #a-mac, #a-state { position: relative; }
 #a-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One hardware line: what the adapter is (left, truncates) and its address (right, never cut). */
 .sub { grid-column: 1 / -1; margin: var(--s1) 0 0; display: flex; align-items: baseline; gap: var(--s6); font-size: 12px; line-height: 16px; color: var(--muted); }
@@ -1066,18 +1068,26 @@ async function gatewayName() {
   if (n && adapters[sel] === a && !(draft && !draft.ipAuto && draft.gateway !== gw)) { $("gw-name").textContent = n; $("gw-name").title = n; }
 }
 
-// Text whose length changes: the box eases to its new width first (so neighbours glide, never jump),
-// then the new words fade in. Empty boxes (first paint) just take their text.
+// Text whose length changes: blur crossfade. The old words blur out on a ghost laid over the box while the
+// new ones blur in and the box eases to its new width, so neighbours glide and the text is never blank.
+// Empty boxes (first paint) just take their text.
 function retext(el, text) {
+  el.querySelector(".ghost")?.remove();
   if (el.textContent === text) return;
-  const from = el.getBoundingClientRect().width, first = el.textContent === "";
+  const old = el.textContent, from = el.getBoundingClientRect().width;
   el.textContent = text;
-  if (first || calm.matches || !el.offsetParent) return;
+  if (!old || calm.matches || !el.offsetParent) return;
   const to = el.getBoundingClientRect().width, ease = "cubic-bezier(0.22, 1, 0.36, 1)";
-  el.style.overflow = "hidden";
-  el.animate([{ width: from + "px" }, { width: to + "px" }], { duration: 240, easing: ease }).onfinish = () => el.style.overflow = "";
-  el.animate([{ opacity: 0, transform: "translateY(3px)" }, { opacity: 0, transform: "translateY(3px)", offset: 0.45 }, { opacity: 1, transform: "none" }],
-    { duration: 420, easing: ease });
+  const ghost = document.createElement("span");
+  ghost.className = "ghost"; ghost.textContent = old; ghost.setAttribute("aria-hidden", "true");
+  const now = document.createElement("span");
+  now.textContent = text;
+  el.replaceChildren(now, ghost);
+  el.animate([{ width: from + "px" }, { width: to + "px" }], { duration: 300, easing: ease });
+  ghost.animate([{ opacity: 1, filter: "blur(0)" }, { opacity: 0, filter: "blur(4px)" }], { duration: 200, easing: "ease-in", fill: "forwards" })
+    .onfinish = () => ghost.remove();   // the in-span stays until its own fade ends
+  now.animate([{ opacity: 0, filter: "blur(4px)" }, { opacity: 0, filter: "blur(4px)", offset: 0.2 }, { opacity: 1, filter: "blur(0)" }],
+    { duration: 340, easing: "ease-out" }).onfinish = () => { if (now.isConnected) el.textContent = text; };   // back to plain text
 }
 function renderAdapterFacts() {
   const a = adapters[sel];
