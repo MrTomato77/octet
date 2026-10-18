@@ -224,7 +224,7 @@ button, input, select { font: inherit; color: inherit; }
 .ip:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .ip input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; text-align: center; outline: 0; padding: 0;
   font-variant-numeric: tabular-nums; }
-.ip span.sep { width: 8px; text-align: center; color: var(--muted); }
+.ip span.sep { width: 14px; text-align: center; color: var(--muted); }
 .ip.ro { background: transparent; border-color: var(--border); }
 .ip.ro input { color: var(--muted); }
 .ip.invalid { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
@@ -901,8 +901,12 @@ function ipField(host, key, short, ext) {
     });
     inp.addEventListener("input", () => {
       inp.value = inp.value.replace(/\D/g, "");
+      // Over 255 snaps to 255, as the Windows IP field does.
+      const over = +inp.value > 255;
+      if (over) inp.value = "255";
       if (inp.value.length === 3 && i < 3) go(i + 1);
       write();
+      if (over) say(L("Each part goes up to 255", "แต่ละช่องใส่ได้สูงสุด 255"), "bad", "warning-circle");
     });
     inp.addEventListener("blur", () => {
       if (/^0\d/.test(inp.value)) { inp.value = String(+inp.value); write(); }
@@ -913,7 +917,7 @@ function ipField(host, key, short, ext) {
       if (!text.includes(".")) return;
       e.preventDefault();
       const parts = text.split(".");
-      if (parts.length === 4 && parts.every(p => /^\d{1,3}$/.test(p))) { parts.forEach((p, j) => inputs[j].value = String(+p)); write(); }
+      if (parts.length === 4 && parts.every(p => /^\d{1,3}$/.test(p))) { parts.forEach((p, j) => inputs[j].value = String(Math.min(255, +p))); write(); }
     });
   });
   function write() {
