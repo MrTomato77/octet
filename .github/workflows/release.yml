@@ -4,6 +4,9 @@ name: release
 on:
   push:
     tags: ["v*"]
+    # Pushes to main test and build only (no release). They also keep the dependency cache warm:
+    # a cache saved on main is readable by every tag, while one saved on a tag is not.
+    branches: [main]
 permissions:
   contents: write
 jobs:
@@ -17,7 +20,8 @@ jobs:
       # Tests in release too, so they and the build below share one compile of the dependencies.
       - run: cargo test --release -p octet
       - run: cargo build --release -p octet
-      - shell: pwsh
+      - if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
         run: |
           Copy-Item target/release/octet.exe Octet.exe
           $hash = (Get-FileHash Octet.exe -Algorithm SHA256).Hash.ToLower()
