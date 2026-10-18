@@ -157,7 +157,7 @@ button, input, select { font: inherit; color: inherit; }
 .head h1 i { font-size: 20px; color: var(--muted); flex: none; }
 /* Long adapter names stay on one line; the full name is in the tooltip */
 .ghost { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: none; }
-#a-name, #a-desc, #a-mac, #a-state { position: relative; white-space: nowrap; }
+#a-name, #a-desc, #a-mac, #a-state, #gw-name { position: relative; white-space: nowrap; }
 #a-mac .ghost { left: auto; right: 0; }   /* MAC sits on the right edge */
 #a-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One hardware line: what the adapter is (left, truncates) and its address (right, never cut). */
@@ -720,7 +720,9 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
     return res();
   }
   rej(`demo: ${cmd}`);
-}, cmd === "change" ? 900 : 300));
+}, cmd === "change" ? 900
+  // A name nobody answers for takes seconds on a real network (DNS, LLMNR and NetBIOS all time out).
+  : cmd === "hostname" && !(demo.names[a.address] ?? demo.taken[a.address]) ? 2500 : 300));
 const net = (cmd, args) => tauri ? invoke(cmd, args) : demoInvoke(cmd, args);
 async function reload() {
   const id = adapters[sel]?.id;
@@ -1077,15 +1079,20 @@ async function maker(mac) {
 async function gatewayName() {
   const a = adapters[sel], gw = a?.cfg.gateway;
   if (!gw || (draft && !draft.ipAuto && draft.gateway !== gw)) return;
-  // Shows its name if it gives one, else who made it (from its MAC); the tooltip has both, in full.
-  if (!names.has(gw)) names.set(gw, await Promise.all([
-    net("hostname", { address: gw }).catch(() => null),
-    net("who_has", { address: gw }).then(maker).catch(() => null)]));
-  const [name, made] = names.get(gw), n = name || made;
-  // Still the same adapter and gateway once the answer is back?
-  if (n && adapters[sel] === a && !(draft && !draft.ipAuto && draft.gateway !== gw)) {
-    $("gw-name").textContent = n; $("gw-name").title = [name, made].filter(Boolean).join(" · ");
-  }
+  // Its name if it gives one, else who made it (from its MAC); the tooltip has both, in full.
+  // The maker (ARP, a few ms) shows first; a name can take ~7 s when nobody answers, and replaces it if one comes.
+  const got = names.get(gw) ?? {};
+  names.set(gw, got);
+  const show = () => {
+    const n = got.name || got.made;
+    // Still the same adapter and gateway once the answer is back?
+    if (!n || adapters[sel] !== a || (draft && !draft.ipAuto && draft.gateway !== gw)) return;
+    retext($("gw-name"), n); $("gw-name").title = [got.name, got.made].filter(Boolean).join(" · ");
+  };
+  show();
+  // Asked once per gateway: null marks a question already on its way.
+  if (!("made" in got)) { got.made = null; net("who_has", { address: gw }).then(maker).catch(() => null).then(m => { got.made = m; show(); }); }
+  if (!("name" in got)) { got.name = null; net("hostname", { address: gw }).catch(() => null).then(n => { got.name = n; show(); }); }
 }
 
 // Text whose length changes: crossfade. The old words fade out on a ghost laid over the box while the
