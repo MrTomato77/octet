@@ -55,6 +55,8 @@ struct Raw {
     phy: String,
     #[serde(default)]
     mhz: u32,
+    #[serde(default)]
+    ppp: bool,
 }
 
 /// The settings the form edits, in the shape the UI uses (empty string = not set).
@@ -87,6 +89,8 @@ pub struct Adapter {
     pub speed: u64,
     pub phy: String,
     pub mhz: u32,
+    /// A dial-up link (PPPoE, VPN): no DHCP, so no lease to renew.
+    pub ppp: bool,
     /// "up", "down" or "disabled"
     pub state: &'static str,
     pub dhcp_server: String,
@@ -152,6 +156,7 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 speed: r.speed,
                 phy: r.phy,
                 mhz: r.mhz,
+                ppp: r.ppp,
                 state,
                 dhcp_server,
                 extra_ips,
@@ -321,6 +326,7 @@ mod native {
                 register: flags & IP_ADAPTER_DDNS_ENABLED != 0,
                 // u64::MAX means the driver doesn't say.
                 speed: Some(a.TransmitLinkSpeed).filter(|&s| a.OperStatus == IfOperStatusUp && s != u64::MAX).unwrap_or(0),
+                ppp: a.IfType == 23,   // IF_TYPE_PPP
                 ..Default::default()
             };
             let mut u = a.FirstUnicastAddress;

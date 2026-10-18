@@ -1512,9 +1512,16 @@ tools.onclick = async e => {
     return;
   }
   if (act === "ncpa" && tauri) { invoke("open_ncpa").catch(e => say(String(e), "bad")); return; }
-  if (["release", "renew", "cycle"].includes(act) && a.cfg.ipAuto) { leaseAction(act); return; }
-  say(act === "ncpa" ? "Opens ncpa.cpl (demo)" : L("Not a DHCP adapter", "อะแดปเตอร์นี้ไม่ได้ใช้ DHCP"));
+  if (["release", "renew", "cycle"].includes(act) && leasable(a)) { leaseAction(act); return; }
+  say(act === "ncpa" ? "Opens ncpa.cpl (demo)" : noLease(a));
 };
+
+// ipconfig waits about a minute for a DHCP server that isn't there: a dial-up link (PPPoE) has none,
+// and an APIPA address (169.254.x.x) means none answered last time. Those don't get the buttons.
+const leasable = a => a.cfg.ipAuto && !a.ppp && !a.cfg.address.startsWith("169.254.");
+const noLease = a => !a.cfg.ipAuto ? L("Not a DHCP adapter", "อะแดปเตอร์นี้ไม่ได้ใช้ DHCP")
+  : a.ppp ? L("A dial-up link has no DHCP lease", "การเชื่อมต่อแบบ Dial ไม่มี DHCP ให้ Renew")
+  : L("No DHCP server answers on this network", "เครือข่ายนี้ไม่มี DHCP server ตอบ");
 
 // ---------- DHCP lease (demo: a random address from the same scope) ----------
 function leaseAction(act) {
@@ -1562,8 +1569,9 @@ function renderSlots() {
   const a = adapters[sel], cur = a.cfg, ip = $("ip-act"), dns = $("dns-act");
   if (draft.ipAuto) {
     ip.dataset.act = "renew"; slotIcon("ip-act", "arrows-clockwise");
-    ip.disabled = !cur.ipAuto;
-    ip.title = cur.ipAuto ? L("Renew lease", "Renew IP") + (a.dhcpServer ? " · " + a.dhcpServer : "") : L("Apply DHCP first, then renew", "บันทึกเป็น DHCP ก่อน แล้วค่อย Renew");
+    ip.disabled = !leasable(a);
+    ip.title = leasable(a) ? L("Renew lease", "Renew IP") + (a.dhcpServer ? " · " + a.dhcpServer : "")
+      : cur.ipAuto ? noLease(a) : L("Apply DHCP first, then renew", "บันทึกเป็น DHCP ก่อน แล้วค่อย Renew");
   } else {
     ip.dataset.act = "pull"; slotIcon("ip-act", "tray-arrow-down");
     ip.disabled = !cur.address;
