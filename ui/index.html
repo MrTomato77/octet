@@ -449,7 +449,11 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 .form > .gw-lbl { line-height: 18px; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; }
 #gw-name { max-width: 100%; font-size: 12px; line-height: 14px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #gw-name:empty { display: none; }
+#gw-name { animation: name-in var(--t-base) var(--ease-out); }
+@keyframes name-in { from { opacity: 0; max-height: 0; } to { max-height: 14px; } }
 @keyframes msg-in { from { opacity: 0; max-height: 0; transform: translateY(-4px); } to { max-height: 16px; } }
+.form > .row-msg.leaving { animation: msg-out var(--t-fast) ease-in forwards; }
+@keyframes msg-out { from { max-height: 16px; } to { opacity: 0; max-height: 0; margin-top: -8px; transform: translateY(-4px); } }
 /* Live validation: an out-of-range octet turns red while typing */
 .ip.over { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
 .ip input.over { color: var(--bad); }
@@ -493,7 +497,8 @@ html, body, .list, .scroll { scrollbar-width: none; }
 html.app, html.app body { overflow: hidden; }
 
 /* Nothing to show (all hidden, or Windows returned no adapters) */
-.window.empty .scroll { visibility: hidden; }
+.scroll { transition: opacity var(--t-base) var(--ease-out); }
+.window.empty .scroll { opacity: 0; visibility: hidden; transition: opacity var(--t-fast) ease-in, visibility 0s linear var(--t-fast); }
 .prefix.bad { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
 .dlg-foot.end { justify-content: flex-end; }
 #ask p { margin: 0; }
@@ -965,15 +970,21 @@ prefix.addEventListener("input", () => {
 function rowMsg(key, text, kind = "") {
   const host = fields[key].box.parentElement;
   let m = host.nextElementSibling?.classList.contains("row-msg") ? host.nextElementSibling : null;
-  if (!text) { m?.remove(); return; }
-  if (m && m.dataset.text === text) return;
+  if (!text) { dropMsg(m); return; }
+  if (m && m.dataset.text === text) { m.classList.remove("leaving"); return; }
   m?.remove();
   m = document.createElement("div"); m.className = "row-msg " + kind; m.dataset.text = text;
   m.innerHTML = `<i class="ph ${{ hint: "ph-info" }[kind] || "ph-warning-circle"}"></i><span></span>`;
   m.lastChild.textContent = text; m.title = text;
   host.after(m);
 }
-const clearMsgs = () => document.querySelectorAll(".row-msg").forEach(m => m.remove());
+// Messages fold away; one re-added before it is gone just stays.
+function dropMsg(m) {
+  if (!m || m.classList.contains("leaving")) return;
+  m.classList.add("leaving");
+  setTimeout(() => { if (m.classList.contains("leaving")) m.remove(); }, calm.matches ? 0 : 160);
+}
+const clearMsgs = () => document.querySelectorAll(".row-msg").forEach(dropMsg);
 const replay = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
 function flash(el) { replay(el, "flash"); clearTimeout(el._flash); el._flash = setTimeout(() => el.classList.remove("flash"), 800); }
 
