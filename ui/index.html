@@ -879,6 +879,9 @@ function ipField(host, key, short, ext) {
     if (i) { const s = document.createElement("span"); s.className = "sep"; s.textContent = "."; box.append(s); }
     const inp = document.createElement("input");
     inp.id = `f-${key}-${i}`; inp.inputMode = "numeric"; inp.maxLength = 3; inp.autocomplete = "off";
+    // Not a login field: tell password managers (1Password, LastPass, Bitwarden, Dashlane, Proton) to keep their icons out.
+    for (const k of ["data-1p-ignore", "data-lpignore", "data-bwignore", "data-protonpass-ignore"]) inp.setAttribute(k, "true");
+    inp.setAttribute("data-form-type", "other");
     inp.setAttribute("aria-label", `${key} octet ${i + 1}`);
     inputs.push(inp); box.append(inp);
   }
