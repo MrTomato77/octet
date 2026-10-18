@@ -428,11 +428,10 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 .tip.show { opacity: 1; transform: none; }
 
 /* Apply in progress and refresh changes: a highlight runs across the row */
-.working, .flash { position: relative; overflow: hidden; }
-.working::after, .flash::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+.working { position: relative; overflow: hidden; }
+.working::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
   background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--accent) 24%, transparent), transparent) 0 0 / 50% 100% no-repeat; }
 .working::after { animation: sweep-row 900ms var(--ease-out) infinite; }
-.flash::after { animation: sweep-row 700ms var(--ease-out); }
 @keyframes sweep-row { from { background-position: -100% 0; } to { background-position: 200% 0; } }
 /* Apply success: changed-marks fold away one after another */
 .ip.settle .diff { animation: fold 180ms ease-in forwards; animation-delay: calc(var(--i) * 60ms); }
@@ -976,7 +975,6 @@ function flag(key, text) {
 }
 const clearMsgs = () => document.querySelectorAll(".ip.flagged").forEach(b => b.classList.remove("flagged"));
 const replay = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
-function flash(el) { replay(el, "flash"); clearTimeout(el._flash); el._flash = setTimeout(() => el.classList.remove("flash"), 800); }
 
 // ---------- validation and state ----------
 const validIp = v => /^\d{1,3}(\.\d{1,3}){3}$/.test(v) && v.split(".").every(o => +o <= 255);
@@ -1324,7 +1322,7 @@ function refresh(quiet) {
     for (let k = 0; k < rows; k++) { const li = document.createElement("li"); li.className = "skel"; ul.append(li); }
     say(L("Reading adapters…", "กำลังอ่านอะแดปเตอร์…"));
   }
-  const before = structuredClone(adapters[sel]?.cfg ?? {}), id = adapters[sel]?.id;
+  const id = adapters[sel]?.id;
   const work = tauri ? reload() : new Promise(res => setTimeout(() => {
     // Demo: the world moved while we weren't looking (cable plugged, lease changed).
     const a = adapters[sel];
@@ -1342,8 +1340,6 @@ function refresh(quiet) {
     if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = a.cfg[k];
     if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = a.cfg[k];
     renderList(!quiet); renderAdapterFacts(); renderForm(true);   // values that changed roll; the rest stay still
-    for (const k of ["address", "subnet", "gateway", "dns1", "dns2"])
-      if (before[k] !== a.cfg[k] && (k.startsWith("dns") ? draft.dnsAuto : draft.ipAuto)) flash(fields[k].box);
     if (quiet) return;
     iconNow("refresh", "check");
     say(L("Adapters refreshed", "รีเฟรชแล้ว"));
