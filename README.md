@@ -4,7 +4,7 @@ Switch IPv4 and DNS settings on Windows in seconds. A fast, modern take on [Simp
 
 > **Status: 0.1, first test build.** Try it on an adapter you can afford to lose first.
 
-<p align="center"><img src="assets/screenshots.png" alt="Octet: a Wi-Fi adapter on DHCP with its gateway named router.lan, and the Settings page"></p>
+<p align="center"><img src="assets/screenshots.png" alt="Octet: a Wi-Fi adapter on Office-5G with its gateway maker and link speed, and the Settings page"></p>
 
 ## Download
 
