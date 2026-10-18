@@ -171,7 +171,7 @@ button, input, select { font: inherit; color: inherit; }
 .hint:empty { display: none; }
 .kv { display: inline-flex; gap: var(--s2); font-variant-numeric: tabular-nums; }
 .kv .k { color: var(--muted); }
-.kv i.k { font-size: 14px; align-self: center; }
+.kv i.k { font-size: 14px; align-self: center; transform: translateY(0.57px); }   /* glyph sits 0.57px above the digits; measured */
 /* Every MAC is 17 characters: a fixed box, so switching adapters never stretches it. */
 #a-mac { display: inline-block; min-width: 17ch; text-align: right; }
 .kv[hidden] { display: none; }
