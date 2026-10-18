@@ -1115,13 +1115,15 @@ async function gatewayName() {
     const n = got.name || hotspot || got.made || "";
     // Still the same adapter and gateway once the answer is back?
     if (adapters[sel] !== a || (draft && !draft.ipAuto && draft.gateway !== gw)) return;
+    // Nothing yet but the maker is a few ms away: keep the old line up, so the same name doesn't fold and unfold.
+    if (!n && got.made === null && got.asking) return;
     // A known name crossfades from the old one; an unknown one fades the old out, and comes in when it arrives.
     gwName(n); $("gw-name").title = [got.name, hotspot, got.made].filter(Boolean).join(" · ");
   };
-  show();
   // Asked once per gateway: null marks a question already on its way.
-  if (!("made" in got)) { got.made = null; net("who_has", { address: gw }).then(maker).catch(() => null).then(m => { got.made = m; show(); }); }
+  if (!("made" in got)) { got.made = null; got.asking = true; net("who_has", { address: gw }).then(maker).catch(() => null).then(m => { got.made = m; got.asking = false; show(); }); }
   if (!("name" in got)) { got.name = null; net("hostname", { address: gw }).catch(() => null).then(n => { got.name = n; show(); }); }
+  show();
 }
 
 // Text whose length changes: crossfade. The old words fade out on a ghost laid over the box while the
