@@ -454,8 +454,6 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 #gw-name { animation: name-in var(--t-base) var(--ease-out); }
 @keyframes name-in { from { opacity: 0; max-height: 0; } to { max-height: 14px; } }
 /* Live validation: an out-of-range octet turns red while typing */
-.ip.over { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
-.ip input.over { color: var(--bad); }
 .main { position: relative; overflow: hidden; min-width: 0; }
 .actions { min-width: 0; }
 /* Copy feedback */
@@ -923,9 +921,6 @@ function ipField(host, key, short, ext) {
   function write() {
     inputs.forEach(x => { x._count = (x._count || 0) + 1; delete x.dataset.final; });  // typing stops a count
     const v = inputs.map(x => x.value);
-    inputs.forEach(x => x.classList.toggle("over", +x.value > 255));
-    const over = v.some(x => +x > 255);
-    box.classList.toggle("over", over);
     box.classList.remove("flagged");
     draft[key] = v.every(x => x === "") ? "" : v.map(x => x === "" ? x : String(+x)).join(".");
     sync(key);
@@ -1027,8 +1022,7 @@ function sync(from) {
   }
   if (from !== "prefix") { const shownMask = fields.subnet.inputs.map(shownOf).join("."), p = prefixOf(shownMask); prefix.value = p >= 0 ? p : ""; }
   updateTags();
-  if (document.querySelector(".ip.over")) say(L("Each number is 0 to 255", "แต่ละช่องต้องอยู่ระหว่าง 0–255"), "bad");
-  else if (bad.length && diff.length) say(bad.map(b => b[1]).join(", ") + L(" needs a valid value", " ไม่ถูกต้อง"), "bad");
+  if (bad.length && diff.length) say(bad.map(b => b[1]).join(", ") + L(" needs a valid value", " ไม่ถูกต้อง"), "bad");
   // Manual IP replaces every address on the adapter: the line says which ones go.
   else if (extra.length) {
     say(L(`Apply removes ${extra.join(", ")}`, `บันทึกแล้วจะลบ ${extra.join(", ")}`), "", "info", true);
@@ -1790,7 +1784,7 @@ const scenarios = {
   },
   "Before Apply": {
     edited: ["Unapplied changes", () => edit({ address: "10.0.1.60" })],
-    invalid: ["Octet out of range", () => edit({ address: "10.0.1.260" })],
+    invalid: ["Incomplete address", () => edit({ address: "10.0.1." })],
     samegw: ["Address equals gateway", () => edit({ address: "10.0.0.1" }, true)],
     outside: ["Gateway outside the subnet", () => edit({ gateway: "192.168.1.1" }, true)],
     conflict: ["Address already in use", () => edit({ address: "10.0.1.50" }, true)],
