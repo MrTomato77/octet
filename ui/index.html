@@ -835,7 +835,7 @@ function updateTags() {
   tag(fields.address, sc && { text: sc[0], title: sc[1] }, sc && sc[0] === "Public" ? "public" : "");
   // The DHCP server is almost always the gateway: mark it there instead of a loose line of text.
   const a = adapters[sel], gw = shown("gateway");
-  if (gw !== a.cfg.gateway) $("gw-name").textContent = "";   // the name belongs to the old one
+  if (gw !== a.cfg.gateway) { $("gw-name").textContent = ""; delete $("gw-name").dataset.gw; }   // the name belongs to the old one
   const gsc = scope(gw);
   tag(fields.gateway, a.dhcpServer && gw === a.dhcpServer ? { text: "DHCP", title: "Also the DHCP server that leased this address" }
     : gsc && { text: gsc[0], title: gsc[1] }, gsc && gsc[0] === "Public" ? "public" : "");
@@ -1063,7 +1063,10 @@ function renderForm(roll = false) {
   renderRegister();
   clearMsgs();
   // set address source=static replaces every IPv4 on the adapter
-  $("gw-name").textContent = ""; gatewayName();
+  // Same gateway (switching Automatic/Manual, a refresh): the name stays put. Only another gateway clears it.
+  const g = $("gw-name"), gw = adapters[sel].cfg.gateway;
+  if (g.dataset.gw !== gw) { g.textContent = ""; g.dataset.gw = gw; }
+  gatewayName();
   sync();
   renderSlots();
 }
