@@ -52,6 +52,21 @@ pub fn hostname(_: Ipv4Addr) -> Option<String> {
     None
 }
 
+/// Empties the DNS client cache, as `ipconfig /flushdns` does (it calls this same function),
+/// without starting a process: under 1 ms instead of ~45 ms.
+#[cfg(windows)]
+pub fn flush_dns() -> bool {
+    #[link(name = "dnsapi")]
+    unsafe extern "system" {
+        fn DnsFlushResolverCache() -> i32;
+    }
+    unsafe { DnsFlushResolverCache() != 0 }
+}
+#[cfg(not(windows))]
+pub fn flush_dns() -> bool {
+    false
+}
+
 /// One ICMP echo; round-trip milliseconds, or None when there is no reply in `timeout_ms`.
 #[cfg(windows)]
 pub fn ping(ip: Ipv4Addr, timeout_ms: u32) -> Option<u32> {
@@ -110,6 +125,13 @@ mod tests {
     #[test]
     fn loopback_answers_ping() {
         assert!(super::ping(std::net::Ipv4Addr::LOCALHOST, 1000).is_some());
+    }
+
+    #[test]
+    fn flushes_dns_cache() {
+        let t = std::time::Instant::now();
+        assert!(super::flush_dns());
+        println!("TIME flush_dns ms: {:.2}", t.elapsed().as_secs_f64() * 1000.0);
     }
 
     #[test]

@@ -46,11 +46,7 @@ async fn change(request: Request) -> Result<(), String> {
 
 #[tauri::command]
 async fn flush_dns() -> Result<(), String> {
-    blocking(|| {
-        let o = hidden("ipconfig").arg("/flushdns").output().map_err(|e| e.to_string())?;
-        if o.status.success() { Ok(()) } else { Err(change::oem_text(&o.stdout).trim().to_string()) }
-    })
-    .await
+    blocking(|| if net::flush_dns() { Ok(()) } else { Err("Could not flush the DNS cache".into()) }).await
 }
 
 /// Before Apply: does another device already answer ARP for this address?
