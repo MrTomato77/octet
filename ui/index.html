@@ -155,9 +155,12 @@ button, input, select { font: inherit; color: inherit; }
 .head { display: grid; grid-template-columns: minmax(0, max-content) auto 1fr auto; align-items: center; column-gap: var(--s3); }
 .head h1 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .head h1 i { font-size: 20px; color: var(--muted); flex: none; }
+/* Wi-Fi: the network it is on, after the name. It gives way (ellipsis) before the name does. */
+#a-ssid { font-weight: 400; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 100 auto; }
+#a-ssid:empty { display: none; }
 /* Long adapter names stay on one line; the full name is in the tooltip */
 .ghost { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: none; }
-#a-name, #a-desc, #a-mac, #a-state, #gw-name { position: relative; white-space: nowrap; }
+#a-name, #a-ssid, #a-desc, #a-mac, #a-state, #gw-name { position: relative; white-space: nowrap; }
 #a-mac .ghost { left: auto; right: 0; }   /* MAC sits on the right edge */
 #a-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One hardware line: what the adapter is (left, truncates) and its address (right, never cut). */
@@ -523,7 +526,7 @@ html.app, html.app body { overflow: hidden; }
       <div class="scroll">
         <div class="head-wrap">
           <div class="head">
-            <h1><i id="a-icon" class="ph ph-wifi-high"></i><span id="a-name"></span></h1>
+            <h1><i id="a-icon" class="ph ph-wifi-high"></i><span id="a-name"></span><span id="a-ssid"></span></h1>
             <span class="state" id="a-state-chip"><span class="dot" id="a-dot"></span><span id="a-state"></span></span>
             <span></span>
             <button class="icon-btn" id="more" aria-haspopup="menu" aria-expanded="false" title="Adapter tools" aria-label="Adapter tools"><i class="ph ph-dots-three"></i></button>
@@ -677,7 +680,7 @@ html.app, html.app body { overflow: hidden; }
 <script>
 // Sample adapters modelled on a real read. Mock data only.
 const adapters = [
-  { id: 1, name: "Wi-Fi", desc: "Qualcomm FastConnect 7800 Wi-Fi 7 High Band Simultaneous (HBS) Network Adapter",
+  { id: 1, name: "Wi-Fi", ssid: "Office-5G", desc: "Qualcomm FastConnect 7800 Wi-Fi 7 High Band Simultaneous (HBS) Network Adapter",
     mac: "02-00-00-00-00-01", state: "up", dhcpServer: "10.0.0.1",
     cfg: { ipAuto: true, address: "10.0.1.124", subnet: "255.255.254.0", gateway: "10.0.0.1", dnsAuto: true, dns1: "8.8.8.8", dns2: "8.8.4.4", register: true } },
   { id: 2, name: "Ethernet", desc: "Realtek USB GbE Family Controller", mac: "02-00-00-00-00-02", state: "down", dhcpServer: "",
@@ -1076,7 +1079,7 @@ const names = new Map();
 // so it names no maker: phones and Windows use these for privacy.
 async function maker(mac) {
   if (!mac) return null;
-  if ("26AE".includes(mac.replace(/[^0-9A-F]/gi, "")[1]?.toUpperCase())) return L("Private (random) MAC", "MAC แบบสุ่ม");
+  if ("26AE".includes(mac.replace(/[^0-9A-F]/gi, "")[1]?.toUpperCase())) return L("Random MAC", "MAC แบบสุ่ม");
   return net("vendor", { mac }).catch(() => null);
 }
 async function gatewayName() {
@@ -1086,11 +1089,13 @@ async function gatewayName() {
   // The maker (ARP, a few ms) shows first; a name can take ~7 s when nobody answers, and replaces it if one comes.
   const got = names.get(gw) ?? {};
   names.set(gw, got);
+  // iPhone Personal Hotspot always hands out 172.20.10.0/28 and hides behind a random MAC: say what it is.
+  const hotspot = gw.startsWith("172.20.10.") && a.cfg.subnet === "255.255.255.240" ? "iPhone hotspot" : null;
   const show = () => {
-    const n = got.name || got.made;
+    const n = got.name || hotspot || got.made;
     // Still the same adapter and gateway once the answer is back?
     if (!n || adapters[sel] !== a || (draft && !draft.ipAuto && draft.gateway !== gw)) return;
-    retext($("gw-name"), n); $("gw-name").title = [got.name, got.made].filter(Boolean).join(" · ");
+    retext($("gw-name"), n); $("gw-name").title = [got.name, hotspot, got.made].filter(Boolean).join(" · ");
   };
   show();
   // Asked once per gateway: null marks a question already on its way.
@@ -1123,6 +1128,8 @@ function renderAdapterFacts() {
   const a = adapters[sel];
   if (!a) return;
   retext($("a-name"), a.name); $("a-name").title = a.name;
+  const ssid = a.state === "up" && a.ssid ? `(${a.ssid})` : "";
+  retext($("a-ssid"), ssid); $("a-ssid").title = a.ssid ? L(`Wi-Fi network: ${a.ssid}`, `เครือข่าย Wi-Fi: ${a.ssid}`) : "";
   $("a-icon").className = "ph " + kindIcon[kind(a)];
   $("a-icon").title = kindName[kind(a)];
   retext($("a-desc"), a.desc); $("a-desc").title = a.desc;
@@ -1799,6 +1806,12 @@ if (tauri) requestAnimationFrame(() => requestAnimationFrame(() => invoke("ready
 const scenarios = {
   "Adapters": {
     connected: ["Connected, DHCP, named gateway", () => go(0)],
+    hotspot: ["iPhone hotspot", () => {
+      Object.assign(adapters[0], { ssid: "MrTomato's iPhone", dhcpServer: "172.20.10.1" });
+      Object.assign(adapters[0].cfg, { address: "172.20.10.2", subnet: "255.255.255.240", gateway: "172.20.10.1", dns1: "172.20.10.1", dns2: "" });
+      demo.macs["172.20.10.1"] = "B2-9B-08-43-A1-01";   // the iPhone's random MAC
+      return go(0).then(() => { renderList(); renderAdapter(true); });
+    }],
     static: ["Manual IP and DNS", () => go(4)],
     down: ["Cable unplugged", () => go(1)],
     disabled: ["Adapter turned off", () => go(5)],

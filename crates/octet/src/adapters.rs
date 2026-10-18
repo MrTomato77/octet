@@ -47,6 +47,8 @@ struct Raw {
     gateway: Vec<String>,
     dns: Vec<String>,
     static_dns: bool,
+    #[serde(default)]
+    ssid: String,
 }
 
 /// The settings the form edits, in the shape the UI uses (empty string = not set).
@@ -72,6 +74,8 @@ pub struct Adapter {
     pub name: String,
     pub desc: String,
     pub mac: String,
+    /// The Wi-Fi network it is joined to; empty for anything else.
+    pub ssid: String,
     /// "up", "down" or "disabled"
     pub state: &'static str,
     pub dhcp_server: String,
@@ -133,6 +137,7 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 name: r.name,
                 desc: r.description,
                 mac: r.mac.replace(':', "-"),
+                ssid: r.ssid,
                 state,
                 dhcp_server,
                 extra_ips,
@@ -328,8 +333,44 @@ mod native {
         Ok(out)
     }
 
+    /// The network each Wi-Fi card is joined to, by adapter GUID. Empty when there is no
+    /// Wi-Fi (the WLAN service is not running) or nothing is joined.
+    fn ssids() -> HashMap<String, String> {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        let mut out = HashMap::new();
+        unsafe {
+            let (mut ver, mut h) = (0u32, std::ptr::null_mut());
+            if WlanOpenHandle(2, std::ptr::null(), &mut ver, &mut h) != 0 {
+                return out;
+            }
+            let mut list: *mut WLAN_INTERFACE_INFO_LIST = std::ptr::null_mut();
+            if WlanEnumInterfaces(h, std::ptr::null(), &mut list) == 0 {
+                let n = (*list).dwNumberOfItems as usize;
+                let infos = std::slice::from_raw_parts((*list).InterfaceInfo.as_ptr(), n);
+                for info in infos {
+                    let (mut size, mut data) = (0u32, std::ptr::null_mut());
+                    if WlanQueryInterface(h, &info.InterfaceGuid, wlan_intf_opcode_current_connection, std::ptr::null(),
+                        &mut size, &mut data, std::ptr::null_mut()) != 0 {
+                        continue;   // not joined to anything
+                    }
+                    let ssid = &(*(data as *const WLAN_CONNECTION_ATTRIBUTES)).wlanAssociationAttributes.dot11Ssid;
+                    let name = String::from_utf8_lossy(&ssid.ucSSID[..(ssid.uSSIDLength as usize).min(32)]).into_owned();
+                    WlanFreeMemory(data);
+                    let g = info.InterfaceGuid;
+                    let id = format!("{{{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{}}}", g.data1, g.data2, g.data3, g.data4[0], g.data4[1],
+                        g.data4[2..].iter().map(|b| format!("{b:02X}")).collect::<String>());
+                    out.insert(id, name);
+                }
+                WlanFreeMemory(list.cast());
+            }
+            WlanCloseHandle(h, std::ptr::null());
+        }
+        out
+    }
+
     pub fn read() -> Result<Vec<Raw>, String> {
         let mut live = live()?;
+        let mut ssids = ssids();
         let mut out = vec![];
         // One entry per network adapter driver. Virtual ports of one card (Wi-Fi Direct)
         // have no driver entry of their own, and NCF_HIDDEN (0x8) marks WAN miniports and
@@ -353,6 +394,7 @@ mod native {
                     let Some(mut raw) = live.remove(&id) else { continue };
                     raw.name = name;
                     raw.static_dns = static_dns;
+                    raw.ssid = ssids.remove(&id).unwrap_or_default();
                     // Not connected and on DHCP: no lease, so any 169.254 address is leftover noise.
                     if raw.status != "Up" && raw.dhcp {
                         (raw.ip, raw.subnet, raw.gateway) = Default::default();
@@ -381,6 +423,15 @@ mod native {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Prints each adapter's Wi-Fi network: cargo test --release -p octet shows_ssids -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn shows_ssids() {
+        for a in read().unwrap() {
+            println!("SSID {:<32} {:?}", a.name, a.ssid);
+        }
+    }
 
     #[test]
     fn parses_mixed_ipv4_ipv6_and_static_dns() {
