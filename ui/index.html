@@ -175,6 +175,8 @@ button, input, select { font: inherit; color: inherit; }
 /* Every pair of a MAC in its own fixed cell (as the octets of an IP field), so switching adapters never stretches it */
 #a-mac b { display: inline-block; width: 2.3ch; text-align: center; font-weight: inherit; }
 #mac-kv { gap: 5px; }
+/* The cells break text-decoration into pieces: one line under the whole MAC instead */
+#mac-kv:hover #a-mac { text-decoration: none; box-shadow: 0 1px 0 var(--border-strong); }
 .kv[hidden] { display: none; }
 .copy { border: 0; background: none; padding: 0; cursor: copy; border-radius: 2px; }
 .copy:hover .v { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
