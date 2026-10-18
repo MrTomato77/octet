@@ -1066,21 +1066,29 @@ async function gatewayName() {
   if (n && adapters[sel] === a && !(draft && !draft.ipAuto && draft.gateway !== gw)) { $("gw-name").textContent = n; $("gw-name").title = n; }
 }
 
+// Text whose length changes: the box eases to its new width first (so neighbours glide, never jump),
+// then the new words fade in. Empty boxes (first paint) just take their text.
+function retext(el, text) {
+  if (el.textContent === text) return;
+  const from = el.getBoundingClientRect().width, first = el.textContent === "";
+  el.textContent = text;
+  if (first || calm.matches || !el.offsetParent) return;
+  const to = el.getBoundingClientRect().width, ease = "cubic-bezier(0.22, 1, 0.36, 1)";
+  el.style.overflow = "hidden";
+  el.animate([{ width: from + "px" }, { width: to + "px" }], { duration: 240, easing: ease }).onfinish = () => el.style.overflow = "";
+  el.animate([{ opacity: 0, transform: "translateY(3px)" }, { opacity: 0, transform: "translateY(3px)", offset: 0.45 }, { opacity: 1, transform: "none" }],
+    { duration: 420, easing: ease });
+}
 function renderAdapterFacts() {
   const a = adapters[sel];
   if (!a) return;
-  $("a-name").textContent = a.name; $("a-name").title = a.name;
+  retext($("a-name"), a.name); $("a-name").title = a.name;
   $("a-icon").className = "ph " + kindIcon[kind(a)];
   $("a-icon").title = kindName[kind(a)];
-  $("a-desc").textContent = a.desc; $("a-desc").title = a.desc;
-  $("a-mac").textContent = a.mac;
+  retext($("a-desc"), a.desc); $("a-desc").title = a.desc;
+  retext($("a-mac"), a.mac);
   $("mac-kv").hidden = !a.mac;   // a disabled adapter reports none
-  $("a-state").textContent = t(a.state);
-  const chip = $("a-state-chip"), was = chip.dataset.key, now = a.id + ":" + a.state;
-  chip.dataset.key = now;
-  if (was && was !== now && was.split(":")[0] === String(a.id) && !calm.matches) {
-    chip.animate([{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
-  }
+  retext($("a-state"), t(a.state));
   if (draft) sync();
   $("a-state-chip").className = "state" + (a.state === "up" ? "" : " off");
   $("a-dot").className = "dot" + (a.state === "up" ? "" : " off");
@@ -1194,8 +1202,7 @@ async function select(i) {
   if (i === sel || busyNow || !await discardOk()) return;
   // Only text moves: octets count to the new adapter's values, the header text rises in. The page itself stays.
   sel = i; animateNext = true; renderList(); renderAdapter(true);
-  if (!calm.matches) ["a-icon", "a-name", "a-desc", "a-mac"].forEach((id, k) =>
-    $(id).animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 240, delay: k * 30, easing: "ease-out", fill: "backwards" }));
+  if (!calm.matches) $("a-icon").animate([{ opacity: 0 }, { opacity: 0, offset: 0.45 }, { opacity: 1 }], { duration: 420, easing: "ease-out" });
 }
 
 // ---------- events ----------
