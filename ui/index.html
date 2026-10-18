@@ -172,6 +172,8 @@ button, input, select { font: inherit; color: inherit; }
 .kv { display: inline-flex; gap: var(--s2); font-variant-numeric: tabular-nums; }
 .kv .k { color: var(--muted); }
 .kv i.k { font-size: 14px; align-self: center; }
+/* Every MAC is 17 characters: a fixed box, so switching adapters never stretches it. */
+#a-mac { display: inline-block; min-width: 17ch; text-align: right; }
 .kv[hidden] { display: none; }
 .copy { border: 0; background: none; padding: 0; cursor: copy; border-radius: 2px; }
 .copy:hover .v { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
@@ -1052,7 +1054,7 @@ function sync(from) {
     const speed = !sp ? "" : sp >= 1e9 ? `${+(sp / 1e9).toFixed(1)} Gbps` : `${Math.round(sp / 1e6)} Mbps`;
     const band = !a.mhz ? "" : a.mhz < 3000 ? "2.4 GHz" : a.mhz < 5925 ? "5 GHz" : "6 GHz";
     const link = [a.phy, band, speed].filter(Boolean).join(" · ");
-    say(link || t("noChanges"), "", link ? "speedometer" : "", true);
+    say(link || t("noChanges"), "", link ? "lightning" : "", true);
     if (band) $("status").title = L(`Channel at ${a.mhz} MHz · no changes`, `ช่องสัญญาณ ${a.mhz} MHz · ยังไม่ได้แก้อะไร`);
   }
   for (const [id, off] of [["apply", busyNow || !diff.length || bad.length > 0], ["revert", busyNow || !diff.length]]) {
