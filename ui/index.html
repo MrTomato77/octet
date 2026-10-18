@@ -459,9 +459,7 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 /* The gateway's name sits under its label, inside the row, so the grid keeps its rhythm */
 .form > .gw-lbl { line-height: 18px; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; }
 #gw-name { max-width: 100%; font-size: 12px; line-height: 14px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#gw-name:empty { display: none; }
-#gw-name { animation: name-in var(--t-base) var(--ease-out); }
-@keyframes name-in { from { opacity: 0; max-height: 0; } to { max-height: 14px; } }
+/* Empty, it is 0 tall on its own; coming and going are animated in JS (gatewayName, retext). */
 /* Live validation: an out-of-range octet turns red while typing */
 .main { position: relative; overflow: hidden; min-width: 0; }
 .actions { min-width: 0; }
@@ -1109,7 +1107,10 @@ async function gatewayName() {
     // Still the same adapter and gateway once the answer is back?
     if (adapters[sel] !== a || (draft && !draft.ipAuto && draft.gateway !== gw)) return;
     // A known name crossfades from the old one; an unknown one fades the old out, and comes in when it arrives.
-    retext($("gw-name"), n); $("gw-name").title = [got.name, hotspot, got.made].filter(Boolean).join(" · ");
+    const g = $("gw-name"), appearing = n && !g.textContent;
+    retext(g, n);
+    // From nothing: it grows into its line and fades in.
+    if (appearing && !calm.matches) g.animate([{ opacity: 0, maxHeight: "0px" }, { maxHeight: "14px" }], { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }); $("gw-name").title = [got.name, hotspot, got.made].filter(Boolean).join(" · ");
   };
   show();
   // Asked once per gateway: null marks a question already on its way.
@@ -1130,17 +1131,21 @@ function retext(el, text, resize = true, build = null) {
   const outgoing = cur ? kids : prev ? [...prev.childNodes] : [];
   const old = outgoing.map(n => n.textContent).join(""), oldNodes = outgoing.map(n => n.cloneNode(true));
   // Measured before the change: an emptied box may hide itself (:empty), which would skip the fade.
-  const shown = !!el.offsetParent, from = el.getBoundingClientRect().width;
+  const box = el.getBoundingClientRect(), shown = !!el.offsetParent, from = box.width;
   prev?.remove();
   put(el, text);
   if (!old || calm.matches || !shown) return;
-  const to = el.getBoundingClientRect().width, ease = "cubic-bezier(0.22, 1, 0.36, 1)";
+  // Not measured when emptied: layout would apply :empty for a moment, and an element that hides itself
+  // (the gateway name) restarts its CSS fade-in, which hides the fading words with it.
+  const to = text && resize ? el.getBoundingClientRect().width : from, ease = "cubic-bezier(0.22, 1, 0.36, 1)";
   const ghost = document.createElement("span");
   ghost.className = "ghost"; ghost.replaceChildren(...oldNodes); ghost.setAttribute("aria-hidden", "true");
   const now = document.createElement("span");
   put(now, text);
   el.replaceChildren(now, ghost);
-  if (resize) el.animate([{ width: from + "px" }, { width: to + "px" }], { duration: 300, easing: ease });
+  // Emptied: hold the old width while the words fade, or the box (overflow hidden) would cut them off at once.
+  if (!text) el.animate([{ width: from + "px", height: box.height + "px" }, { width: from + "px", height: box.height + "px" }], { duration: 200 });
+  else if (resize) el.animate([{ width: from + "px" }, { width: to + "px" }], { duration: 300, easing: ease });
   ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: "ease-in", fill: "forwards" })
     .onfinish = () => ghost.remove();   // the in-span stays until its own fade ends
   now.animate([{ opacity: 0 }, { opacity: 0, offset: 0.2 }, { opacity: 1 }],
@@ -1160,8 +1165,9 @@ function countMac(el, mac) {
   pairs.forEach((p, j) => {
     const x = cells[j], from = parseInt(x.dataset.final ?? x.textContent, 16) || 0, to = parseInt(p, 16);
     const token = (x._count = (x._count || 0) + 1), hex = n => n.toString(16).toUpperCase().padStart(2, "0");
-    x.dataset.final = p.toUpperCase();
-    const finish = () => { if (x._count === token) { x.textContent = x.dataset.final; delete x.dataset.final; } };
+    const next = (x.dataset.final = p.toUpperCase());
+    // Runs twice (end of the count, and the timer behind it): set from `next`, never from the deleted dataset.
+    const finish = () => { if (x._count === token) { x.textContent = next; delete x.dataset.final; } };
     if (from === to) return finish();
     const dur = 700, start = performance.now() + j * 40;
     const step = now => {
