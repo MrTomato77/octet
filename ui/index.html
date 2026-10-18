@@ -1068,8 +1068,8 @@ async function gatewayName() {
   if (n && adapters[sel] === a && !(draft && !draft.ipAuto && draft.gateway !== gw)) { $("gw-name").textContent = n; $("gw-name").title = n; }
 }
 
-// Text whose length changes: blur crossfade. The old words blur out on a ghost laid over the box while the
-// new ones blur in and the box eases to its new width, so neighbours glide and the text is never blank.
+// Text whose length changes: crossfade. The old words fade out on a ghost laid over the box while the
+// new ones fade in and the box eases to its new width, so neighbours glide and the text is never blank.
 // Empty boxes (first paint) just take their text.
 function retext(el, text) {
   el.querySelector(".ghost")?.remove();
@@ -1084,9 +1084,9 @@ function retext(el, text) {
   now.textContent = text;
   el.replaceChildren(now, ghost);
   el.animate([{ width: from + "px" }, { width: to + "px" }], { duration: 300, easing: ease });
-  ghost.animate([{ opacity: 1, filter: "blur(0)" }, { opacity: 0, filter: "blur(4px)" }], { duration: 200, easing: "ease-in", fill: "forwards" })
+  ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: "ease-in", fill: "forwards" })
     .onfinish = () => ghost.remove();   // the in-span stays until its own fade ends
-  now.animate([{ opacity: 0, filter: "blur(4px)" }, { opacity: 0, filter: "blur(4px)", offset: 0.2 }, { opacity: 1, filter: "blur(0)" }],
+  now.animate([{ opacity: 0 }, { opacity: 0, offset: 0.2 }, { opacity: 1 }],
     { duration: 340, easing: "ease-out" }).onfinish = () => { if (now.isConnected) el.textContent = text; };   // back to plain text
 }
 function renderAdapterFacts() {
