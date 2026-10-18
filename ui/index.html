@@ -1516,12 +1516,11 @@ tools.onclick = async e => {
   say(act === "ncpa" ? "Opens ncpa.cpl (demo)" : noLease(a));
 };
 
-// ipconfig waits about a minute for a DHCP server that isn't there: a dial-up link (PPPoE) has none,
-// and an APIPA address (169.254.x.x) means none answered last time. Those don't get the buttons.
-const leasable = a => a.cfg.ipAuto && !a.ppp && !a.cfg.address.startsWith("169.254.");
+// A dial-up link (PPPoE) has no DHCP at all, so no buttons. Anywhere else a server may be missing
+// (APIPA can mean it was just down), so it may try, and leaseAction stops waiting after a while.
+const leasable = a => a.cfg.ipAuto && !a.ppp;
 const noLease = a => !a.cfg.ipAuto ? L("Not a DHCP adapter", "อะแดปเตอร์นี้ไม่ได้ใช้ DHCP")
-  : a.ppp ? L("A dial-up link has no DHCP lease", "การเชื่อมต่อแบบ Dial ไม่มี DHCP ให้ Renew")
-  : L("No DHCP server answers on this network", "เครือข่ายนี้ไม่มี DHCP server ตอบ");
+  : L("A dial-up link has no DHCP lease", "การเชื่อมต่อแบบ Dial ไม่มี DHCP ให้ Renew");
 
 // ---------- DHCP lease (demo: a random address from the same scope) ----------
 function leaseAction(act) {
@@ -1530,7 +1529,9 @@ function leaseAction(act) {
     say(act === "release" ? L("Releasing…", "กำลัง Release…") : L("Renewing lease…", "กำลัง Renew…"));
     lock(true);
     const req = op => change({ op, index: a.index, name: a.name });
-    const go = act === "cycle" ? req("release").then(() => req("renew")) : req(act);
+    // ipconfig waits about a minute when no DHCP server answers: give up on it after 15 s.
+    const wait = new Promise((_, no) => setTimeout(() => no(L("No DHCP server answered", "ไม่มี DHCP server ตอบ")), 15000));
+    const go = Promise.race([act === "cycle" ? req("release").then(() => req("renew")) : req(act), wait]);
     return go.then(reload).then(() => {
       lock(false);
       const c = adapters[sel].cfg;
