@@ -843,7 +843,7 @@ function updateTags() {
   tag(fields.address, sc && { text: sc[0], title: sc[1] }, sc && sc[0] === "Public" ? "public" : "");
   // The DHCP server is almost always the gateway: mark it there instead of a loose line of text.
   const a = adapters[sel], gw = shown("gateway");
-  if (gw !== a.cfg.gateway) retext($("gw-name"), "");   // the name belongs to the old one
+  if (gw !== a.cfg.gateway) gwName("");   // the name belongs to the old one
   const gsc = scope(gw);
   tag(fields.gateway, a.dhcpServer && gw === a.dhcpServer ? { text: "DHCP", title: "Also the DHCP server that leased this address" }
     : gsc && { text: gsc[0], title: gsc[1] }, gsc && gsc[0] === "Public" ? "public" : "");
@@ -1093,9 +1093,18 @@ async function maker(mac) {
   if ("26AE".includes(mac.replace(/[^0-9A-F]/gi, "")[1]?.toUpperCase())) return L("Random MAC", "MAC แบบสุ่ม");
   return net("vendor", { mac }).catch(() => null);
 }
+// The line under "Gateway": it grows in (the label rises) and shrinks away (the label settles back), mirrored.
+function gwName(n) {
+  // Showing a name now? (words still fading out don't count)
+  const g = $("gw-name"), had = [...g.childNodes].some(c => !c.classList?.contains("ghost") && c.textContent);
+  retext(g, n);
+  if (calm.matches || !!n === had) return;
+  const ease = "cubic-bezier(0.22, 1, 0.36, 1)";
+  g.animate(n ? [{ opacity: 0, maxHeight: "0px" }, { maxHeight: "14px" }] : [{ maxHeight: "14px" }, { maxHeight: "0px" }], { duration: 240, easing: ease });
+}
 async function gatewayName() {
   const a = adapters[sel], gw = a?.cfg.gateway;
-  if (!gw || (draft && !draft.ipAuto && draft.gateway !== gw)) return retext($("gw-name"), "");   // fades the old name out
+  if (!gw || (draft && !draft.ipAuto && draft.gateway !== gw)) return gwName("");
   // Its name if it gives one, else who made it (from its MAC); the tooltip has both, in full.
   // The maker (ARP, a few ms) shows first; a name can take ~7 s when nobody answers, and replaces it if one comes.
   const got = names.get(gw) ?? {};
@@ -1107,10 +1116,7 @@ async function gatewayName() {
     // Still the same adapter and gateway once the answer is back?
     if (adapters[sel] !== a || (draft && !draft.ipAuto && draft.gateway !== gw)) return;
     // A known name crossfades from the old one; an unknown one fades the old out, and comes in when it arrives.
-    const g = $("gw-name"), appearing = n && !g.textContent;
-    retext(g, n);
-    // From nothing: it grows into its line and fades in.
-    if (appearing && !calm.matches) g.animate([{ opacity: 0, maxHeight: "0px" }, { maxHeight: "14px" }], { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }); $("gw-name").title = [got.name, hotspot, got.made].filter(Boolean).join(" · ");
+    gwName(n); $("gw-name").title = [got.name, hotspot, got.made].filter(Boolean).join(" · ");
   };
   show();
   // Asked once per gateway: null marks a question already on its way.
