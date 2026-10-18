@@ -10,7 +10,7 @@
 /* Layout spec. Every size in the window comes from these tokens. */
 :root {
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px;
-  --win-w: 520px; --win-h: 562px;
+  --win-w: 520px; --win-h: 542px;
   --side-w: 216px;
   --label-w: 112px;          /* shared by adapter facts and the form */
   --col-gap: 16px;
@@ -160,12 +160,10 @@ button, input, select { font: inherit; color: inherit; }
 #a-ssid:empty { display: none; }
 /* Long adapter names stay on one line; the full name is in the tooltip */
 .ghost { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: none; }
-#a-name, #a-ssid, #a-link, #a-desc, #a-mac, #a-state, #gw-name { position: relative; white-space: nowrap; }
+#a-name, #a-ssid, #a-desc, #a-mac, #a-state, #gw-name { position: relative; white-space: nowrap; }
 #a-mac .ghost { left: auto; right: 0; }   /* MAC sits on the right edge */
 #a-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One hardware line: what the adapter is (left, truncates) and its address (right, never cut). */
-/* The link (802.11 standard, band, speed). Its line keeps its height when empty, so the form never shifts. */
-.sub.link { min-height: 16px; color: var(--ink); }
 .sub { grid-column: 1 / -1; margin: var(--s1) 0 0; display: flex; align-items: baseline; gap: var(--s6); font-size: 12px; line-height: 16px; color: var(--muted); }
 .desc { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Lease source sits with the DHCP choice it belongs to */
@@ -484,7 +482,7 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
   background-image: linear-gradient(90deg, transparent 0%, color-mix(in oklch, var(--surface) 70%, transparent) 50%, transparent 100%) !important;
   animation: shimmer 1100ms linear infinite; }
 .loading :is(.ip, .seg, .slot-btn) > *, .loading .tag::after { visibility: hidden; }
-.loading :is(#a-ssid, #a-link) { visibility: hidden; }   /* filled in once the adapters are read */
+.loading #a-ssid { visibility: hidden; }   /* filled in once the adapters are read */
 
 /* Inside Octet (Tauri) the page is the window: no demo frame, titlebar or note */
 html.app body { display: block; padding: 0; background: var(--bg); }
@@ -533,7 +531,6 @@ html.app, html.app body { overflow: hidden; }
             <span class="state" id="a-state-chip"><span class="dot" id="a-dot"></span><span id="a-state"></span></span>
             <span></span>
             <button class="icon-btn" id="more" aria-haspopup="menu" aria-expanded="false" title="Adapter tools" aria-label="Adapter tools"><i class="ph ph-dots-three"></i></button>
-            <p class="sub link"><span id="a-link"></span></p>
             <p class="sub">
               <span class="desc" id="a-desc"></span>
               <button class="kv copy" id="mac-kv" title="Click to copy"><span class="k">MAC</span><span class="v" id="a-mac"></span></button>
@@ -1048,7 +1045,15 @@ function sync(from) {
   } else if (adapters[sel].state === "down") {
     say(L("Not connected", "ไม่ได้เชื่อมต่อ"), "", "plugs", true);
     $("status").title = L("Settings apply when it connects", "ค่าจะมีผลเมื่อเชื่อมต่อ");
-  } else say(t("noChanges"), "", "", true);
+  } else {
+    // Connected and nothing pending: the line tells how well it is connected instead of "No changes".
+    const a = adapters[sel], sp = a.speed || 0;
+    const speed = !sp ? "" : sp >= 1e9 ? `${+(sp / 1e9).toFixed(1)} Gbps` : `${Math.round(sp / 1e6)} Mbps`;
+    const band = !a.mhz ? "" : a.mhz < 3000 ? "2.4 GHz" : a.mhz < 5925 ? "5 GHz" : "6 GHz";
+    const link = [a.phy, band, speed].filter(Boolean).join(" · ");
+    say(link || t("noChanges"), "", link ? "gauge" : "", true);
+    if (band) $("status").title = L(`Channel at ${a.mhz} MHz · no changes`, `ช่องสัญญาณ ${a.mhz} MHz · ยังไม่ได้แก้อะไร`);
+  }
   for (const [id, off] of [["apply", busyNow || !diff.length || bad.length > 0], ["revert", busyNow || !diff.length]]) {
     const b = $(id);
     b.disabled = off;
@@ -1134,11 +1139,7 @@ function renderAdapterFacts() {
   retext($("a-name"), a.name); $("a-name").title = a.name;
   const ssid = a.state === "up" && a.ssid ? `(${a.ssid})` : "";
   retext($("a-ssid"), ssid);
-  const up = a.state === "up", sp = a.speed || 0;
-  const speed = !up || !sp ? "" : sp >= 1e9 ? `${+(sp / 1e9).toFixed(1)} Gbps` : `${Math.round(sp / 1e6)} Mbps`;
-  const band = !up || !a.mhz ? "" : a.mhz < 3000 ? "2.4 GHz" : a.mhz < 5925 ? "5 GHz" : "6 GHz";
-  retext($("a-link"), up ? [a.phy, band, speed].filter(Boolean).join(" · ") : "");
-  $("a-link").title = band ? L(`Channel at ${a.mhz} MHz`, `ช่องสัญญาณ ${a.mhz} MHz`) : ""; $("a-ssid").title = a.ssid ? L(`Wi-Fi network: ${a.ssid}`, `เครือข่าย Wi-Fi: ${a.ssid}`) : "";
+  $("a-ssid").title = a.ssid ? L(`Wi-Fi network: ${a.ssid}`, `เครือข่าย Wi-Fi: ${a.ssid}`) : "";
   $("a-icon").className = "ph " + kindIcon[kind(a)];
   $("a-icon").title = kindName[kind(a)];
   retext($("a-desc"), a.desc); $("a-desc").title = a.desc;
