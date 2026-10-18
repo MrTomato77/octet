@@ -140,7 +140,7 @@ button, input, select { font: inherit; color: inherit; }
 
 /* Main pane */
 .main { display: grid; grid-template-rows: 1fr auto; min-height: 0; background: var(--surface); }
-.scroll { overflow: hidden; padding: var(--s4) var(--s6) var(--s4); }
+.scroll { overflow: hidden; padding: var(--s4) var(--s6) var(--group-gap); }   /* last row to the action bar = the gap around each divider */
 /* Identity header: name + state on one line, hardware details as one meta line.
    Facts are not settings, so they no longer borrow the form's label column. */
 .head { display: grid; grid-template-columns: minmax(0, max-content) auto 1fr auto; align-items: center; column-gap: var(--s3); }
@@ -440,9 +440,11 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 .form > .row-msg { grid-column: 2; min-height: 0; margin-top: -4px; gap: 6px; font-size: 12px; line-height: 16px; color: var(--bad);
   overflow: hidden; animation: msg-in var(--t-base) var(--ease-out); }
 .row-msg i { font-size: 14px; }
-.row-msg.hint, .row-msg.host { color: var(--muted); }
-/* The gateway name sits in the gap above the divider, so the form keeps its height */
-.form > .row-msg.host { margin-bottom: calc(-1 * (16px + var(--row-gap))); }
+.row-msg.hint { color: var(--muted); }
+/* The gateway's name sits under its label, inside the row, so the grid keeps its rhythm */
+.form > .gw-lbl { line-height: 18px; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; }
+#gw-name { max-width: 100%; font-size: 12px; line-height: 14px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#gw-name:empty { display: none; }
 @keyframes msg-in { from { opacity: 0; max-height: 0; transform: translateY(-4px); } to { max-height: 16px; } }
 /* Live validation: an out-of-range octet turns red while typing */
 .ip.over { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
@@ -555,7 +557,7 @@ html.app, html.app body { overflow: hidden; }
           </div>
           <label data-t="ip" for="f-address-0">IP address</label><div id="f-address"></div>
           <label data-t="subnet" for="f-subnet-0">Subnet mask</label><div class="subnet" id="f-subnet-wrap"></div>
-          <label data-t="gateway" for="f-gateway-0">Gateway</label><div id="f-gateway"></div>
+          <label class="gw-lbl" for="f-gateway-0"><span data-t="gateway">Gateway</span><small id="gw-name"></small></label><div id="f-gateway"></div>
         </div>
 
         <hr class="break">
@@ -805,7 +807,7 @@ function updateTags() {
   tag(fields.address, sc && { text: sc[0], title: sc[1] }, sc && sc[0] === "Public" ? "public" : "");
   // The DHCP server is almost always the gateway: mark it there instead of a loose line of text.
   const a = adapters[sel], gw = shown("gateway");
-  if (gw !== a.cfg.gateway) document.querySelector(".row-msg.host")?.remove();   // the name belongs to the old one
+  if (gw !== a.cfg.gateway) $("gw-name").textContent = "";   // the name belongs to the old one
   const gsc = scope(gw);
   tag(fields.gateway, a.dhcpServer && gw === a.dhcpServer ? { text: "DHCP", title: "Also the DHCP server that leased this address" }
     : gsc && { text: gsc[0], title: gsc[1] }, gsc && gsc[0] === "Public" ? "public" : "");
@@ -943,7 +945,7 @@ function rowMsg(key, text, kind = "") {
   if (m && m.dataset.text === text) return;
   m?.remove();
   m = document.createElement("div"); m.className = "row-msg " + kind; m.dataset.text = text;
-  m.innerHTML = `<i class="ph ${{ hint: "ph-info", host: "ph-tag-simple" }[kind] || "ph-warning-circle"}"></i><span></span>`;
+  m.innerHTML = `<i class="ph ${{ hint: "ph-info" }[kind] || "ph-warning-circle"}"></i><span></span>`;
   m.lastChild.textContent = text;
   host.after(m);
 }
@@ -1030,7 +1032,7 @@ function renderForm(roll = false) {
   // set address source=static replaces every IPv4 on the adapter
   const extra = adapters[sel].extraIps || [];
   if (ipEdit && extra.length) rowMsg("address", L(`Also has ${extra.join(", ")}; Apply keeps only this address`, `มี ${extra.join(", ")} อยู่ด้วย บันทึกแล้วจะเหลือแค่ IP นี้`), "hint");
-  gatewayName();
+  $("gw-name").textContent = ""; gatewayName();
   sync();
   renderSlots();
 }
@@ -1042,7 +1044,7 @@ async function gatewayName() {
   if (!gw || (draft && !draft.ipAuto && draft.gateway !== gw)) return;
   if (!names.has(gw)) names.set(gw, tauri ? await invoke("hostname", { address: gw }).catch(() => null) : demoNames[gw] ?? null);
   const n = names.get(gw);
-  if (n && adapters[sel] === a && !document.querySelector(".row-msg")) rowMsg("gateway", n, "host");
+  if (n && adapters[sel] === a) { $("gw-name").textContent = n; $("gw-name").title = n; }
 }
 
 function renderAdapterFacts() {
