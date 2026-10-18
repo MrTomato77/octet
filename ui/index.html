@@ -1077,12 +1077,15 @@ async function maker(mac) {
 async function gatewayName() {
   const a = adapters[sel], gw = a?.cfg.gateway;
   if (!gw || (draft && !draft.ipAuto && draft.gateway !== gw)) return;
-  // Its name if it gives one, else who made it (from its MAC): "router.lan", or at least "Ubiquiti".
-  if (!names.has(gw)) names.set(gw, await net("hostname", { address: gw }).catch(() => null)
-    || await net("who_has", { address: gw }).then(maker).catch(() => null));
-  const n = names.get(gw);
+  // Shows its name if it gives one, else who made it (from its MAC); the tooltip has both, in full.
+  if (!names.has(gw)) names.set(gw, await Promise.all([
+    net("hostname", { address: gw }).catch(() => null),
+    net("who_has", { address: gw }).then(maker).catch(() => null)]));
+  const [name, made] = names.get(gw), n = name || made;
   // Still the same adapter and gateway once the answer is back?
-  if (n && adapters[sel] === a && !(draft && !draft.ipAuto && draft.gateway !== gw)) { $("gw-name").textContent = n; $("gw-name").title = n; }
+  if (n && adapters[sel] === a && !(draft && !draft.ipAuto && draft.gateway !== gw)) {
+    $("gw-name").textContent = n; $("gw-name").title = [name, made].filter(Boolean).join(" · ");
+  }
 }
 
 // Text whose length changes: crossfade. The old words fade out on a ghost laid over the box while the
