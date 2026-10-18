@@ -845,7 +845,15 @@ function countTo(x, next, delay) {
   const token = (x._count = (x._count || 0) + 1);
   x.dataset.final = next;
   const finish = () => { if (x._count === token) { x.value = next; delete x.dataset.final; } };
-  if (to === null || from === to || calm.matches) { finish(); return; }
+  if (calm.matches || x.value === next) { finish(); return; }
+  if (to === null || !/^\d+$/.test(x.value)) {
+    // Number to blank or blank to number (adapter off/on): nothing to count, so crossfade the octet.
+    x.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, delay, easing: "ease-in", fill: "backwards" }).onfinish = () => {
+      finish(); x.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
+    };
+    setTimeout(finish, delay + 400);
+    return;
+  }
   const dur = 700, start = performance.now() + delay;
   const step = now => {
     if (x._count !== token) return;
@@ -1082,9 +1090,6 @@ function renderAdapterFacts() {
   chip.dataset.key = now;
   if (was && was !== now && was.split(":")[0] === String(a.id) && !calm.matches) {
     chip.animate([{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
-    // Turned on or off: the values change under the user, so ease them in instead of swapping.
-    document.querySelector(".form").animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }],
-      { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
   }
   const off = a.state !== "up";
   document.querySelector(".scroll").classList.toggle("dim", off);
@@ -1336,7 +1341,7 @@ function refresh(quiet) {
     // While a group is automatic the draft mirrors Windows.
     if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = a.cfg[k];
     if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = a.cfg[k];
-    renderList(!quiet); renderAdapterFacts(); renderForm(!quiet);
+    renderList(!quiet); renderAdapterFacts(); renderForm(true);   // values that changed roll; the rest stay still
     for (const k of ["address", "subnet", "gateway", "dns1", "dns2"])
       if (before[k] !== a.cfg[k] && (k.startsWith("dns") ? draft.dnsAuto : draft.ipAuto)) flash(fields[k].box);
     if (quiet) return;
@@ -1387,12 +1392,12 @@ tools.onclick = async e => {
       // Same order the app reads them in (adapters.rs): online with gateway, online, down, disabled; by name.
       const rank = x => [x.state !== "up", !x.cfg.gateway, x.state === "disabled"].map(Number).join("") + x.name;
       adapters.sort((x, y) => rank(x).localeCompare(rank(y))); sel = adapters.indexOf(a);
-      renderList(); renderAdapterFacts(); return;
+      renderList(); renderAdapterFacts(); renderForm(true); return;
     }
     const on = a.state === "disabled";
     say(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true);
     change({ op: "enable", index: a.index, name: a.name, on }).then(reload).then(() => {
-      lock(false); renderList(); renderAdapterFacts(); renderForm();
+      lock(false); renderList(); renderAdapterFacts(); renderForm(true);
       say(on ? L("Adapter enabled", "เปิดอะแดปเตอร์แล้ว") : L("Adapter disabled", "ปิดอะแดปเตอร์แล้ว"), "ok");
     }, e => { lock(false); say(String(e), "bad"); });
     return;
