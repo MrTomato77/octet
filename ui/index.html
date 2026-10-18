@@ -1529,8 +1529,8 @@ function leaseAction(act) {
     say(act === "release" ? L("Releasing…", "กำลัง Release…") : L("Renewing lease…", "กำลัง Renew…"));
     lock(true);
     const req = op => change({ op, index: a.index, name: a.name });
-    // ipconfig waits about a minute when no DHCP server answers: give up on it after 15 s.
-    const wait = new Promise((_, no) => setTimeout(() => no(L("No DHCP server answered", "ไม่มี DHCP server ตอบ")), 15000));
+    // ipconfig waits about a minute when no DHCP server answers: give up on it after 10 s.
+    const wait = new Promise((_, no) => setTimeout(() => no(L("No DHCP server answered", "ไม่มี DHCP server ตอบ")), 10000));
     const go = Promise.race([act === "cycle" ? req("release").then(() => req("renew")) : req(act), wait]);
     return go.then(reload).then(() => {
       lock(false);
