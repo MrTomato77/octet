@@ -153,9 +153,10 @@ fn main() {
     if restarted {
         // Let the copy that started us close first, or single-instance would hand off to it.
         std::thread::sleep(std::time::Duration::from_millis(700));
-    } else if always_admin() && !net::elevated() {
+    } else if always_admin() && !args.iter().any(|a| a == "--admin") && !net::elevated() {
         if let Ok(exe) = std::env::current_exe() {
-            if change::run_as_admin(&exe, "--restarted", false).is_ok() {
+            // No window or single-instance lock exists yet, so the elevated copy needn't wait.
+            if change::run_as_admin(&exe, "--admin", false).is_ok() {
                 return;
             }
         } // UAC declined: carry on without admin rights.
