@@ -171,6 +171,7 @@ button, input, select { font: inherit; color: inherit; }
 .hint:empty { display: none; }
 .kv { display: inline-flex; gap: var(--s2); font-variant-numeric: tabular-nums; }
 .kv .k { color: var(--muted); }
+.kv i.k { font-size: 14px; align-self: center; }
 .kv[hidden] { display: none; }
 .copy { border: 0; background: none; padding: 0; cursor: copy; border-radius: 2px; }
 .copy:hover .v { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
@@ -533,7 +534,7 @@ html.app, html.app body { overflow: hidden; }
             <button class="icon-btn" id="more" aria-haspopup="menu" aria-expanded="false" title="Adapter tools" aria-label="Adapter tools"><i class="ph ph-dots-three"></i></button>
             <p class="sub">
               <span class="desc" id="a-desc"></span>
-              <button class="kv copy" id="mac-kv" title="Click to copy"><span class="k">MAC</span><span class="v" id="a-mac"></span></button>
+              <button class="kv copy" id="mac-kv" title="MAC address · click to copy" aria-label="MAC address, click to copy"><i class="ph ph-barcode k" aria-hidden="true"></i><span class="v" id="a-mac"></span></button>
             </p>
           </div>
           <div class="menu" id="tools" role="menu" style="right:0; top:36px">
@@ -1040,18 +1041,18 @@ function sync(from) {
   else if (diff.length) say(t("changes")(diff.length), "", "", true);
   // Idle: the line explains an adapter that is down or off instead of "No changes".
   else if (adapters[sel].state === "disabled") {
-    say(L("Adapter is off", "อะแดปเตอร์ปิดอยู่"), "", "power", true);
-    $("status").title = L("Settings are kept but not in use until the adapter is enabled", "ค่ายังอยู่ จะมีผลเมื่อเปิดการใช้งาน");
+    // The chip already says Disabled: the line says what that means for these settings.
+    say(L("Kept, used once the adapter is enabled", "ค่าเก็บไว้ จะใช้เมื่อเปิดอะแดปเตอร์"), "", "power", true);
+    $("status").title = L("Enable it from the ··· menu", "เปิดได้จากเมนู ···");
   } else if (adapters[sel].state === "down") {
-    say(L("Not connected", "ไม่ได้เชื่อมต่อ"), "", "plugs", true);
-    $("status").title = L("Settings apply when it connects", "ค่าจะมีผลเมื่อเชื่อมต่อ");
+    say(L("Settings apply once it connects", "ค่าจะมีผลเมื่อเชื่อมต่อ"), "", "plugs", true);
   } else {
     // Connected and nothing pending: the line tells how well it is connected instead of "No changes".
     const a = adapters[sel], sp = a.speed || 0;
     const speed = !sp ? "" : sp >= 1e9 ? `${+(sp / 1e9).toFixed(1)} Gbps` : `${Math.round(sp / 1e6)} Mbps`;
     const band = !a.mhz ? "" : a.mhz < 3000 ? "2.4 GHz" : a.mhz < 5925 ? "5 GHz" : "6 GHz";
     const link = [a.phy, band, speed].filter(Boolean).join(" · ");
-    say(link || t("noChanges"), "", link ? "gauge" : "", true);
+    say(link || t("noChanges"), "", link ? "speedometer" : "", true);
     if (band) $("status").title = L(`Channel at ${a.mhz} MHz · no changes`, `ช่องสัญญาณ ${a.mhz} MHz · ยังไม่ได้แก้อะไร`);
   }
   for (const [id, off] of [["apply", busyNow || !diff.length || bad.length > 0], ["revert", busyNow || !diff.length]]) {
