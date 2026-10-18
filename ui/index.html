@@ -552,7 +552,7 @@ html.app, html.app body { overflow: hidden; }
           <div class="ctl">
             <div class="seg" role="radiogroup" aria-label="IP">
               <span class="thumb"></span>
-              <label class="choice"><input type="radio" name="ipmode" value="auto"><span data-t="dhcp">DHCP</span></label>
+              <label class="choice" id="ip-auto" title="Get an IP from the DHCP server"><input type="radio" name="ipmode" value="auto"><span data-t="auto">Automatic</span></label>
               <label class="choice"><input type="radio" name="ipmode" value="manual"><span data-t="manual">Manual</span></label>
             </div>
             <span class="ext"><button class="slot-btn" id="ip-act"><i class="ph ph-arrows-clockwise"></i></button></span>
@@ -1639,7 +1639,10 @@ for (const d of document.querySelectorAll("dialog")) {
   d.querySelector("form").addEventListener("submit", e => { e.preventDefault(); shut(d, e.submitter?.value ?? ""); });
   d.addEventListener("cancel", e => { e.preventDefault(); shut(d, ""); });
 }
-function translate() { document.querySelectorAll("[data-t]").forEach(el => { const v = T[lang][el.dataset.t]; if (typeof v === "string") el.textContent = v; }); }
+function translate() {
+  document.querySelectorAll("[data-t]").forEach(el => { const v = T[lang][el.dataset.t]; if (typeof v === "string") el.textContent = v; });
+  $("ip-auto").title = L("Get an IP from the DHCP server", "รับ IP จาก DHCP server");
+}
 // Sidebar: always opens as the rail; expanded it floats over the form until you pick,
 // click the dimmed form, or press Esc.
 const isRail = () => document.querySelector(".window").classList.contains("rail");
