@@ -10,7 +10,7 @@
 /* Layout spec. Every size in the window comes from these tokens. */
 :root {
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px;
-  --win-w: 520px; --win-h: 542px;
+  --win-w: 520px; --win-h: 562px;
   --side-w: 216px;
   --label-w: 112px;          /* shared by adapter facts and the form */
   --col-gap: 16px;
@@ -160,10 +160,12 @@ button, input, select { font: inherit; color: inherit; }
 #a-ssid:empty { display: none; }
 /* Long adapter names stay on one line; the full name is in the tooltip */
 .ghost { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: none; }
-#a-name, #a-ssid, #a-desc, #a-mac, #a-state, #gw-name { position: relative; white-space: nowrap; }
+#a-name, #a-ssid, #a-link, #a-desc, #a-mac, #a-state, #gw-name { position: relative; white-space: nowrap; }
 #a-mac .ghost { left: auto; right: 0; }   /* MAC sits on the right edge */
 #a-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One hardware line: what the adapter is (left, truncates) and its address (right, never cut). */
+/* The link (802.11 standard, band, speed). Its line keeps its height when empty, so the form never shifts. */
+.sub.link { min-height: 16px; color: var(--ink); }
 .sub { grid-column: 1 / -1; margin: var(--s1) 0 0; display: flex; align-items: baseline; gap: var(--s6); font-size: 12px; line-height: 16px; color: var(--muted); }
 .desc { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Lease source sits with the DHCP choice it belongs to */
@@ -482,6 +484,7 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
   background-image: linear-gradient(90deg, transparent 0%, color-mix(in oklch, var(--surface) 70%, transparent) 50%, transparent 100%) !important;
   animation: shimmer 1100ms linear infinite; }
 .loading :is(.ip, .seg, .slot-btn) > *, .loading .tag::after { visibility: hidden; }
+.loading :is(#a-ssid, #a-link) { visibility: hidden; }   /* filled in once the adapters are read */
 
 /* Inside Octet (Tauri) the page is the window: no demo frame, titlebar or note */
 html.app body { display: block; padding: 0; background: var(--bg); }
@@ -530,6 +533,7 @@ html.app, html.app body { overflow: hidden; }
             <span class="state" id="a-state-chip"><span class="dot" id="a-dot"></span><span id="a-state"></span></span>
             <span></span>
             <button class="icon-btn" id="more" aria-haspopup="menu" aria-expanded="false" title="Adapter tools" aria-label="Adapter tools"><i class="ph ph-dots-three"></i></button>
+            <p class="sub link"><span id="a-link"></span></p>
             <p class="sub">
               <span class="desc" id="a-desc"></span>
               <button class="kv copy" id="mac-kv" title="Click to copy"><span class="k">MAC</span><span class="v" id="a-mac"></span></button>
@@ -680,14 +684,14 @@ html.app, html.app body { overflow: hidden; }
 <script>
 // Sample adapters modelled on a real read. Mock data only.
 const adapters = [
-  { id: 1, name: "Wi-Fi", ssid: "Office-5G", desc: "Qualcomm FastConnect 7800 Wi-Fi 7 High Band Simultaneous (HBS) Network Adapter",
+  { id: 1, name: "Wi-Fi", ssid: "Office-5G", phy: "802.11be", mhz: 6115, speed: 2882e6, desc: "Qualcomm FastConnect 7800 Wi-Fi 7 High Band Simultaneous (HBS) Network Adapter",
     mac: "02-00-00-00-00-01", state: "up", dhcpServer: "10.0.0.1",
     cfg: { ipAuto: true, address: "10.0.1.124", subnet: "255.255.254.0", gateway: "10.0.0.1", dnsAuto: true, dns1: "8.8.8.8", dns2: "8.8.4.4", register: true } },
   { id: 2, name: "Ethernet", desc: "Realtek USB GbE Family Controller", mac: "02-00-00-00-00-02", state: "down", dhcpServer: "",
     cfg: { ipAuto: false, address: "192.168.50.20", subnet: "255.255.255.0", gateway: "192.168.50.254", dnsAuto: false, dns1: "192.168.50.254", dns2: "1.1.1.1", register: true } },
   { id: 3, name: "Npcap Loopback Adapter", desc: "Npcap Loopback Adapter", mac: "02-00-4C-4F-4F-50", state: "up", dhcpServer: "",
     cfg: { ipAuto: true, address: "169.254.165.178", subnet: "255.255.0.0", gateway: "", dnsAuto: true, dns1: "", dns2: "", register: true } },
-  { id: 5, name: "vEthernet (WSL)", desc: "Hyper-V Virtual Ethernet Adapter", mac: "02-00-00-00-00-05", state: "up", dhcpServer: "", extraIps: ["172.24.80.2"],
+  { id: 5, name: "vEthernet (WSL)", speed: 10e9, desc: "Hyper-V Virtual Ethernet Adapter", mac: "02-00-00-00-00-05", state: "up", dhcpServer: "", extraIps: ["172.24.80.2"],
     cfg: { ipAuto: false, address: "172.24.80.1", subnet: "255.255.240.0", gateway: "", dnsAuto: false, dns1: "", dns2: "", register: false } },
   { id: 6, name: "Tailscale", desc: "Tailscale Tunnel", mac: "", state: "up", dhcpServer: "",
     cfg: { ipAuto: false, address: "100.101.5.7", subnet: "255.255.255.255", gateway: "", dnsAuto: false, dns1: "100.100.100.100", dns2: "", register: false } },
@@ -1129,7 +1133,12 @@ function renderAdapterFacts() {
   if (!a) return;
   retext($("a-name"), a.name); $("a-name").title = a.name;
   const ssid = a.state === "up" && a.ssid ? `(${a.ssid})` : "";
-  retext($("a-ssid"), ssid); $("a-ssid").title = a.ssid ? L(`Wi-Fi network: ${a.ssid}`, `เครือข่าย Wi-Fi: ${a.ssid}`) : "";
+  retext($("a-ssid"), ssid);
+  const up = a.state === "up", sp = a.speed || 0;
+  const speed = !up || !sp ? "" : sp >= 1e9 ? `${+(sp / 1e9).toFixed(1)} Gbps` : `${Math.round(sp / 1e6)} Mbps`;
+  const band = !up || !a.mhz ? "" : a.mhz < 3000 ? "2.4 GHz" : a.mhz < 5925 ? "5 GHz" : "6 GHz";
+  retext($("a-link"), up ? [a.phy, band, speed].filter(Boolean).join(" · ") : "");
+  $("a-link").title = band ? L(`Channel at ${a.mhz} MHz`, `ช่องสัญญาณ ${a.mhz} MHz`) : ""; $("a-ssid").title = a.ssid ? L(`Wi-Fi network: ${a.ssid}`, `เครือข่าย Wi-Fi: ${a.ssid}`) : "";
   $("a-icon").className = "ph " + kindIcon[kind(a)];
   $("a-icon").title = kindName[kind(a)];
   retext($("a-desc"), a.desc); $("a-desc").title = a.desc;
@@ -1807,7 +1816,7 @@ const scenarios = {
   "Adapters": {
     connected: ["Connected, DHCP, named gateway", () => go(0)],
     hotspot: ["iPhone hotspot", () => {
-      Object.assign(adapters[0], { ssid: "MrTomato's iPhone", dhcpServer: "172.20.10.1" });
+      Object.assign(adapters[0], { ssid: "MrTomato's iPhone", phy: "802.11ax", mhz: 5180, speed: 866e6, dhcpServer: "172.20.10.1" });
       Object.assign(adapters[0].cfg, { address: "172.20.10.2", subnet: "255.255.255.240", gateway: "172.20.10.1", dns1: "172.20.10.1", dns2: "" });
       demo.macs["172.20.10.1"] = "B2-9B-08-43-A1-01";   // the iPhone's random MAC
       return go(0).then(() => { renderList(); renderAdapter(true); });

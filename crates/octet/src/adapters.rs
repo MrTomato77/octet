@@ -49,6 +49,12 @@ struct Raw {
     static_dns: bool,
     #[serde(default)]
     ssid: String,
+    #[serde(default)]
+    speed: u64,
+    #[serde(default)]
+    phy: String,
+    #[serde(default)]
+    mhz: u32,
 }
 
 /// The settings the form edits, in the shape the UI uses (empty string = not set).
@@ -76,6 +82,11 @@ pub struct Adapter {
     pub mac: String,
     /// The Wi-Fi network it is joined to; empty for anything else.
     pub ssid: String,
+    /// Link: speed in bits/s (0 = unknown or not connected); for Wi-Fi also the 802.11
+    /// standard ("802.11be") and the channel's centre frequency in MHz.
+    pub speed: u64,
+    pub phy: String,
+    pub mhz: u32,
     /// "up", "down" or "disabled"
     pub state: &'static str,
     pub dhcp_server: String,
@@ -138,6 +149,9 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 desc: r.description,
                 mac: r.mac.replace(':', "-"),
                 ssid: r.ssid,
+                speed: r.speed,
+                phy: r.phy,
+                mhz: r.mhz,
                 state,
                 dhcp_server,
                 extra_ips,
@@ -305,6 +319,8 @@ mod native {
                 dhcp: flags & IP_ADAPTER_DHCP_ENABLED != 0,
                 dhcp_server: unsafe { ipv4(&a.Dhcpv4Server) }.map(|ip| ip.to_string()).unwrap_or_default(),
                 register: flags & IP_ADAPTER_DDNS_ENABLED != 0,
+                // u64::MAX means the driver doesn't say.
+                speed: Some(a.TransmitLinkSpeed).filter(|&s| a.OperStatus == IfOperStatusUp && s != u64::MAX).unwrap_or(0),
                 ..Default::default()
             };
             let mut u = a.FirstUnicastAddress;
@@ -333,9 +349,18 @@ mod native {
         Ok(out)
     }
 
+    /// What a joined Wi-Fi card is on: network name, 802.11 standard, channel frequency.
+    #[derive(Default)]
+    struct Wlan {
+        ssid: String,
+        phy: String,
+        mhz: u32,
+    }
+
     /// The network each Wi-Fi card is joined to, by adapter GUID. Empty when there is no
     /// Wi-Fi (the WLAN service is not running) or nothing is joined.
-    fn ssids() -> HashMap<String, String> {
+    #[allow(non_upper_case_globals)]   // Windows names these dot11_phy_type_*
+    fn wlans() -> HashMap<String, Wlan> {
         use windows_sys::Win32::NetworkManagement::WiFi::*;
         let mut out = HashMap::new();
         unsafe {
@@ -353,13 +378,40 @@ mod native {
                         &mut size, &mut data, std::ptr::null_mut()) != 0 {
                         continue;   // not joined to anything
                     }
-                    let ssid = &(*(data as *const WLAN_CONNECTION_ATTRIBUTES)).wlanAssociationAttributes.dot11Ssid;
-                    let name = String::from_utf8_lossy(&ssid.ucSSID[..(ssid.uSSIDLength as usize).min(32)]).into_owned();
+                    let conn = &*(data as *const WLAN_CONNECTION_ATTRIBUTES);
+                    let assoc = &conn.wlanAssociationAttributes;
+                    let ssid = &assoc.dot11Ssid;
+                    let mut w = Wlan {
+                        ssid: String::from_utf8_lossy(&ssid.ucSSID[..(ssid.uSSIDLength as usize).min(32)]).into_owned(),
+                        phy: match assoc.dot11PhyType {
+                            dot11_phy_type_ofdm => "802.11a",
+                            dot11_phy_type_hrdsss => "802.11b",
+                            dot11_phy_type_erp => "802.11g",
+                            dot11_phy_type_ht => "802.11n",
+                            dot11_phy_type_vht => "802.11ac",
+                            dot11_phy_type_dmg => "802.11ad",
+                            dot11_phy_type_he => "802.11ax",
+                            dot11_phy_type_eht => "802.11be",
+                            _ => "",
+                        }
+                        .into(),
+                        mhz: 0,
+                    };
+                    // The frequency is on the access point's entry in the scan list (the one with our BSSID).
+                    let mut bss: *mut WLAN_BSS_LIST = std::ptr::null_mut();
+                    if WlanGetNetworkBssList(h, &info.InterfaceGuid, ssid, dot11_BSS_type_infrastructure,
+                        conn.wlanSecurityAttributes.bSecurityEnabled.into(), std::ptr::null(), &mut bss) == 0 {
+                        let entries = std::slice::from_raw_parts((*bss).wlanBssEntries.as_ptr(), (*bss).dwNumberOfItems as usize);
+                        if let Some(e) = entries.iter().find(|e| e.dot11Bssid == assoc.dot11Bssid) {
+                            w.mhz = e.ulChCenterFrequency / 1000;   // kHz
+                        }
+                        WlanFreeMemory(bss.cast());
+                    }
                     WlanFreeMemory(data);
                     let g = info.InterfaceGuid;
                     let id = format!("{{{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{}}}", g.data1, g.data2, g.data3, g.data4[0], g.data4[1],
                         g.data4[2..].iter().map(|b| format!("{b:02X}")).collect::<String>());
-                    out.insert(id, name);
+                    out.insert(id, w);
                 }
                 WlanFreeMemory(list.cast());
             }
@@ -370,7 +422,7 @@ mod native {
 
     pub fn read() -> Result<Vec<Raw>, String> {
         let mut live = live()?;
-        let mut ssids = ssids();
+        let mut wlans = wlans();
         let mut out = vec![];
         // One entry per network adapter driver. Virtual ports of one card (Wi-Fi Direct)
         // have no driver entry of their own, and NCF_HIDDEN (0x8) marks WAN miniports and
@@ -394,7 +446,8 @@ mod native {
                     let Some(mut raw) = live.remove(&id) else { continue };
                     raw.name = name;
                     raw.static_dns = static_dns;
-                    raw.ssid = ssids.remove(&id).unwrap_or_default();
+                    let w = wlans.remove(&id).unwrap_or_default();
+                    (raw.ssid, raw.phy, raw.mhz) = (w.ssid, w.phy, w.mhz);
                     // Not connected and on DHCP: no lease, so any 169.254 address is leftover noise.
                     if raw.status != "Up" && raw.dhcp {
                         (raw.ip, raw.subnet, raw.gateway) = Default::default();
@@ -429,7 +482,7 @@ mod tests {
     #[ignore]
     fn shows_ssids() {
         for a in read().unwrap() {
-            println!("SSID {:<32} {:?}", a.name, a.ssid);
+            println!("SSID {:<32} {:?} {} {} MHz {} bit/s", a.name, a.ssid, a.phy, a.mhz, a.speed);
         }
     }
 
