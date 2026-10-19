@@ -36,8 +36,6 @@ A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simpl
 <sub>Live latency, jitter and loss, out this adapter</sub><br><br>
 </td>
 </tr>
-</table>
-<table>
 <tr>
 <td width="50%" valign="top" align="center">
 <img src="assets/scan.png" alt="Scan tab: every address on a /23 as a grid"><br>
