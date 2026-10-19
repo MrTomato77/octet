@@ -252,7 +252,10 @@ button, input, select { font: inherit; color: inherit; }
 .pchip.own.on .ip { border-color: var(--accent); }
 .pchip { position: relative; display: flex; align-items: center; gap: 6px; height: var(--row-h); padding: 0 var(--s3); border: 1px solid transparent; border-radius: 8px;
   background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; transition: color 140ms; }
-.pchip:hover { color: var(--ink); }
+.pchip:hover:not(:disabled) { color: var(--ink); }
+.pchip:disabled { opacity: 0.4; cursor: default; }
+.pchip:not(.own) { width: 112px; flex: none; }   /* fixed, so a resolver's name never pushes the IP box */
+.pchip:not(.own) span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pchip.on { color: var(--ink); }
 .pchip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background 240ms; }
 .pchip .dot.up { background: var(--ok); }
@@ -2216,16 +2219,20 @@ function probeRow(target, label, own) {
     };
     el.addEventListener("focusin", adopt);
     el.onclick = adopt;
-  } else { el.querySelector("span:last-child").textContent = label; el.title = target; el.onclick = () => pickRow(row); }
+  } else {
+    el.querySelector("span:last-child").textContent = label; el.title = target || L(`No ${label.toLowerCase()} on this adapter`, `adapter นี้ไม่มี ${label}`);
+    el.disabled = !target; el.onclick = () => pickRow(row);
+  }
   return row;
 }
 function pickRow(row) { probe.pick = probe.rows.indexOf(row); paintProbe(); }
 function probeBuild() {
   const c = adapters[sel]?.cfg || {};
-  const want = [c.gateway && [c.gateway, "Gateway"], [c.dns1 && c.dns1 !== c.gateway ? c.dns1 : "8.8.8.8", "DNS"]].filter(Boolean);
+  // Always the same three chips, so the layout never shifts: one the adapter lacks stays, dimmed.
+  const want = [[c.gateway || "", "Gateway"], [c.dns1 && c.dns1 !== c.gateway ? c.dns1 : "", "DNS"]];
   if (probe.rows.length && same(probe.rows.slice(0, -1).map(r => r.target), want.map(w => w[0]))) return;
   probe.rows = [...want.map(([t, l]) => probeRow(t, l)), probeRow(probe.own, "", true)];
-  probe.pick = Math.min(probe.pick, probe.rows.length - 1);
+  if (!probe.rows[probe.pick]?.target) { const i = probe.rows.findIndex(r => r.target); probe.pick = i < 0 ? probe.rows.length - 1 : i; }
   $("probe-list").replaceChildren($("probe-thumb"), ...probe.rows.map(r => r.el));
   placeThumb(false);
 }
