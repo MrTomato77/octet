@@ -52,6 +52,51 @@ pub fn hostname(_: Ipv4Addr) -> Option<String> {
     None
 }
 
+/// This computer's name, as others on the network see it ("MRTOMATO-PC").
+#[cfg(windows)]
+pub fn computer_name() -> String {
+    use windows_sys::Win32::System::SystemInformation::{ComputerNamePhysicalNetBIOS, GetComputerNameExW};
+    let mut buf = [0u16; 256];
+    let mut len = buf.len() as u32;
+    if unsafe { GetComputerNameExW(ComputerNamePhysicalNetBIOS, buf.as_mut_ptr(), &mut len) } == 0 {
+        return String::new();
+    }
+    String::from_utf16_lossy(&buf[..len as usize])
+}
+#[cfg(not(windows))]
+pub fn computer_name() -> String {
+    String::new()
+}
+
+/// The address the internet sees, with who it belongs to. Asked only when the user clicks
+/// (it leaves this machine): one request to ipinfo.io through curl.exe, which Windows ships.
+#[derive(serde::Serialize, Debug, PartialEq)]
+pub struct Public {
+    pub ip: String,
+    pub isp: String,
+    pub city: String,
+}
+pub fn public_ip() -> Result<Public, String> {
+    let o = crate::hidden("curl.exe").args(["-s", "--max-time", "6", "https://ipinfo.io/json"]).output().map_err(|e| e.to_string())?;
+    if !o.status.success() {
+        return Err("Could not reach the internet".into());
+    }
+    parse_public(&o.stdout)
+}
+/// ipinfo's answer: {"ip": "...", "city": "...", "org": "AS7470 True Internet ..."}.
+fn parse_public(json: &[u8]) -> Result<Public, String> {
+    let v: serde_json::Value = serde_json::from_slice(json).map_err(|_| "Unexpected answer".to_string())?;
+    let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let ip = s("ip");
+    if ip.parse::<std::net::IpAddr>().is_err() {
+        return Err("Unexpected answer".into());
+    }
+    // "AS7470 True Internet Co.,Ltd." -> "True Internet Co.,Ltd."
+    let org = s("org");
+    let isp = org.split_once(' ').filter(|(a, _)| a.starts_with("AS")).map_or(org.as_str(), |(_, b)| b).to_string();
+    Ok(Public { ip, isp, city: s("city") })
+}
+
 /// Who made the network card, from the first 3 bytes of its MAC ("00-11-32-.." -> "Synology").
 /// The IEEE list is built into the exe (data/oui.txt), so nothing is looked up online.
 pub fn vendor(mac: &str) -> Option<&'static str> {
@@ -80,9 +125,11 @@ pub fn flush_dns() -> bool {
 }
 
 /// One ICMP echo; round-trip milliseconds, or None when there is no reply in `timeout_ms`.
+/// With `from`, it is sent from that address, so it leaves through the adapter that holds it
+/// rather than whichever one has the default route.
 #[cfg(windows)]
-pub fn ping(ip: Ipv4Addr, timeout_ms: u32) -> Option<u32> {
-    use windows_sys::Win32::NetworkManagement::IpHelper::{IcmpCloseHandle, IcmpCreateFile, IcmpSendEcho};
+pub fn ping(ip: Ipv4Addr, from: Option<Ipv4Addr>, timeout_ms: u32) -> Option<u32> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{IcmpCloseHandle, IcmpCreateFile, IcmpSendEcho2Ex};
     unsafe {
         let h = IcmpCreateFile();
         if h.is_null() || h as isize == -1 {
@@ -91,8 +138,9 @@ pub fn ping(ip: Ipv4Addr, timeout_ms: u32) -> Option<u32> {
         let data = *b"octet";
         // ICMP_ECHO_REPLY (40 bytes on x64) + payload + 8 bytes for an ICMP error, per the docs.
         let mut reply = [0u8; 128];
-        let n = IcmpSendEcho(h, ip_u32(ip), data.as_ptr().cast(), data.len() as u16, std::ptr::null(),
-            reply.as_mut_ptr().cast(), reply.len() as u32, timeout_ms);
+        let src = from.map_or(0, ip_u32);
+        let n = IcmpSendEcho2Ex(h, std::ptr::null_mut(), None, std::ptr::null(), src, ip_u32(ip), data.as_ptr().cast(), data.len() as u16,
+            std::ptr::null(), reply.as_mut_ptr().cast(), reply.len() as u32, timeout_ms);
         IcmpCloseHandle(h);
         // ICMP_ECHO_REPLY: Address u32, Status u32, RoundTripTime u32, ...
         let status = u32::from_ne_bytes(reply[4..8].try_into().ok()?);
@@ -101,8 +149,47 @@ pub fn ping(ip: Ipv4Addr, timeout_ms: u32) -> Option<u32> {
     }
 }
 #[cfg(not(windows))]
-pub fn ping(_: Ipv4Addr, _: u32) -> Option<u32> {
+pub fn ping(_: Ipv4Addr, _: Option<Ipv4Addr>, _: u32) -> Option<u32> {
     None
+}
+
+/// What the neighbour (ARP) cache holds for `ip` on interface `index`, as "AA-BB-..".
+/// Sends nothing: it reads what Windows already learned (say, while a ping went out).
+#[cfg(windows)]
+#[allow(non_upper_case_globals)]   // Windows names these Nlns*
+pub fn neighbour(ip: Ipv4Addr, index: u32) -> Option<String> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{GetIpNetEntry2, MIB_IPNET_ROW2};
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, NlnsIncomplete, NlnsUnreachable};
+    let mut row = MIB_IPNET_ROW2::default();
+    row.Address.Ipv4.sin_family = AF_INET;
+    row.Address.Ipv4.sin_addr.S_un.S_addr = ip_u32(ip);
+    row.InterfaceIndex = index;
+    if unsafe { GetIpNetEntry2(&mut row) } != 0 || matches!(row.State, NlnsIncomplete | NlnsUnreachable) || row.PhysicalAddressLength != 6 {
+        return None;
+    }
+    let mac = &row.PhysicalAddress[..6];
+    (mac != [0; 6]).then(|| mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
+}
+#[cfg(not(windows))]
+pub fn neighbour(_: Ipv4Addr, _: u32) -> Option<String> {
+    None
+}
+
+/// Who holds an address, for the Scan grid.
+#[derive(serde::Serialize, Debug, PartialEq)]
+pub struct Host {
+    pub mac: Option<String>,
+    pub vendor: Option<&'static str>,
+    pub ms: Option<u32>,
+}
+
+/// One short ping from the adapter, then the neighbour cache, which also catches devices
+/// that ignore ping (most Windows PCs) since the ping made Windows ask ARP for them.
+/// ponytail: ~400 ms for an empty address; the UI runs many at once.
+pub fn scan_host(ip: Ipv4Addr, from: Option<Ipv4Addr>, index: u32) -> Option<Host> {
+    let ms = ping(ip, from, 400);
+    let mac = neighbour(ip, index);
+    (ms.is_some() || mac.is_some()).then(|| Host { vendor: mac.as_deref().and_then(vendor), mac, ms })
 }
 
 /// Calls `on_change` from a Windows thread whenever an interface or an IPv4
@@ -136,7 +223,25 @@ pub fn watch(_: fn()) {}
 mod tests {
     #[test]
     fn loopback_answers_ping() {
-        assert!(super::ping(std::net::Ipv4Addr::LOCALHOST, 1000).is_some());
+        assert!(super::ping(std::net::Ipv4Addr::LOCALHOST, None, 1000).is_some());
+        assert!(super::ping(std::net::Ipv4Addr::LOCALHOST, Some(std::net::Ipv4Addr::LOCALHOST), 1000).is_some());
+    }
+
+    #[test]
+    fn scan_finds_loopback_and_skips_nobody() {
+        let lo = super::scan_host(std::net::Ipv4Addr::LOCALHOST, None, 1).expect("loopback answers");
+        assert!(lo.ms.is_some());
+        // TEST-NET-1 is never assigned, so nothing answers and nothing is cached.
+        assert_eq!(super::scan_host(std::net::Ipv4Addr::new(192, 0, 2, 77), None, 1), None);
+    }
+
+    #[test]
+    fn reads_ipinfo_answers() {
+        let p = super::parse_public(br#"{"ip":"203.0.113.48","city":"Bangkok","org":"AS7470 True Internet Co.,Ltd."}"#).unwrap();
+        assert_eq!((p.ip.as_str(), p.isp.as_str(), p.city.as_str()), ("203.0.113.48", "True Internet Co.,Ltd.", "Bangkok"));
+        assert!(super::parse_public(b"<html>rate limited</html>").is_err());
+        assert!(super::parse_public(br#"{"ip":"not an ip"}"#).is_err());
+        assert!(!super::computer_name().is_empty());
     }
 
     #[test]

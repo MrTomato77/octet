@@ -57,10 +57,28 @@ struct Raw {
     mhz: u32,
     #[serde(default)]
     ppp: bool,
+    #[serde(default)]
+    suffix: String,
+    #[serde(default)]
+    ipv6: Vec<String>,
+    #[serde(default)]
+    lease_got: u64,
+    #[serde(default)]
+    lease_ends: u64,
+    #[serde(skip)]
+    wifi: Option<Wifi>,
+}
+
+/// The joined Wi-Fi network, for Info: signal 0-100, the access point's MAC, and how it is secured.
+#[derive(Serialize, Debug, Clone, Default)]
+pub struct Wifi {
+    pub signal: u32,
+    pub bssid: String,
+    pub security: String,
 }
 
 /// The settings the form edits, in the shape the UI uses (empty string = not set).
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Cfg {
     pub ip_auto: bool,
@@ -71,6 +89,29 @@ pub struct Cfg {
     pub dns1: String,
     pub dns2: String,
     pub register: bool,
+    /// Advanced, sent by the UI only (the reader leaves them out; the UI fills them from `extra_ips`).
+    #[serde(default, skip_serializing)]
+    pub extra: Vec<Addr>,
+    #[serde(default, skip_serializing)]
+    pub gws: Vec<Gw>,
+    /// Metric of the first gateway and of the interface; empty = leave as Windows has it.
+    #[serde(default, skip_serializing)]
+    pub gw_metric: String,
+    #[serde(default, skip_serializing)]
+    pub metric: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct Addr {
+    pub address: String,
+    pub subnet: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct Gw {
+    pub gateway: String,
+    #[serde(default)]
+    pub metric: String,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -94,8 +135,17 @@ pub struct Adapter {
     /// "up", "down" or "disabled"
     pub state: &'static str,
     pub dhcp_server: String,
-    /// IPv4 addresses after the first; a static apply would drop them.
+    /// IPv4 addresses after the first (a static apply would drop them), each with its own mask.
     pub extra_ips: Vec<String>,
+    pub extra_subnets: Vec<String>,
+    /// Default gateways after the first.
+    pub extra_gws: Vec<String>,
+    /// For Info: the connection's DNS suffix, IPv6 addresses, the DHCP lease (ms since 1970, 0 = none), Wi-Fi details.
+    pub suffix: String,
+    pub ipv6: Vec<String>,
+    pub lease_got: u64,
+    pub lease_ends: u64,
+    pub wifi: Option<Wifi>,
     pub cfg: Cfg,
 }
 
@@ -136,7 +186,9 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 .map(|(ip, s)| (ip.clone(), s.cloned().unwrap_or_default()))
                 .unwrap_or_default();
             let dns = v4(&r.dns);
-            let extra_ips = v4(&r.ip).into_iter().skip(1).collect();
+            let pairs: Vec<(String, String)> = r.ip.iter().zip(r.subnet.iter().map(Some).chain(std::iter::repeat(None)))
+                .filter(|(ip, _)| ip.parse::<Ipv4Addr>().is_ok()).map(|(ip, s)| (ip.clone(), s.cloned().unwrap_or_default())).skip(1).collect();
+            let (extra_ips, extra_subnets) = pairs.into_iter().unzip();
             let state = match r.status.as_str() {
                 "Up" => "up",
                 "Disabled" => "disabled",
@@ -160,6 +212,13 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 state,
                 dhcp_server,
                 extra_ips,
+                extra_subnets,
+                extra_gws: v4(&r.gateway).into_iter().skip(1).collect(),
+                suffix: r.suffix,
+                ipv6: r.ipv6,
+                lease_got: r.lease_got,
+                lease_ends: r.lease_ends,
+                wifi: r.wifi,
                 cfg: Cfg {
                     ip_auto: r.dhcp,
                     address,
@@ -169,6 +228,7 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                     dns1: dns.first().cloned().unwrap_or_default(),
                     dns2: dns.get(1).cloned().unwrap_or_default(),
                     register: r.register,
+                    ..Default::default()
                 },
             }
         })
@@ -191,7 +251,7 @@ mod native {
     use windows_sys::Win32::Devices::DeviceAndDriverInstallation::*;
     use windows_sys::Win32::NetworkManagement::IpHelper::*;
     use windows_sys::Win32::NetworkManagement::Ndis::IfOperStatusUp;
-    use windows_sys::Win32::Networking::WinSock::{AF_INET, SOCKADDR_IN, SOCKET_ADDRESS};
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, AF_INET6, SOCKADDR_IN, SOCKADDR_IN6, SOCKET_ADDRESS};
     use windows_sys::Win32::System::Registry::*;
 
     const NET_CLASS: &str = r"SYSTEM\CurrentControlSet\Control\Network\{4D36E972-E325-11CE-BFC1-08002BE10318}";
@@ -291,22 +351,51 @@ mod native {
         Device::Disabled(desc.unwrap_or_default())
     }
 
-    /// Live IPv4 settings of every interface the IP stack knows, by adapter GUID.
-    fn live() -> Result<HashMap<String, Raw>, String> {
+    /// GetAdaptersAddresses for one address family, as a buffer of IP_ADAPTER_ADDRESSES_LH.
+    fn gaa(family: u16) -> Result<Vec<u64>, String> {
         let flags = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST;
         let mut size = 16 * 1024u32;
         let mut buf: Vec<u64> = Vec::new(); // u64 keeps the 8-byte alignment the structs need
         for _ in 0..3 {
             buf.resize(size as usize / 8 + 1, 0);
-            let r = unsafe { GetAdaptersAddresses(AF_INET as u32, flags, std::ptr::null(), buf.as_mut_ptr().cast(), &mut size) };
+            let r = unsafe { GetAdaptersAddresses(family as u32, flags, std::ptr::null(), buf.as_mut_ptr().cast(), &mut size) };
             if r == 0 {
-                break;
+                return Ok(buf);
             }
             if r != 111 {
                 // 111 = buffer too small; size now holds what it needs
                 return Err(format!("GetAdaptersAddresses failed ({r})"));
             }
         }
+        Err("GetAdaptersAddresses kept growing".into())
+    }
+
+    /// IPv6 addresses by adapter GUID (Info shows them; nothing edits them).
+    fn ipv6s() -> HashMap<String, Vec<String>> {
+        let mut out: HashMap<String, Vec<String>> = HashMap::new();
+        let Ok(buf) = gaa(AF_INET6) else { return out };
+        let mut p = buf.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
+        while !p.is_null() {
+            let a = unsafe { &*p };
+            p = a.Next;
+            let id = unsafe { std::ffi::CStr::from_ptr(a.AdapterName as *const _) }.to_string_lossy().to_uppercase();
+            let mut u = a.FirstUnicastAddress;
+            while !u.is_null() {
+                let x = unsafe { &*u };
+                let sa = x.Address.lpSockaddr;
+                if !sa.is_null() && unsafe { (*sa).sa_family } == AF_INET6 {
+                    let sin6 = unsafe { &*(sa as *const SOCKADDR_IN6) };
+                    out.entry(id.clone()).or_default().push(std::net::Ipv6Addr::from(unsafe { sin6.sin6_addr.u.Byte }).to_string());
+                }
+                u = x.Next;
+            }
+        }
+        out
+    }
+
+    /// Live IPv4 settings of every interface the IP stack knows, by adapter GUID.
+    fn live() -> Result<HashMap<String, Raw>, String> {
+        let buf = gaa(AF_INET)?;
         let mut out = HashMap::new();
         let mut p = buf.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
         while !p.is_null() {
@@ -327,6 +416,7 @@ mod native {
                 // u64::MAX means the driver doesn't say.
                 speed: Some(a.TransmitLinkSpeed).filter(|&s| a.OperStatus == IfOperStatusUp && s != u64::MAX).unwrap_or(0),
                 ppp: a.IfType == 23,   // IF_TYPE_PPP
+                suffix: unsafe { from_wide(a.DnsSuffix) },
                 ..Default::default()
             };
             let mut u = a.FirstUnicastAddress;
@@ -361,6 +451,7 @@ mod native {
         ssid: String,
         phy: String,
         mhz: u32,
+        wifi: super::Wifi,
     }
 
     /// The network each Wi-Fi card is joined to, by adapter GUID. Empty when there is no
@@ -402,6 +493,23 @@ mod native {
                         }
                         .into(),
                         mhz: 0,
+                        wifi: super::Wifi {
+                            signal: assoc.wlanSignalQuality,
+                            bssid: assoc.dot11Bssid.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"),
+                            security: match conn.wlanSecurityAttributes.dot11AuthAlgorithm {
+                                DOT11_AUTH_ALGO_80211_OPEN if conn.wlanSecurityAttributes.bSecurityEnabled == 0 => "Open",
+                                DOT11_AUTH_ALGO_80211_OPEN | DOT11_AUTH_ALGO_80211_SHARED_KEY => "WEP",
+                                DOT11_AUTH_ALGO_WPA => "WPA-Enterprise",
+                                DOT11_AUTH_ALGO_WPA_PSK => "WPA-Personal",
+                                DOT11_AUTH_ALGO_RSNA => "WPA2-Enterprise",
+                                DOT11_AUTH_ALGO_RSNA_PSK => "WPA2-Personal",
+                                DOT11_AUTH_ALGO_WPA3_SAE => "WPA3-Personal",
+                                DOT11_AUTH_ALGO_WPA3_ENT_192 | DOT11_AUTH_ALGO_WPA3_ENT => "WPA3-Enterprise",
+                                DOT11_AUTH_ALGO_OWE => "Enhanced Open",
+                                _ => "",
+                            }
+                            .into(),
+                        },
                     };
                     // The frequency is on the access point's entry in the scan list (the one with our BSSID).
                     let mut bss: *mut WLAN_BSS_LIST = std::ptr::null_mut();
@@ -429,6 +537,7 @@ mod native {
     pub fn read() -> Result<Vec<Raw>, String> {
         let mut live = live()?;
         let mut wlans = wlans();
+        let mut v6 = ipv6s();
         let mut out = vec![];
         // One entry per network adapter driver. Virtual ports of one card (Wi-Fi Direct)
         // have no driver entry of their own, and NCF_HIDDEN (0x8) marks WAN miniports and
@@ -452,8 +561,16 @@ mod native {
                     let Some(mut raw) = live.remove(&id) else { continue };
                     raw.name = name;
                     raw.static_dns = static_dns;
-                    let w = wlans.remove(&id).unwrap_or_default();
+                    let w = wlans.remove(&id);
+                    raw.wifi = w.as_ref().filter(|w| !w.ssid.is_empty()).map(|w| w.wifi.clone());
+                    let w = w.unwrap_or_default();
                     (raw.ssid, raw.phy, raw.mhz) = (w.ssid, w.phy, w.mhz);
+                    raw.ipv6 = v6.remove(&id).unwrap_or_default();
+                    // The lease, in seconds since 1970, as Windows keeps it for the interface.
+                    if raw.dhcp && raw.status == "Up" {
+                        let s = |v| reg_dword(&tcp, v).map_or(0, |t| u64::from(t) * 1000);
+                        (raw.lease_got, raw.lease_ends) = (s("LeaseObtainedTime"), s("LeaseTerminatesTime"));
+                    }
                     // Not connected and on DHCP: no lease, so any 169.254 address is leftover noise.
                     if raw.status != "Up" && raw.dhcp {
                         (raw.ip, raw.subnet, raw.gateway) = Default::default();
@@ -507,6 +624,7 @@ mod tests {
         let lab = &a[1];
         assert_eq!((lab.state, lab.index, lab.cfg.subnet.as_str()), ("down", 9, "255.255.0.0"));
         assert_eq!(lab.extra_ips, vec!["10.0.0.6".to_string()]);
+        assert_eq!(lab.extra_subnets, vec![String::new()], "a mask the list did not give stays empty");
         let bt = &a[2];
         assert_eq!((bt.state, bt.dhcp_server.as_str(), bt.cfg.address.as_str()), ("disabled", "", ""));
         assert!(!lab.cfg.ip_auto && !lab.cfg.dns_auto);

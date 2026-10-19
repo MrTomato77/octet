@@ -56,11 +56,20 @@ async fn who_has(address: String) -> Result<Option<String>, String> {
     blocking(move || Ok(net::arp(ip))).await
 }
 
-/// After Apply: round trip in ms, or None.
+/// Round trip in ms, or None. With `source` (the adapter's address) it goes out through that adapter.
 #[tauri::command]
-async fn ping(address: String) -> Result<Option<u32>, String> {
+async fn ping(address: String, source: Option<String>) -> Result<Option<u32>, String> {
     let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
-    blocking(move || Ok(net::ping(ip, 1500))).await
+    let from = source.and_then(|s| s.parse().ok());
+    blocking(move || Ok(net::ping(ip, from, 1500))).await
+}
+
+/// Scan: who holds this address, seen from the adapter (`index`, its own `source` address).
+#[tauri::command]
+async fn scan_host(address: String, source: Option<String>, index: u32) -> Result<Option<net::Host>, String> {
+    let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
+    let from = source.and_then(|s| s.parse().ok());
+    blocking(move || Ok(net::scan_host(ip, from, index))).await
 }
 
 /// The gateway's name, if it gives one.
@@ -68,6 +77,17 @@ async fn ping(address: String) -> Result<Option<u32>, String> {
 async fn hostname(address: String) -> Result<Option<String>, String> {
     let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
     blocking(move || Ok(net::hostname(ip))).await
+}
+
+#[tauri::command]
+fn computer_name() -> String {
+    net::computer_name()
+}
+
+/// Info: the public address, only when the user asks for it.
+#[tauri::command]
+async fn public_ip() -> Result<net::Public, String> {
+    blocking(net::public_ip).await
 }
 
 /// Who made the card behind a MAC, from the built-in IEEE list.
@@ -197,7 +217,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, hostname, vendor, open_ncpa, open_link, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, scan_host, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

@@ -1271,10 +1271,9 @@ const changed = () => !draft ? [] : keys.filter(k => {
   return !same(a[k], draft[k]);
 });
 // The Advanced values (more addresses and gateways, metrics) with what Windows reported.
-// ponytail: extra addresses take the main mask until the Rust side reads each one's own.
 function cfgOf(a) {
-  a.cfg.extra ??= (a.extraIps || []).map(address => ({ address, subnet: a.cfg.subnet }));
-  a.cfg.gws ??= []; a.cfg.gwMetric ??= ""; a.cfg.metric ??= "";
+  a.cfg.extra ??= (a.extraIps || []).map((address, i) => ({ address, subnet: a.extraSubnets?.[i] || a.cfg.subnet }));
+  a.cfg.gws ??= (a.extraGws || []).map(gateway => ({ gateway, metric: "" })); a.cfg.gwMetric ??= ""; a.cfg.metric ??= "";
   return a.cfg;
 }
 const okMetric = v => v === "" || (/^\d{1,4}$/.test(v) && +v >= 1);
@@ -1647,7 +1646,8 @@ $("apply").onclick = async () => {
   lock(true); btn.classList.add("spin"); iconNow("apply", "circle-notch");
   rows.forEach(el => el.classList.add("working"));
   say(L("Waiting for permission…", "รอสิทธิ์ Admin…"));
-  const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]) })
+  const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]),
+    extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: a.extraIps || [], wasGws: a.extraGws || [] })
     .then(() => null, e => String(e));
   work.then(async err => {
     rows.forEach(el => el.classList.remove("working"));
@@ -2400,7 +2400,7 @@ async function probeTick() {
   const t0 = Date.now();
   if (adapters[sel]) probeBuild();
   await Promise.all(probe.rows.filter(r => r.target).map(async r => {
-    const t = r.target, v = await net("ping", { address: t }).catch(() => null);
+    const t = r.target, v = await net("ping", { address: t, source: adapters[sel]?.cfg.address || null }).catch(() => null);   // out through this adapter
     if (r.target !== t || !probe.rows.includes(r)) return;
     const ms = v === null ? null : v.ms ?? v;
     r.got.push(ms); if (r.got.length > SLOTS) r.got.shift();
@@ -2590,7 +2590,7 @@ function scanStart(again = false) {
   scan.total = todo.length;
   const worker = async () => {
     while (todo.length && run === scan.run) {
-      const i = todo.shift(), ip = numIp(first + i), got = await net_("scan_host", ip);
+      const i = todo.shift(), ip = numIp(first + i), got = await scanAsk(ip, a);
       if (run !== scan.run) return;
       const c = scan.cells[i]; c.dataset.ip = ip;
       scan.hosts[i] = got;
@@ -2603,7 +2603,8 @@ function scanStart(again = false) {
     }
   };
   scan.at = 0;
-  Promise.all(Array.from({ length: 16 }, worker)).then(() => {
+  // ponytail: an empty address waits ~400 ms; 48 at once sweeps a /24 in ~2 s.
+  Promise.all(Array.from({ length: tauri ? 48 : 16 }, worker)).then(() => {
     if (run !== scan.run) return;
     if (scan.follow) setTimeout(() => run === scan.run && scan.follow && scanGo(scan.own), 400);
     scanTell(scan.tell ?? null);
@@ -2628,7 +2629,8 @@ function scanSpy() {
 $("scan-grid").addEventListener("scroll", () => { scanSpy(); if (scan.menu !== null) scanMenu(null); }, { passive: true });
 // Your own scroll takes over from the sweep.
 for (const ev of ["wheel", "touchstart", "keydown"]) $("scan-grid").addEventListener(ev, () => scan.follow = false, { passive: true });
-const net_ = (cmd, address) => net(cmd, { address }).catch(() => null);
+// scanStart has its own `net` (the /24), so the call to Rust lives out here.
+const scanAsk = (ip, a) => net("scan_host", { address: ip, source: a.cfg.address, index: a.index ?? 0 }).catch(() => null);
 // What a cell's tooltip says.
 function scanSays(ip, x, a) {
   const h = +ip.split(".")[3];
@@ -2713,7 +2715,8 @@ new ResizeObserver(() => centreUnder($("scan-foot"), $("scan-grid"), $("page-sca
 // ---------- Info: a summary to read, copy one value, or copy all as text ----------
 // ponytail: the public address is asked for only when you click it (it leaves this machine), and kept per adapter for the session.
 const info = { pub: {} };
-const hostName = "MRTOMATO-PC";   // demo; the app reads it from Windows
+let hostName = "MRTOMATO-PC";   // demo; the app asks Windows
+if (tauri) invoke("computer_name").then(n => { hostName = n; if (page === "info") renderInfo(); }, () => {});
 // Wi-Fi channel from the centre frequency.
 const channelOf = f => !f ? 0 : f < 3000 ? (f === 2484 ? 14 : (f - 2407) / 5) : f < 5925 ? (f - 5000) / 5 : (f - 5950) / 5;
 function infoRows() {
