@@ -2181,7 +2181,7 @@ $("page-adv").addEventListener("scroll", advEdges, { passive: true });
 const edgeWatch = new ResizeObserver(advEdges);
 ["page-adv", "adv-list"].forEach(id => edgeWatch.observe($(id)));
 // ---------- Probe: the gateway, DNS and a target of your own, pinged once a second all the time ----------
-// It keeps going on other pages (so the graph already holds the last minute), and rests while the window is out of focus.
+// It keeps going on other pages (so the graph already holds the last minute), and rests while the window is minimised.
 // ping answers a number (ms) or { ms }; null is a loss.
 // ponytail: the Rust ping takes IPv4 only; a host name needs it to resolve first.
 const SLOTS = 60;
@@ -2227,9 +2227,9 @@ function probeBuild() {
   placeThumb(false);
 }
 async function probeTick() {
-  // Out of focus: no pinging until the window comes back.
+  // Minimised (or otherwise hidden): no pinging until the window shows again. Out of focus it keeps going.
   // The graph's clock stops with it, so it picks up where it left off instead of stretching a line across the gap.
-  if (!document.hasFocus()) { probe.asleep = true; probe.sleptAt = performance.now(); return; }
+  if (document.hidden) { probe.asleep = true; probe.sleptAt = performance.now(); return; }
   const t0 = Date.now();
   if (adapters[sel]) probeBuild();
   await Promise.all(probe.rows.filter(r => r.target).map(async r => {
@@ -2303,12 +2303,17 @@ function drawGraph() {
     const k = calm.matches ? 1 : ease(Math.min(1, (now - q.t) / RISE));
     return { q, x: x(q.t), y: y(q.from + (q.v - q.from) * k) };
   });
-  if (shown.length > 1) {
-    let d = `M${shown[0].x},${shown[0].y}`;
-    for (let i = 1; i < shown.length; i++) { const a = shown[i - 1], b = shown[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
-    out += `<path class="area" d="${d}L${shown.at(-1).x},${h}L${shown[0].x},${h}Z"/><path class="line" d="${d}"/>`;
+  // A lost ping is no value, not zero: the line breaks there, and a small red mark sits under the gap.
+  const runs = [[]];
+  for (const q of pts) if (q.v === null) { if (runs.at(-1).length) runs.push([]); } else runs.at(-1).push(shown.find(p => p.q === q));
+  for (const run of runs) {
+    if (!run.length) continue;
+    let d = `M${run[0].x},${run[0].y}`;
+    for (let i = 1; i < run.length; i++) { const a = run[i - 1], b = run[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
+    if (run.length === 1) d += `h1`;   // a lone reply between losses still shows as a dot of line
+    out += `<path class="area" d="${d}L${run.at(-1).x + (run.length === 1 ? 1 : 0)},${h}L${run[0].x},${h}Z"/><path class="line" d="${d}"/>`;
   }
-  for (const q of pts) if (q.v === null) out += `<rect class="lost" x="${x(q.t) - 1}" y="${h - 4}" width="2" height="4"/>`;
+  for (const q of pts) if (q.v === null) out += `<rect class="lost" x="${x(q.t) - 1.5}" y="${h - 5}" width="3" height="5" rx="1"/>`;
   // Hover reading: fades in and out; the line glides after the pointer.
   probe.show += ((probe.hx !== null && shown.length ? 1 : 0) - probe.show) * (calm.matches ? 1 : 0.2);
   if (probe.hx !== null) probe.cx = calm.matches || probe.show < 0.05 ? probe.hx : probe.cx + (probe.hx - probe.cx) * 0.3;
@@ -2353,7 +2358,7 @@ function alignFoot() {
   Object.assign($("probe-foot").style, { marginLeft: `${g.left - dx - b.left - pad}px`, marginRight: `${b.right - pad - (g.right - dx)}px` });
 }
 new ResizeObserver(alignFoot).observe($("probe-graph"));
-addEventListener("focus", () => { if (probe.asleep) { probe.asleep = false; probe.slept += performance.now() - probe.sleptAt; probeTick(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && probe.asleep) { probe.asleep = false; probe.slept += performance.now() - probe.sleptAt; probeTick(); } });
 window.pagesReady = true;
 
 // Tooltips replace native titles. In the rail they fly out beside the icon.
