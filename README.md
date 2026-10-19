@@ -28,24 +28,26 @@ A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simpl
 <td width="50%" valign="top" align="center">
 <img src="assets/advanced.png" alt="Advanced tab: addresses and gateways on one adapter"><br>
 <b>Advanced</b><br>
-<sub>Several addresses and gateways, with metrics</sub>
+<sub>Several addresses and gateways, with metrics</sub><br><br>
 </td>
 <td width="50%" valign="top" align="center">
 <img src="assets/ping.png" alt="Ping tab: a live latency graph to the gateway"><br>
 <b>Ping</b><br>
-<sub>Live latency, jitter and loss, out this adapter</sub>
+<sub>Live latency, jitter and loss, out this adapter</sub><br><br>
 </td>
 </tr>
+</table>
+<table>
 <tr>
-<td valign="top" align="center">
+<td width="50%" valign="top" align="center">
 <img src="assets/scan.png" alt="Scan tab: every address on a /23 as a grid"><br>
 <b>Scan</b><br>
-<sub>Who is on the subnet, with maker and MAC</sub>
+<sub>Who is on the subnet, with maker and MAC</sub><br><br>
 </td>
-<td valign="top" align="center">
+<td width="50%" valign="top" align="center">
 <img src="assets/info.png" alt="Info tab: adapter details ready to copy"><br>
 <b>Info</b><br>
-<sub>Everything about the adapter, one click to copy</sub>
+<sub>Everything about the adapter, one click to copy</sub><br><br>
 </td>
 </tr>
 </table>
