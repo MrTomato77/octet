@@ -214,30 +214,32 @@ button, input, select { font: inherit; color: inherit; }
 #page-adv.below { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
 #page-adv.above { mask-image: linear-gradient(to top, #000 calc(100% - 28px), transparent); }
 #page-adv.above.below { mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
-/* Advanced: rows carry their own bottom gap, so a row grows from nothing without a gap that jumps */
+/* Advanced: Octet's own rows. The label column says what a row is (Main, its order, Add) and holds its
+   actions; the octets sit where IP & DNS has them, so switching tabs moves nothing that stays the same.
+   Rows carry their own bottom gap, so one can grow from nothing without a gap that jumps. */
+.form > .adv-head { grid-column: 1 / -1; display: grid; grid-template-columns: var(--label-w) var(--field-w); column-gap: var(--col-gap); align-items: center; min-height: var(--row-h); }
+.adv-head .lbl { color: var(--muted); }
+.adv-head .aside { justify-self: end; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--faint); white-space: nowrap; }
 .form > .alist { grid-column: 1 / -1; display: block; min-height: 0; margin-bottom: calc(-1 * var(--row-gap)); }
 .arow { display: grid; grid-template-columns: var(--label-w) var(--field-w); column-gap: var(--col-gap); align-items: center;
   height: calc(var(--row-h) + var(--row-gap)); padding-bottom: var(--row-gap); box-sizing: border-box; }
-.arow > label { color: var(--muted); }
 .arow .pair { display: flex; align-items: center; }
-.rm { display: inline-flex; align-items: center; gap: 6px; height: var(--row-h); padding: 0; border: 0; background: none;
-  color: var(--muted); font: 13px var(--font); cursor: pointer; justify-self: start; transition: color var(--t-fast) var(--ease-out); }
-.rm .ph { font-size: 16px; }
-.rm:hover { color: var(--bad); }
-.rm:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-input); }
-.add-row { width: var(--field-w); height: var(--row-h); display: flex; align-items: center; justify-content: center; gap: 6px;
-  border: 1px dashed var(--border-strong); border-radius: var(--r-input); background: none; color: var(--muted); font: 13px var(--font); cursor: pointer;
-  transition: background-color var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out), transform var(--t-press) var(--ease-out); }
-.add-row:hover { background: var(--hover); color: var(--ink); }
-.add-row:active { transform: scale(0.98); }
-.add-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.add-row[hidden], .adv-note[hidden] { display: none; }
-.adv-note { display: flex; align-items: center; font-size: 12px; color: var(--muted); gap: 6px; }
+.role { display: flex; align-items: center; min-width: 0; height: var(--row-h); }
+.rtag { font-size: 11px; line-height: 20px; padding: 0 8px; border-radius: var(--r-input); background: var(--sel-fill); color: var(--sel-ink); white-space: nowrap; }
+.rtag.plain { background: var(--hover); color: var(--muted); }
+.racts { display: flex; gap: 2px; margin-left: auto; }
+.ract { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--r-input); background: none;
+  color: var(--faint); font-size: 16px; cursor: pointer; transition: color var(--t-fast) var(--ease-out), background-color var(--t-fast) var(--ease-out); }
+.arow:hover .ract { color: var(--muted); }
+.ract:hover { background: var(--hover); color: var(--ink) !important; }
+.ract.rm:hover { color: var(--bad) !important; }
+.ract:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; color: var(--ink); }
+.addcap { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: 13px; }
+.addcap .ph { font-size: 14px; }
+.arow.adding .ip, .arow.adding .prefix { border-style: dashed; }
+.arow.adding .ip:focus-within { border-style: solid; }
+.gwmaker { width: 58px; flex: none; text-align: right; font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-.col-head { justify-content: flex-end; font-size: 12px; color: var(--faint); min-height: 16px !important; }
-.col-head span { width: 40px; text-align: center; }
-.metric { width: 40px; }
-.metric::placeholder { color: var(--faint); }
 .page[hidden] { display: none; }
 .page.leaving { pointer-events: none; }
 .page.soon { display: grid; place-content: center; justify-items: center; gap: var(--s2); min-height: 280px; color: var(--muted); font-size: 13px; }
@@ -659,27 +661,13 @@ html.app, html.app body { overflow: hidden; }
         <!-- ponytail: placeholders until each page is built (docs/plan-0.2.md) -->
         <div class="page" id="page-adv" data-page="adv" role="tabpanel" hidden>
           <div class="grid form" role="group" aria-label="IP addresses">
+            <div class="adv-head"><span class="lbl" data-t="addrs">IP addresses</span><span class="aside" id="adv-ip-aside"></span></div>
             <div class="alist" id="adv-ips"></div>
-            <span></span><span><button class="add-row" id="add-ip"><i class="ph ph-plus"></i><span data-t="addIp">Add address</span></button>
-              <span class="adv-note" id="adv-dhcp" hidden><span data-t="byDhcp">Set by DHCP.</span><button class="link" id="adv-manual" data-t="toManual">Switch to Manual</button></span></span>
           </div>
           <hr class="break">
           <div class="grid form" role="group" aria-label="Gateways">
-            <span class="col-head"></span><span class="col-head"><span data-t="metric">Metric</span></span>
+            <div class="adv-head"><span class="lbl" data-t="gws">Gateways</span><span class="aside" id="adv-gw-aside"></span></div>
             <div class="alist" id="adv-gws"></div>
-            <span></span><button class="add-row" id="add-gw"><i class="ph ph-plus"></i><span data-t="addGw">Add gateway</span></button>
-          </div>
-          <hr class="break">
-          <div class="grid form" role="group" aria-label="Interface metric">
-            <span class="lbl" data-t="ifMetric">Interface metric</span>
-            <div class="ctl">
-              <div class="seg" role="radiogroup" aria-label="Interface metric">
-                <span class="thumb"></span>
-                <label class="choice" title="Windows picks it from the link speed"><input type="radio" name="metricmode" value="auto"><span data-t="auto">Automatic</span></label>
-                <label class="choice"><input type="radio" name="metricmode" value="manual"><span data-t="manual">Manual</span></label>
-              </div>
-              <span class="ext"><input class="prefix metric" id="f-metric" maxlength="4" inputmode="numeric" aria-label="Interface metric" title="1 to 9999. Lower wins when two adapters can reach the same place."></span>
-            </div>
           </div>
         </div>
         <div class="page soon" id="page-probe" data-page="probe" role="tabpanel" hidden><i class="ph ph-pulse"></i><span data-t="soonProbe">Ping with a live graph</span></div>
@@ -857,7 +845,7 @@ const T = {
     up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabProbe: "Probe", tabScan: "Scan", tabInfo: "Info",
     soonAdv: "Extra addresses, gateways and metric", soonProbe: "Ping with a live graph", soonScan: "Free addresses on this subnet", soonInfo: "A summary to copy and send",
     kPages: "Go to a page", addIp: "Add address", addGw: "Add gateway", byDhcp: "Set by DHCP.", toManual: "Switch to Manual",
-    metric: "Metric", ifMetric: "Interface metric",
+    metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateways",
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
   },
   th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", refresh: "รีเฟรช", release: "Release IP", renew: "Renew IP", cycle: "Release แล้ว Renew",
@@ -873,7 +861,7 @@ const T = {
     up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabProbe: "ทดสอบ", tabScan: "หา IP", tabInfo: "ข้อมูล",
     soonAdv: "หลาย IP, หลาย Gateway และ Metric", soonProbe: "Ping พร้อมกราฟสด", soonScan: "IP ที่ยังว่างใน subnet นี้", soonInfo: "สรุปข้อมูลไว้คัดลอกส่งต่อ",
     kPages: "ไปที่หน้า", addIp: "เพิ่ม IP", addGw: "เพิ่ม Gateway", byDhcp: "ได้จาก DHCP", toManual: "เปลี่ยนเป็นกำหนดเอง",
-    metric: "Metric", ifMetric: "Interface metric",
+    metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateway",
     changes: n => `แก้ไว้ ${n} จุด ยังไม่ได้บันทึก`, applied: n => `บันทึกค่าของ ${n} แล้ว`, disable: "ปิดการใช้งาน", enable: "เปิดการใช้งาน",
   },
 };
@@ -1109,7 +1097,6 @@ function problems() {
     draft.gws.forEach((g, i) => { if (!validIp(g.gateway) || !okMetric(g.metric)) out.push([`gw${i}`, `${t("gateway")} ${i + 2}`]); });
     if (!okMetric(draft.gwMetric)) out.push(["gwMetric", t("metric")]);
   }
-  if (!okMetric(draft.metric) || (draft.metric === "" && $("f-metric") && document.querySelector("input[name=metricmode][value=manual]").checked)) out.push(["metric", t("ifMetric")]);
   if (!draft.dnsAuto) {
     if (draft.dns1 && !validIp(draft.dns1)) out.push(["dns1", t("dns1")]);
     if (draft.dns2 && !validIp(draft.dns2)) out.push(["dns2", t("dns2")]);
@@ -2027,28 +2014,37 @@ ptabs.forEach((b, i) => {
 });
 placePill();
 
-// ---------- Advanced: more addresses, more gateways, metrics ----------
-// Row 0 of each list is the address or gateway on IP & DNS (same draft value). Rows grow from
-// nothing and fold away; what's below glides with them. The draft changes at once, the motion follows.
-const adv = { ip: [], gw: [] };
-let advDrawn = false;
+// ---------- Advanced: more addresses, more gateways ----------
+// Row 0 of each list is the address or gateway on IP & DNS (the same draft value). The last row is an
+// empty one to type into: Enter (or leaving it) makes it a real row, and a new empty one grows below.
+// The draft changes at once; the motion follows.
+const adv = { ip: [], gw: [], ipAdd: null, gwAdd: null };
+let advDrawn = false, advUid = 0;
 const advData = kind => kind === "ip" ? draft.extra : draft.gws;
-function advRow(kind, i) {
-  const rows = adv[kind], el = document.createElement("div");
-  el.className = "arow";
-  const row = { el };
-  const at = () => rows.indexOf(row);
-  if (i === 0) { const l = document.createElement("label"); l.textContent = t(kind === "ip" ? "ip" : "gateway"); el.append(l); row.lbl = l; }
-  else {
-    const b = document.createElement("button");
-    b.className = "rm"; b.innerHTML = `<i class="ph ph-minus-circle"></i><span>${L("Remove", "ลบ")}</span>`;
-    b.onclick = () => removeRow(kind, row);
-    el.append(b); row.rm = b;
-  }
-  const pair = document.createElement("div"); pair.className = "pair"; el.append(pair);
-  const key = `${kind}${i}`;
-  const write = (k, v) => { const n = at(); if (n === 0) draft[k === "address" || k === "gateway" ? k : k === "subnet" ? "subnet" : "gwMetric"] = v; else advData(kind)[n - 1][k] = v; sync("adv"); };
-  row.f = ipField(pair, key, true, false, v => write(kind === "ip" ? "address" : "gateway", v));
+const advHost = kind => $(kind === "ip" ? "adv-ips" : "adv-gws");
+const getRow = (kind, n) => kind === "ip"
+  ? (n ? draft.extra[n - 1] : { address: draft.address, subnet: draft.subnet })
+  : (n ? draft.gws[n - 1] : { gateway: draft.gateway, metric: draft.gwMetric });
+function putRow(kind, n, v) {
+  if (n) { advData(kind)[n - 1] = v; return; }
+  if (kind === "ip") { draft.address = v.address; draft.subnet = v.subnet; } else { draft.gateway = v.gateway; draft.gwMetric = v.metric; }
+}
+const ordinal = n => L(["1st", "2nd", "3rd"][n] ?? `${n + 1}th`, `ลำดับ ${n + 1}`);
+const rowEase = "cubic-bezier(0.33, 1, 0.68, 1)";
+function advRow(kind) {
+  const el = document.createElement("div"); el.className = "arow";
+  const row = { el, kind, adding: false, temp: null };
+  const role = document.createElement("div"); role.className = "role"; row.role = role;
+  const pair = document.createElement("div"); pair.className = "pair";
+  el.append(role, pair);
+  const key = kind === "ip" ? "address" : "gateway";
+  const write = (k, v) => {
+    if (row.adding) { row.temp[k] = v; return; }
+    const n = adv[kind].indexOf(row);
+    putRow(kind, n, { ...getRow(kind, n), [k]: v });
+    sync("adv");
+  };
+  row.f = ipField(pair, `${kind}x${advUid++}`, true, false, v => write(key, v));
   if (kind === "ip") {
     const sl = document.createElement("span"); sl.className = "slash"; sl.textContent = "/";
     const pre = document.createElement("input"); pre.className = "prefix"; pre.maxLength = 2; pre.inputMode = "numeric"; pre.setAttribute("aria-label", "Prefix length");
@@ -2056,51 +2052,109 @@ function advRow(kind, i) {
     row.f.box.addEventListener("exit-right", () => { pre.focus(); pre.select(); });
     pair.append(sl, pre); row.pre = pre;
   } else {
-    const ext = document.createElement("span"); ext.className = "ext";
-    const m = document.createElement("input"); m.className = "prefix metric"; m.maxLength = 4; m.inputMode = "numeric"; m.placeholder = L("Auto", "อัตโนมัติ");
-    m.setAttribute("aria-label", "Gateway metric"); m.title = L("Blank: Windows picks it", "เว้นว่าง: ให้ Windows เลือกเอง");
-    m.oninput = () => { m.value = m.value.replace(/\D/g, ""); write("metric", m.value); };
-    row.f.box.addEventListener("exit-right", () => { m.focus(); m.select(); });
-    ext.append(m); pair.append(ext); row.pre = m;
+    const mk = document.createElement("span"); mk.className = "gwmaker"; pair.append(mk); row.maker = mk;
   }
+  // The empty row becomes real on Enter, or when you leave it with something valid in it.
+  el.addEventListener("keydown", e => { if (e.key === "Enter" && row.adding) { e.preventDefault(); e.stopPropagation(); commit(row, true); } });
+  el.addEventListener("focusout", e => { if (row.adding && !el.contains(e.relatedTarget)) commit(row, false); });
   row.set = (d, editable, roll) => {
     row.f.set(kind === "ip" ? d.address : d.gateway, editable, roll);
-    row.pre.value = kind === "ip" ? (prefixOf(d.subnet) >= 0 ? prefixOf(d.subnet) : "") : d.metric;
-    row.pre.disabled = !editable;
-    if (row.rm) row.rm.hidden = !editable;
+    if (row.pre) { row.pre.value = prefixOf(d.subnet) >= 0 ? prefixOf(d.subnet) : ""; row.pre.disabled = !editable; }
+    if (row.maker) { const g = names.get(d.gateway); row.maker.textContent = g?.name || g?.made || ""; row.maker.title = row.maker.textContent; }
   };
   return row;
 }
-const rowEase = "cubic-bezier(0.33, 1, 0.68, 1)";
+function addingRow(kind) {
+  const row = advRow(kind);
+  row.adding = true;
+  row.temp = kind === "ip" ? { address: "", subnet: draft.subnet } : { gateway: "", metric: "" };
+  row.el.classList.add("adding");
+  row.set(row.temp, true);
+  row.role.innerHTML = `<span class="addcap"><i class="ph ph-plus"></i>${L("Add", "เพิ่ม")}</span>`;
+  return row;
+}
+function commit(row, byEnter) {
+  const kind = row.kind, d = row.temp, ok = validIp(kind === "ip" ? d.address : d.gateway) && (kind !== "ip" || prefixOf(d.subnet) > 0);
+  if (!ok) { row.f.box.classList.toggle("invalid", !!(d.address || d.gateway) && !byEnter); if (byEnter) say(L("Finish the address first", "ใส่ IP ให้ครบก่อน"), "bad", "warning-circle"); return; }
+  advData(kind).push(d);
+  adv[kind].push(row);
+  row.adding = false; row.temp = null;
+  row.el.classList.remove("adding");
+  const next = addingRow(kind);
+  adv[kind + "Add"] = next;
+  advHost(kind).append(next.el); rowIn(next.el);
+  paintRoles(kind, true);
+  sync("adv");
+  if (byEnter) next.f.inputs[0].focus();   // typing a list of addresses: straight on to the next
+}
+// What each row is, in the label column: Main / its order, and what you can do with it.
+function paintRoles(kind, editable) {
+  const rows = adv[kind];
+  rows.forEach((r, n) => {
+    const tagText = kind === "ip" ? (n ? "" : L("Main", "หลัก")) : ordinal(n);
+    const acts = !editable || !n ? "" : `<span class="racts">
+      <button class="ract up" title="${kind === "ip" ? L("Make main", "ตั้งเป็นหลัก") : L("Try earlier", "เลื่อนขึ้น")}" aria-label="${kind === "ip" ? "Make main" : "Move up"}"><i class="ph ${kind === "ip" ? "ph-arrow-line-up" : "ph-arrow-up"}"></i></button>
+      <button class="ract rm" title="${L("Remove", "ลบ")}" aria-label="Remove"><i class="ph ph-trash"></i></button></span>`;
+    r.role.innerHTML = (tagText ? `<span class="rtag${kind === "gw" ? " plain" : ""}">${tagText}</span>` : "") + acts;
+    r.role.querySelector(".up")?.addEventListener("click", () => swap(kind, rows.indexOf(r), kind === "ip" ? 0 : rows.indexOf(r) - 1));
+    r.role.querySelector(".rm")?.addEventListener("click", () => removeRow(kind, r));
+  });
+  const n = rows.length, ip = kind === "ip";
+  const aside = $(ip ? "adv-ip-aside" : "adv-gw-aside");
+  if (ip && !editable) {
+    aside.innerHTML = `<span>${L("Set by DHCP.", "ได้จาก DHCP")}</span><button class="link" id="adv-manual">${L("Switch to Manual", "เปลี่ยนเป็นกำหนดเอง")}</button>`;
+    $("adv-manual").onclick = () => pick("ipmode", "manual");
+  } else retext(aside, !editable ? "" : ip ? L(`${n} address${n > 1 ? "es" : ""}`, `${n} IP`) : n > 1 ? L("Tried top first", "ลองจากบนลงล่าง") : "");
+}
 function rowIn(el) {
-  if (calm.matches) return;
+  if (calm.matches || !advDrawn) return;
   el.animate([{ height: "0px", paddingBottom: "0px", opacity: 0, transform: "translateY(4px)" }, {}], { duration: 180, easing: rowEase });
 }
 function rowOut(el) {
   if (calm.matches) return el.remove();
-  el.style.pointerEvents = "none";
-  el.style.overflow = "hidden";
+  el.style.pointerEvents = "none"; el.style.overflow = "hidden";
   el.animate([{}, { height: "0px", paddingBottom: "0px", opacity: 0, transform: "translateX(8px)" }], { duration: 140, easing: "ease-in", fill: "forwards" })
     .finished.finally(() => el.remove());
 }
-function fill(kind, host, data, editable, roll) {
-  const rows = adv[kind];
-  while (rows.length < data.length) { const r = advRow(kind, rows.length); rows.push(r); host.append(r.el); if (advDrawn) rowIn(r.el); }
+// Two rows trade places: the data swaps, the rows slide past each other (FLIP), and the role column repaints.
+function swap(kind, n, m) {
+  const rows = adv[kind], host = advHost(kind), first = new Map(rows.map(r => [r, r.el.getBoundingClientRect().top]));
+  const dn = getRow(kind, n), dm = getRow(kind, m);
+  putRow(kind, n, dm); putRow(kind, m, dn);
+  [rows[n], rows[m]] = [rows[m], rows[n]];
+  rows.forEach(r => host.insertBefore(r.el, adv[kind + "Add"]?.el ?? null));
+  paintRoles(kind, true);
+  if (!calm.matches) rows.forEach(r => {
+    const dy = first.get(r) - r.el.getBoundingClientRect().top;
+    if (dy) r.el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 240, easing: rowEase });
+  });
+  rows[m].role.querySelector(".up, .rm")?.focus() ?? rows[m].f.inputs[0].focus();
+  sync("adv");
+}
+function removeRow(kind, row) {
+  const rows = adv[kind], n = rows.indexOf(row);
+  if (n < 1) return;
+  advData(kind).splice(n - 1, 1);
+  rows.splice(n, 1);
+  paintRoles(kind, true);
+  (rows[n]?.role.querySelector(".rm") ?? adv[kind + "Add"]?.f.inputs[0])?.focus();
+  rowOut(row.el);
+  sync("adv");
+}
+function fill(kind, data, editable, roll) {
+  const rows = adv[kind], host = advHost(kind), addKey = kind + "Add";
+  while (rows.length < data.length) { const r = advRow(kind); rows.push(r); host.insertBefore(r.el, adv[addKey]?.el ?? null); rowIn(r.el); }
   while (rows.length > data.length) rowOut(rows.pop().el);
   data.forEach((d, i) => rows[i].set(d, editable, roll));
+  if (editable && !adv[addKey]) { adv[addKey] = addingRow(kind); host.append(adv[addKey].el); rowIn(adv[addKey].el); }
+  if (!editable && adv[addKey]) { rowOut(adv[addKey].el); adv[addKey] = null; }
+  paintRoles(kind, editable);
 }
 function renderAdv(roll = false) {
   if (!draft) return;
-  const a = adapters[sel], ed = !draft.ipAuto, src = ed ? draft : cfgOf(a);
-  fill("ip", $("adv-ips"), [{ address: src.address, subnet: src.subnet }, ...src.extra], ed, roll);
-  fill("gw", $("adv-gws"), [{ gateway: src.gateway, metric: src.gwMetric }, ...src.gws], ed, roll);
-  $("add-ip").hidden = $("add-gw").hidden = !ed;
-  $("adv-dhcp").hidden = ed;
-  const manual = draft.metric !== "" || document.activeElement === $("f-metric");
-  document.querySelector(`input[name=metricmode][value=${manual ? "manual" : "auto"}]`).checked = true;
-  // Automatic shows the number Windows picked, read-only.
-  $("f-metric").value = manual ? draft.metric : (a.ifMetric ?? (tauri ? "" : 25));
-  $("f-metric").disabled = !manual;
+  const ed = !draft.ipAuto, src = ed ? draft : cfgOf(adapters[sel]);
+  fill("ip", [{ address: src.address, subnet: src.subnet }, ...src.extra], ed, roll);
+  fill("gw", [{ gateway: src.gateway, metric: src.gwMetric }, ...src.gws], ed, roll);
   advDrawn = true;
   markAdv(changed(), problems());
   if (window.pagesReady) advEdges();
@@ -2108,43 +2162,13 @@ function renderAdv(roll = false) {
 // Changed rows wear the diamond, bad ones go red once you leave them, like the fields on IP & DNS.
 function markAdv(diff, bad) {
   const c = cfgOf(adapters[sel]);
-  adv.ip.forEach((r, i) => {
-    const was = i ? c.extra[i - 1] : { address: c.address, subnet: c.subnet }, now = i ? draft.extra[i - 1] : { address: draft.address, subnet: draft.subnet };
+  for (const kind of ["ip", "gw"]) adv[kind].forEach((r, i) => {
+    const was = kind === "ip" ? (i ? c.extra[i - 1] : { address: c.address, subnet: c.subnet }) : (i ? c.gws[i - 1] : { gateway: c.gateway, metric: c.gwMetric });
+    const now = getRow(kind, i), tag = kind === "ip" ? `extra${i - 1}` : `gw${i - 1}`;
     r.f.box.classList.toggle("changed", !draft.ipAuto && !!now && !same(was, now));
-    r.f.box.classList.toggle("invalid", i > 0 && bad.some(([b]) => b === `extra${i - 1}`) && !!now?.address && !r.el.contains(document.activeElement));
+    r.f.box.classList.toggle("invalid", i > 0 && bad.some(([b]) => b === tag) && !r.el.contains(document.activeElement));
   });
-  adv.gw.forEach((r, i) => {
-    const was = i ? c.gws[i - 1] : { gateway: c.gateway, metric: c.gwMetric }, now = i ? draft.gws[i - 1] : { gateway: draft.gateway, metric: draft.gwMetric };
-    r.f.box.classList.toggle("changed", !draft.ipAuto && !!now && !same(was, now));
-    r.f.box.classList.toggle("invalid", i > 0 && bad.some(([b]) => b === `gw${i - 1}`) && !!now?.gateway && !r.el.contains(document.activeElement));
-  });
-  $("f-metric").classList.toggle("bad", bad.some(([b]) => b === "metric") && !$("f-metric").matches(":focus"));
 }
-function addRow(kind) {
-  advData(kind).push(kind === "ip" ? { address: "", subnet: draft.subnet } : { gateway: "", metric: "" });
-  renderAdv();
-  sync("adv");
-  const r = adv[kind].at(-1); r.f.inputs[0].focus();
-}
-function removeRow(kind, row) {
-  const rows = adv[kind], n = rows.indexOf(row);
-  advData(kind).splice(n - 1, 1);
-  rows.splice(n, 1);
-  // Rows below now sit one place up: re-label their writes by position (at() reads it live).
-  (rows[n]?.rm ?? $(kind === "ip" ? "add-ip" : "add-gw")).focus();
-  rowOut(row.el);
-  sync("adv");
-}
-$("add-ip").onclick = () => addRow("ip");
-$("add-gw").onclick = () => addRow("gw");
-$("adv-manual").onclick = () => pick("ipmode", "manual");
-document.querySelectorAll("input[name=metricmode]").forEach(x => x.onchange = () => {
-  const a = adapters[sel];
-  draft.metric = x.value === "manual" ? String(a.ifMetric ?? (tauri ? "" : 25)) : "";
-  renderAdv(); sync("adv");
-  if (x.value === "manual") { $("f-metric").focus(); $("f-metric").select(); }
-});
-$("f-metric").oninput = () => { const m = $("f-metric"); m.value = m.value.replace(/\D/g, ""); draft.metric = m.value; sync("adv"); };
 function advEdges() {
   const p = $("page-adv");
   p.classList.toggle("above", p.scrollTop > 1);
