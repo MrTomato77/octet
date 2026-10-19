@@ -2598,7 +2598,7 @@ function scanStart(again = false) {
   const show = (i, got) => {
       const ip = numIp(first + i), c = scan.cells[i]; c.dataset.ip = ip;
       scan.hosts[i] = got;
-      c.classList.add(ip === a.cfg.address ? "me" : ip === a.cfg.gateway ? "gw" : got ? "used" : "free");
+      c.classList.add(mine(a, ip) ? "me" : ip === a.cfg.gateway ? "gw" : got ? "used" : "free");
       c.dataset.tip = scanSays(ip, got, a); c.setAttribute("aria-label", c.dataset.tip);
       scan.done++;
       if (scan.follow && Math.floor(i / 256) > scan.at) scanGo(scan.at = Math.floor(i / 256));
@@ -2654,6 +2654,8 @@ function scanSpy() {
 $("scan-grid").addEventListener("scroll", () => { scanSpy(); if (scan.menu !== null) scanMenu(null); }, { passive: true });
 // Your own scroll takes over from the sweep.
 for (const ev of ["wheel", "touchstart", "keydown"]) $("scan-grid").addEventListener(ev, () => scan.follow = false, { passive: true });
+// This PC holds the address: its main one or any extra one.
+const mine = (a, ip) => ip === a.cfg.address || (a.extraIps || []).includes(ip);
 // scanStart has its own `net` (the /24), so the call to Rust lives out here.
 const scanAsk = (ip, a) => net("scan_host", { address: ip, source: a.cfg.address, index: a.index ?? 0 }).catch(() => null);
 // What a cell's tooltip says.
@@ -2662,7 +2664,7 @@ function scanSays(ip, x, a) {
   // A MAC with the "locally administered" bit is made up by the device (phones and laptops do this for privacy): no maker to find.
   const priv = x?.mac && parseInt(x.mac.slice(0, 2), 16) & 2;
   const maker = x && (x.vendor || (priv ? L("Private MAC (phone or laptop)", "Private MAC (มือถือ/โน้ตบุ๊ก)") : L("Unknown maker", "ไม่ทราบยี่ห้อ")));
-  const role = ip === a.cfg.address ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : "";
+  const role = mine(a, ip) ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : "";
   const who = role ? [role, x?.vendor].filter(Boolean).join(" · ") : x ? maker
     : (h === 0 || h === 255) ? L(`Free, valid on a /${prefixOf(a.cfg.subnet)}`, `ว่าง ใช้ได้ในวง /${prefixOf(a.cfg.subnet)}`) : L("Free, click to use", "ว่าง กดเพื่อใช้");
   return [[ip, x?.ms ? `${x.ms} ms` : ""].filter(Boolean).join(" · "), who, x?.mac].filter(Boolean).join("\n");
