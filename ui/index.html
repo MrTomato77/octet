@@ -246,25 +246,25 @@ button, input, select { font: inherit; color: inherit; }
    Its address and numbers sit in the footer. */
 #page-probe:not([hidden]) { display: flex; flex-direction: column; gap: var(--s3); }
 .pchips { position: relative; display: flex; gap: 4px; }
-.pchips .thumb { position: absolute; left: 0; top: 0; height: 100%; border-radius: 8px; background: color-mix(in oklch, var(--accent) 16%, transparent); pointer-events: none;
-  transition: transform 240ms cubic-bezier(0.33, 1, 0.68, 1), width 240ms cubic-bezier(0.33, 1, 0.68, 1), top 240ms, height 240ms; }
+.pchips .thumb { position: absolute; left: 0; top: 0; height: 100%; border-radius: 8px; background: color-mix(in oklch, var(--accent) 12%, transparent); pointer-events: none;
+  transition: transform 240ms cubic-bezier(0.33, 1, 0.68, 1), width 240ms cubic-bezier(0.33, 1, 0.68, 1), top 240ms, height 240ms, opacity 180ms; }
 .pchips .thumb.in-box { top: 2px; height: calc(100% - 4px); border-radius: var(--r-input); }
-.pchip.own.on .ip { border-color: var(--accent); }
 .pchip { position: relative; display: flex; align-items: center; gap: 6px; height: var(--row-h); padding: 0 var(--s3); border: 1px solid transparent; border-radius: 8px;
   background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; transition: color 140ms; }
 .pchip:hover:not(:disabled) { color: var(--ink); }
 .pchip:disabled { opacity: 0.4; cursor: default; }
-.pchip:not(.own) { width: 112px; flex: none; }   /* fixed, so a resolver's name never pushes the IP box */
+.pchip:not(.own) { flex: 0 1 auto; min-width: 0; }   /* a long name gives way (…) before the IP box does */
 .pchip:not(.own) span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pchip.on { color: var(--ink); }
 .pchip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background 240ms; }
 .pchip .dot.up { background: var(--ok); }
 .pchip .dot.down { background: var(--bad); }
-.pchip.own { flex: 1; min-width: 0; padding-right: 2px; cursor: default; }
+.pchip.own { flex: none; width: 184px; min-width: 0; margin-left: auto; padding: 0 2px; cursor: default; }   /* fixed and right-aligned: a chip's name never moves it */
 .pchip.own .host { flex: 1; min-width: 0; display: flex; }
 .pchip.own .ip.short { width: auto; flex: 1; min-width: 0; height: calc(var(--row-h) - 4px); padding: 0 8px; background: transparent; position: relative; z-index: 1; }   /* no changed mark here, so less side room */
-.pchip.own.empty .ip { border-style: dashed; }
+.pchip.own.off { opacity: 0.4; }
 .pchip.own .ip:focus-within { border-style: solid; }
+.pchip.own .ip.ro { border-color: var(--border-strong); }
 .pgraph { flex: 1; position: relative; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: crosshair; }
 .pgraph svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .pgraph .grid { stroke: color-mix(in oklch, var(--border) 45%, transparent); stroke-width: 1; }
@@ -1355,6 +1355,7 @@ function renderAdapterFacts() {
 }
 function renderAdapter(roll = false) {
   const none = !adapters[sel] || hidden.has(adapters[sel].id);
+  if (window.pagesReady && !none) { probeBuild(); if (page === "probe") paintProbe(); }   // Probe follows the adapter at once
   document.querySelector(".window").classList.toggle("empty", none);
   if (none) {
     draft = null; $("apply").disabled = $("revert").disabled = true;
@@ -2189,15 +2190,13 @@ const edgeWatch = new ResizeObserver(advEdges);
 // ping answers a number (ms) or { ms }; null is a loss.
 // ponytail: the Rust ping takes IPv4 only; a host name needs it to resolve first.
 const SLOTS = 60;
-const probe = { rows: [], pick: 0, own: "", hx: null, cx: 0, show: 0, slept: 0 };
+const probe = { rows: [], pick: 0, own: "", hx: null, cx: 0, show: 0, slept: 0, live: false, key: "" };
 const clock = () => (probe.asleep ? probe.sleptAt : performance.now()) - probe.slept;
-function probeRow(target, label, own) {
+function probeRow(own) {
   const el = document.createElement(own ? "div" : "button");
   el.className = "pchip" + (own ? " own" : ""); el.setAttribute("role", "tab");
-  const who = label === "DNS" && resolver(target, adapters[sel]?.cfg.gateway);
-  if (who?.logo) label = who.title.replace(/ Public DNS| DNS| \(.*\)/g, "");
-  el.innerHTML = `<span class="dot"></span>${own ? `<span class="host"></span>` : `${who?.logo ? `<span class="plogo" style="--logo:url(vendor/logos/${who.logo}.svg)"></span>` : ""}<span></span>`}`;
-  const row = { el, target, label, got: [], pts: [] };
+  el.innerHTML = own ? `<span class="host"></span>` : `<span class="dot"></span><span class="plogo" hidden></span><span class="name"></span>`;
+  const row = { el, target: "", label: "", got: [], pts: [] };
   if (own) {
     // Only a whole address is pinged; a half-typed one keeps the line empty.
     const f = ipField(el.querySelector(".host"), "probe", true, false, v => {
@@ -2206,35 +2205,56 @@ function probeRow(target, label, own) {
       if (t === row.target) return;
       probe.own = row.target = t; row.got = []; row.pts = []; paintProbe();
     });
-    f.set(target, true); el.classList.toggle("empty", !target);
     f.inputs.forEach(x => x.setAttribute("aria-label", "Target octet"));
     row.f = f;
     // The box shows whatever is picked. Going into it makes that address your own target,
     // carrying its last minute along so the graph doesn't start over.
     // Clicking anywhere on it counts, not just in an octet (the dot and the edges gave an empty target before).
     const adopt = () => {
+      if (!probe.live) return;
       const from = probe.rows[probe.pick];
       if (from && from !== row && from.target) Object.assign(row, { target: from.target, got: [...from.got], pts: [...from.pts] }), probe.own = from.target;
       pickRow(row);
     };
     el.addEventListener("focusin", adopt);
     el.onclick = adopt;
-  } else {
-    el.querySelector("span:last-child").textContent = label; el.title = target || L(`No ${label.toLowerCase()} on this adapter`, `adapter นี้ไม่มี ${label}`);
-    el.disabled = !target; el.onclick = () => pickRow(row);
-  }
+  } else el.onclick = () => pickRow(row);
   return row;
 }
+// Fill a Gateway/DNS chip: a DNS server it knows shows its logo and name.
+function fillChip(row, target, label) {
+  const who = label === "DNS" && resolver(target, adapters[sel]?.cfg.gateway), logo = row.el.querySelector(".plogo");
+  logo.hidden = !who?.logo; if (who?.logo) logo.style.setProperty("--logo", `url(vendor/logos/${who.logo}.svg)`);
+  Object.assign(row, { target, label, got: [], pts: [] });
+  row.el.querySelector(".name").textContent = who?.logo ? who.title.split(" ")[0] : label;   // the maker's name: Google, Cloudflare, Tailscale
+  row.el.title = target || L(`No ${label.toLowerCase()} on this adapter`, `adapter นี้ไม่มี ${label}`);
+  row.el.disabled = !target;
+}
 function pickRow(row) { probe.pick = probe.rows.indexOf(row); paintProbe(); }
+// Only the adapter on screen is pinged. Another adapter starts fresh; one that is not connected (or has no
+// address) keeps the same page, just with nothing to pick or ping.
 function probeBuild() {
-  const c = adapters[sel]?.cfg || {};
-  // Always the same three chips, so the layout never shifts: one the adapter lacks stays, dimmed.
-  const want = [[c.gateway || "", "Gateway"], [c.dns1 && c.dns1 !== c.gateway ? c.dns1 : "", "DNS"]];
-  if (probe.rows.length && same(probe.rows.slice(0, -1).map(r => r.target), want.map(w => w[0]))) return;
-  probe.rows = [...want.map(([t, l]) => probeRow(t, l)), probeRow(probe.own, "", true)];
-  if (!probe.rows[probe.pick]?.target) { const i = probe.rows.findIndex(r => r.target); probe.pick = i < 0 ? probe.rows.length - 1 : i; }
-  $("probe-list").replaceChildren($("probe-thumb"), ...probe.rows.map(r => r.el));
-  placeThumb(false);
+  const a = adapters[sel], c = a?.cfg || {};
+  probe.live = a?.state === "up" && validIp(c.address);
+  const want = probe.live ? [[c.gateway || "", "Gateway"], [c.dns1 && c.dns1 !== c.gateway ? c.dns1 : "", "DNS"]] : [["", "Gateway"], ["", "DNS"]];
+  const key = JSON.stringify([a?.id, probe.live, want]);
+  if (key === probe.key) return;
+  const fresh = !probe.rows.length;
+  if (fresh) {
+    probe.rows = [probeRow(), probeRow(), probeRow(true)];
+    $("probe-list").replaceChildren($("probe-thumb"), ...probe.rows.map(r => r.el));
+  }
+  const moved = probe.key && JSON.parse(probe.key)[0] !== a?.id;
+  probe.key = key;
+  want.forEach(([t, l], i) => fillChip(probe.rows[i], t, l));
+  const own = probe.rows[2];
+  if (moved) probe.own = "";
+  Object.assign(own, { target: probe.live ? probe.own : "", got: [], pts: [] });
+  own.f.set(own.target, probe.live); own.el.classList.toggle("empty", !own.target);
+  own.el.classList.toggle("off", !probe.live);
+  const i = probe.rows.findIndex(r => r.target);
+  if (!probe.rows[probe.pick]?.target || moved) probe.pick = i < 0 ? 2 : i;
+  placeThumb(!fresh);
 }
 async function probeTick() {
   // Minimised (or otherwise hidden): no pinging until the window shows again. Out of focus it keeps going.
@@ -2261,17 +2281,18 @@ function placeThumb(move = true) {
   const box = on.querySelector(".ip"), x = on.offsetLeft + (box ? on.clientLeft + box.offsetLeft : 0);
   th.style.width = (box ? box.offsetWidth : on.offsetWidth) + "px"; th.style.transform = `translateX(${x}px)`;
   th.classList.toggle("in-box", !!box);
+  th.style.opacity = probe.live ? 1 : 0;   // nothing to pick on an adapter that isn't connected
 }
 function paintProbe() {
   probe.rows.forEach((r, i) => {
     const down = r.got.length > 0 && r.got.at(-1) === null;
     r.el.classList.toggle("on", i === probe.pick); r.el.setAttribute("aria-selected", i === probe.pick);
-    r.el.querySelector(".dot").className = "dot" + (!r.got.length ? "" : down ? " down" : " up");
+    if (r.el.querySelector(".dot")) r.el.querySelector(".dot").className = "dot" + (!r.got.length ? "" : down ? " down" : " up");
   });
   placeThumb();
   const r = probe.rows[probe.pick]; if (!r) return;
   const own = probe.rows.at(-1);
-  if (r !== own && own?.f && !own.el.contains(document.activeElement)) { own.f.set(r.target, true, true); own.el.classList.toggle("empty", !r.target); }
+  if (r !== own && own?.f && !own.el.contains(document.activeElement)) { own.f.set(r.target, probe.live, true); own.el.classList.toggle("empty", !r.target); }
   const ok = r.got.filter(v => v !== null), ms = v => v === null ? "-" : String(v);   // the unit sits after it, small
   roll($("ps-max"), ms(ok.length ? Math.max(...ok) : null));
   roll($("ps-avg"), ms(ok.length ? Math.round(ok.reduce((a, b) => a + b) / ok.length) : null));
