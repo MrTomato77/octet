@@ -2207,12 +2207,14 @@ function probeRow(target, label, own) {
     row.f = f;
     // The box shows whatever is picked. Going into it makes that address your own target,
     // carrying its last minute along so the graph doesn't start over.
-    el.addEventListener("focusin", () => {
+    // Clicking anywhere on it counts, not just in an octet (the dot and the edges gave an empty target before).
+    const adopt = () => {
       const from = probe.rows[probe.pick];
       if (from && from !== row && from.target) Object.assign(row, { target: from.target, got: [...from.got], pts: [...from.pts] }), probe.own = from.target;
       pickRow(row);
-    });
-    el.onclick = () => pickRow(row);
+    };
+    el.addEventListener("focusin", adopt);
+    el.onclick = adopt;
   } else { el.querySelector("span:last-child").textContent = label; el.title = target; el.onclick = () => pickRow(row); }
   return row;
 }
