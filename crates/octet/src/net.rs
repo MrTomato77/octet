@@ -235,7 +235,8 @@ pub fn ping(ip: Ipv4Addr, from: Option<Ipv4Addr>, timeout_ms: u32) -> Option<u32
         let data = *b"octet";
         // ICMP_ECHO_REPLY (40 bytes on x64) + payload + 8 bytes for an ICMP error, per the docs.
         let mut reply = [0u8; 128];
-        let src = from.map_or(0, ip_u32);
+        // A loopback target (a local DNS proxy such as WARP's 127.0.2.2) never answers a ping sent from the adapter's address.
+        let src = if ip.is_loopback() { 0 } else { from.map_or(0, ip_u32) };
         let n = IcmpSendEcho2Ex(h, std::ptr::null_mut(), None, std::ptr::null(), src, ip_u32(ip), data.as_ptr().cast(), data.len() as u16,
             std::ptr::null(), reply.as_mut_ptr().cast(), reply.len() as u32, timeout_ms);
         IcmpCloseHandle(h);
