@@ -238,9 +238,9 @@ button, input, select { font: inherit; color: inherit; }
 .arow .to i { grid-area: 1 / 1; transition: opacity 140ms, transform 180ms var(--ease-out); }
 .arow .to .ph-x { opacity: 0; transform: rotate(-90deg) scale(0.6); }
 /* Added lines (not the first, not the empty one at the end) can be removed from here. */
-.arow:not(:first-child):not(.ph):is(:hover, :focus-within) .to { cursor: pointer; }
-.arow:not(:first-child):not(.ph):is(:hover, :focus-within) .to .ph-arrow-right { opacity: 0; transform: scale(0.6); }
-.arow:not(:first-child):not(.ph):is(:hover, :focus-within) .to .ph-x { opacity: 1; transform: none; }
+.arow:not(:first-child):not(.ph):hover .to { cursor: pointer; }
+.arow:not(:first-child):not(.ph):hover .to .ph-arrow-right { opacity: 0; transform: scale(0.6); }
+.arow:not(:first-child):not(.ph):hover .to .ph-x { opacity: 1; transform: none; }
 .arow:not(:first-child):not(.ph) .to:hover { background: var(--hover); color: var(--bad); }
 /* Changed-marks belong to IP & DNS; here the lines themselves are the change. */
 #adv-list .ip.changed .diff { display: none; }
@@ -2959,6 +2959,12 @@ const scenarios = {
     noping: ["Applied, gateway not answering", () => { demo.pingFail = true; return edit({ address: "10.0.1.60" }, true); }],
     cancel: ["UAC prompt declined", () => { demo.outcome = "cancel"; return edit({ address: "10.0.1.60" }, true); }],
     fail: ["Windows refused the change", () => { demo.outcome = "fail"; return edit({ address: "10.0.1.60" }, true); }],
+  },
+  "Pages": {
+    pgadv: ["Advanced", () => showPage("adv")],
+    pgping: ["Ping", () => showPage("probe")],
+    pgscan: ["Scan", () => showPage("scan")],
+    pginfo: ["Info", () => showPage("info")],
   },
   "Settings": {
     general: ["General", () => openSettings()],
