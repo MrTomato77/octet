@@ -714,7 +714,7 @@ html.app, html.app body { overflow: hidden; }
 
       <div class="actions">
         <span class="status" id="status" role="status"></span>
-        <span class="pfoot" id="probe-foot" hidden><span><i class="ph ph-chart-line"></i>Avg<b id="ps-avg">-</b><i class="u">ms</i></span><span><i class="ph ph-arrow-line-up"></i>Max<b id="ps-max">-</b><i class="u">ms</i></span><span><i class="ph ph-wave-sine"></i>Jitter<b id="ps-jit">-</b><i class="u">ms</i></span><span><i class="ph ph-link-break"></i>Loss<b id="ps-loss">-</b></span></span>
+        <span class="pfoot" id="probe-foot" hidden><span><i class="ph ph-chart-line"></i><span data-t="pAvg">Avg</span><b id="ps-avg">-</b><i class="u">ms</i></span><span><i class="ph ph-arrow-line-up"></i><span data-t="pMax">Max</span><b id="ps-max">-</b><i class="u">ms</i></span><span><i class="ph ph-wave-sine"></i><span data-t="pJit">Jitter</span><b id="ps-jit">-</b><i class="u">ms</i></span><span><i class="ph ph-link-break"></i><span data-t="pLoss">Loss</span><b id="ps-loss">-</b></span></span>
         <button class="btn" id="revert" disabled><i class="ph ph-arrow-counter-clockwise"></i><span data-t="revert">Revert</span></button>
         <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
       </div>
@@ -879,7 +879,7 @@ const T = {
     kOctet: "Move between octets", kEsc: "Close a menu or the sidebar", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
-    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabProbe: "Probe", tabScan: "Scan", tabInfo: "Info",
+    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabProbe: "Probe", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
     soonAdv: "Extra addresses, gateways and metric", soonProbe: "Ping with a live graph", soonScan: "Free addresses on this subnet", soonInfo: "A summary to copy and send",
     kPages: "Go to a page", addIp: "Add address", addGw: "Add gateway", byDhcp: "Set by DHCP.", toManual: "Switch to Manual",
     metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateways",
@@ -895,7 +895,7 @@ const T = {
     kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนูหรือแถบซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
-    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabProbe: "ทดสอบ", tabScan: "หา IP", tabInfo: "ข้อมูล",
+    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabProbe: "ทดสอบ", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
     soonAdv: "หลาย IP, หลาย Gateway และ Metric", soonProbe: "Ping พร้อมกราฟสด", soonScan: "IP ที่ยังว่างใน subnet นี้", soonInfo: "สรุปข้อมูลไว้คัดลอกส่งต่อ",
     kPages: "ไปที่หน้า", addIp: "เพิ่ม IP", addGw: "เพิ่ม Gateway", byDhcp: "ได้จาก DHCP", toManual: "เปลี่ยนเป็นกำหนดเอง",
     metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateway",
@@ -1935,6 +1935,7 @@ for (const d of document.querySelectorAll("dialog")) {
 function translate() {
   document.querySelectorAll("[data-t]").forEach(el => { const v = T[lang][el.dataset.t]; if (typeof v === "string") el.textContent = v; });
   $("ip-auto").title = L("Get an IP from the DHCP server", "รับ IP จาก DHCP server");
+  if (window.pagesReady) { measureFoot(); alignFoot(); }
 }
 // Sidebar: always opens as the rail; expanded it floats over the form until you pick,
 // click the dimmed form, or press Esc.
@@ -2342,15 +2343,18 @@ function probeShow(on) {
   if (!graphRaf) graphRaf = requestAnimationFrame(drawGraph);
 }
 setTimeout(probeTick, 1000);
-// Measure each footer item at its widest ("999 ms", "100%") and keep that width (once the fonts are in).
-document.fonts.ready.then(() => {
+// Measure each footer item at its widest ("999 ms", "100%") and keep that width (once the fonts are in,
+// and again when the language changes the labels).
+function measureFoot() {
   const vals = [...$("probe-foot").querySelectorAll("b")], was = vals.map(b => b.textContent);
   $("probe-foot").hidden = false;
   vals.forEach(b => b.textContent = b.id === "ps-loss" ? "100%" : "999");
+  vals.forEach(b => b.parentElement.style.minWidth = "");
   vals.forEach(b => b.parentElement.style.minWidth = Math.ceil(b.parentElement.getBoundingClientRect().width) + "px");
   vals.forEach((b, i) => b.textContent = was[i]);
   $("probe-foot").hidden = page !== "probe";
-});
+}
+document.fonts.ready.then(measureFoot);
 // The footer row is centred under the graph, not under the bar: its sides follow the graph's edges.
 function alignFoot() {
   const g = $("probe-graph").getBoundingClientRect(), bar = document.querySelector(".actions"), b = bar.getBoundingClientRect(), pad = parseFloat(getComputedStyle(bar).paddingLeft);
