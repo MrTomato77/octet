@@ -217,6 +217,15 @@ button, input, select { font: inherit; color: inherit; }
 /* Advanced: the IP toggle, then one line of boxes per address: address / prefix -> the gateway it goes out
    through. The last line is empty and dashed: type into it and it becomes a real one. */
 .alist { margin-top: 0; }
+/* Column names over the boxes, on the same widths, so each line reads without labels of its own */
+.ahead { display: flex; align-items: center; gap: 4px; height: 20px; margin-bottom: 6px; font-size: 12px; color: var(--faint); }
+.ahead > .host { flex: 1 1 0; padding-left: 2px; }
+.ahead .cidr { width: 34px; text-align: center; }
+.ahead .slash { width: 10px; } .ahead .to { width: 22px; }
+/* The first line is the main address: its numbers stand out (weight, full ink), the rest sit back */
+.arow:first-child .ip input, .arow:first-child .prefix { font-weight: 600; color: var(--ink); }
+.arow:not(:first-child) .ip input, .arow:not(:first-child) .prefix { color: var(--muted); }
+.arow:not(:first-child) .ip:focus-within input { color: var(--ink); }
 .arow { display: flex; align-items: center; gap: 4px; height: calc(var(--row-h) + var(--row-gap)); padding-bottom: var(--row-gap); box-sizing: border-box; }
 .arow > .host { flex: 1 1 0; min-width: 0; display: flex; }
 .arow .ip.short { width: auto; flex: 1 1 0; min-width: 0; }
@@ -647,6 +656,7 @@ html.app, html.app body { overflow: hidden; }
         </div>
         <!-- ponytail: placeholders until each page is built (docs/plan-0.2.md) -->
         <div class="page" id="page-adv" data-page="adv" role="tabpanel" hidden>
+          <div class="ahead" aria-hidden="true"><span class="host">IP address</span><span class="slash"></span><span class="cidr">CIDR</span><span class="to"></span><span class="host">Gateway</span></div>
           <div class="alist" id="adv-list" role="list" aria-label="Addresses"></div>
         </div>
         <div class="page soon" id="page-probe" data-page="probe" role="tabpanel" hidden><i class="ph ph-pulse"></i><span data-t="soonProbe">Ping with a live graph</span></div>
