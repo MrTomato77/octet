@@ -216,8 +216,7 @@ button, input, select { font: inherit; color: inherit; }
 #page-adv.above.below { mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 /* Advanced: the IP toggle, then one line of boxes per address: address / prefix -> the gateway it goes out
    through. The last line is empty and dashed: type into it and it becomes a real one. */
-#page-adv .seg { width: 100%; display: grid; }   /* one edge on both sides, the same as the rows below */
-.alist { margin-top: var(--row-gap); }
+.alist { margin-top: 0; }
 .arow { display: flex; align-items: center; gap: 4px; height: calc(var(--row-h) + var(--row-gap)); padding-bottom: var(--row-gap); box-sizing: border-box; }
 .arow > .host { flex: 1 1 0; min-width: 0; display: flex; }
 .arow .ip.short { width: auto; flex: 1 1 0; min-width: 0; }
@@ -648,15 +647,6 @@ html.app, html.app body { overflow: hidden; }
         </div>
         <!-- ponytail: placeholders until each page is built (docs/plan-0.2.md) -->
         <div class="page" id="page-adv" data-page="adv" role="tabpanel" hidden>
-          <div role="group" aria-label="IP">
-            <div>
-              <div class="seg" role="radiogroup" aria-label="IP">
-                <span class="thumb"></span>
-                <label class="choice"><input type="radio" name="ipmode2" value="auto"><span data-t="auto">Automatic</span></label>
-                <label class="choice"><input type="radio" name="ipmode2" value="manual"><span data-t="manual">Manual</span></label>
-              </div>
-            </div>
-          </div>
           <div class="alist" id="adv-list" role="list" aria-label="Addresses"></div>
         </div>
         <div class="page soon" id="page-probe" data-page="probe" role="tabpanel" hidden><i class="ph ph-pulse"></i><span data-t="soonProbe">Ping with a live graph</span></div>
@@ -1950,8 +1940,7 @@ function showPage(next) {
   for (const b of ptabs) { const on = b.dataset.page === page; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; }
   placePill(true);
   if (next === "adv") renderAdv();
-  if (next === "ip" && draft) for (const k of ["address", "subnet", "gateway"]) fields[k].set(draft.ipAuto ? adapters[sel].cfg[k] : draft[k], !draft.ipAuto);
-  if (next === "ip") sync();
+  if (next === "ip" && draft) renderForm();   // Advanced may have switched it to Manual
   now.hidden = false;
   footer(editable(page));
   pending();
@@ -2061,7 +2050,10 @@ function newPh() {
   row.ipf.inputs[0].placeholder = "";
   return row;
 }
+// Typing a second address is what Manual means: the adapter switches on the first keystroke,
+// keeping what DHCP gave as the starting values (and DNS goes static with it, as on IP & DNS).
 function promote(row) {
+  if (draft.ipAuto) { draft.ipAuto = false; draft.dnsAuto = false; setTimeout(() => renderAdv()); }
   draft.extra.push({ address: "", subnet: masks[+row.pre.value] ?? draft.subnet });
   adv.rows.push(row); row.el.classList.remove("ph");
   adv.ph = newPh(); $("adv-list").append(adv.ph.el); rowIn(adv.ph.el);
@@ -2111,15 +2103,12 @@ function renderAdv(roll = false) {
   const ed = !draft.ipAuto, c = ed ? draft : cfgOf(adapters[sel]), n = addrsOf(c).length, host = $("adv-list");
   while (adv.rows.length < n) { const r = advRow(); adv.rows.push(r); host.insertBefore(r.el, adv.ph?.el ?? null); rowIn(r.el); }
   while (adv.rows.length > n) rowOut(adv.rows.pop().el);
-  if (ed && !adv.ph) { adv.ph = newPh(); host.append(adv.ph.el); rowIn(adv.ph.el); }
-  if (!ed && adv.ph) { rowOut(adv.ph.el); adv.ph = null; }
-  document.querySelector(`input[name=ipmode2][value=${ed ? "manual" : "auto"}]`).checked = true;
+  if (!adv.ph) { adv.ph = newPh(); host.append(adv.ph.el); rowIn(adv.ph.el); }
   paintAdv(roll);
   advDrawn = true;
   if (window.pagesReady) advEdges();
 }
 const markAdv = () => { if (advDrawn) paintAdv(); };
-document.querySelectorAll("input[name=ipmode2]").forEach(x => x.onchange = () => pick("ipmode", x.value));
 function advEdges() {
   const p = $("page-adv");
   p.classList.toggle("above", p.scrollTop > 1);
