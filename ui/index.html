@@ -216,7 +216,7 @@ button, input, select { font: inherit; color: inherit; }
 #page-adv.above.below { mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 /* Advanced: the IP toggle, then one line of boxes per address: address / prefix -> the gateway it goes out
    through. The last line is empty and dashed: type into it and it becomes a real one. */
-#page-adv .seg { width: var(--field-w); }
+#page-adv .seg { width: 100%; display: grid; }   /* one edge on both sides, the same as the rows below */
 .alist { margin-top: var(--row-gap); }
 .arow { display: flex; align-items: center; gap: 4px; height: calc(var(--row-h) + var(--row-gap)); padding-bottom: var(--row-gap); box-sizing: border-box; }
 .arow > .host { flex: 1 1 0; min-width: 0; display: flex; }
@@ -648,9 +648,8 @@ html.app, html.app body { overflow: hidden; }
         </div>
         <!-- ponytail: placeholders until each page is built (docs/plan-0.2.md) -->
         <div class="page" id="page-adv" data-page="adv" role="tabpanel" hidden>
-          <div class="grid form" role="group" aria-label="IP">
-            <span class="lbl">IP</span>
-            <div class="ctl">
+          <div role="group" aria-label="IP">
+            <div>
               <div class="seg" role="radiogroup" aria-label="IP">
                 <span class="thumb"></span>
                 <label class="choice"><input type="radio" name="ipmode2" value="auto"><span data-t="auto">Automatic</span></label>
