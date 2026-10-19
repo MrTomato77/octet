@@ -345,19 +345,21 @@ button, input, select { font: inherit; color: inherit; }
 /* Info: what this adapter has, read-only, grouped. A row copies its value; the footer copies it all as text. */
 #page-info:not([hidden]) { display: flex; flex-direction: column; overflow-y: auto; scrollbar-width: none; }
 .info { display: flex; flex-direction: column; }
-.igroup { display: grid; grid-template-columns: 112px minmax(0, 1fr) 20px; padding: var(--s2) 0; }
+.igroup { display: grid; grid-template-columns: 120px minmax(0, 1fr) 20px; padding: var(--s2) 0; }
 .igroup + .igroup { border-top: 1px solid var(--border); }
-.ihead { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; height: 26px; font-size: 12px; color: var(--faint); }
+.ihead { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; font-size: 12px; color: var(--faint); }
 .ihead i { font-size: 14px; }
 .itag::before { content: "·"; margin-right: 6px; }   /* how it is set, said as quietly as the heading */
-.irow { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; min-height: 30px; margin: 0 -8px; padding: 0 8px;
+.irow { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; min-height: 30px; margin: 0; padding: 0 8px;
   border: 0; border-radius: var(--r-input); background: transparent; color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; transition: background 140ms; }
 .irow:hover { background: var(--hover); }
 .irow .k { color: var(--muted); }
 .irow .v { color: var(--ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .irow .v em { display: inline-block; font-style: normal; color: var(--faint); margin-left: 6px; }
 .irow .v em:empty { margin: 0; }
-.irow .v > span { display: inline-block; }
+.irow .v { display: flex; align-items: baseline; min-width: 0; }
+.irow .v > span { display: inline-block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.irow .v em { flex: none; }
 .irow .v .pfx { color: var(--muted); margin-left: 0; }
 .irow > i { justify-self: end; font-size: 15px; color: var(--faint); opacity: 0; transition: opacity 140ms, color 140ms; }
 .irow:hover > i, .irow:focus-visible > i { opacity: 1; }
@@ -2588,11 +2590,11 @@ function scanStart(again = false) {
   if (!live) return;
   const todo = [...Array(n * 256).keys()].filter(i => !scan.edge(i));
   scan.total = todo.length;
-  const worker = async () => {
-    while (todo.length && run === scan.run) {
-      const i = todo.shift(), ip = numIp(first + i), got = await scanAsk(ip, a);
-      if (run !== scan.run) return;
-      const c = scan.cells[i]; c.dataset.ip = ip;
+  // Answers come in bursts (every empty address times out at once), so they wait in a queue
+  // and are let out a few per frame, lowest address first: the grid, ring and % move steadily.
+  const q = [];
+  const show = (i, got) => {
+      const ip = numIp(first + i), c = scan.cells[i]; c.dataset.ip = ip;
       scan.hosts[i] = got;
       c.classList.add(ip === a.cfg.address ? "me" : ip === a.cfg.gateway ? "gw" : got ? "used" : "free");
       c.dataset.tip = scanSays(ip, got, a); c.setAttribute("aria-label", c.dataset.tip);
@@ -2600,15 +2602,36 @@ function scanStart(again = false) {
       if (scan.follow && Math.floor(i / 256) > scan.at) scanGo(scan.at = Math.floor(i / 256));
       scanState();
       if (scan.tell === null || scan.tell === undefined) scanTell(null);
+  };
+  // The pace follows how fast answers have come in so far (an average, so bursts even out),
+  // a bit slower while the queue is short so it never runs dry, faster when it piles up.
+  let fed = false, got = 0, acc = 0;
+  const t0 = performance.now(); let last = t0;
+  const drain = now => {
+    if (run !== scan.run) return;
+    const dt = Math.min(now - last, 50); last = now;
+    const rate = got / Math.max(now - t0, 400), lean = fed ? 2 : q.length > 40 ? 1.4 : q.length < 10 ? 0.7 : 1;
+    acc += dt * rate * lean;
+    q.sort((x, y) => x[0] - y[0]);
+    while (acc >= 1 && q.length) { show(...q.shift()); acc--; }
+    if (!q.length) acc = Math.min(acc, 1);
+    if (q.length || !fed) requestAnimationFrame(drain); else done();
+  };
+  const worker = async () => {
+    while (todo.length && run === scan.run) {
+      const i = todo.shift(), res = await scanAsk(numIp(first + i), a);
+      if (run !== scan.run) return;
+      q.push([i, res]); got++;
     }
   };
   scan.at = 0;
+  requestAnimationFrame(drain);
   // ponytail: an empty address waits ~400 ms; 48 at once sweeps a /24 in ~2 s.
-  Promise.all(Array.from({ length: tauri ? 48 : 16 }, worker)).then(() => {
-    if (run !== scan.run) return;
+  Promise.all(Array.from({ length: tauri ? 48 : 16 }, worker)).then(() => { fed = true; });
+  const done = () => {
     if (scan.follow) setTimeout(() => run === scan.run && scan.follow && scanGo(scan.own), 400);
     scanTell(scan.tell ?? null);
-  });
+  };
 }
 // The header map: one segment per /24 (none for a single one). Click one to go there.
 function scanMap(n) {
@@ -2634,9 +2657,13 @@ const scanAsk = (ip, a) => net("scan_host", { address: ip, source: a.cfg.address
 // What a cell's tooltip says.
 function scanSays(ip, x, a) {
   const h = +ip.split(".")[3];
-  const who = ip === a.cfg.address ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : x ? (x.vendor || L("Unknown maker", "ไม่ทราบยี่ห้อ"))
+  // A MAC with the "locally administered" bit is made up by the device (phones and laptops do this for privacy): no maker to find.
+  const priv = x?.mac && parseInt(x.mac.slice(0, 2), 16) & 2;
+  const maker = x && (x.vendor || (priv ? L("Private MAC (phone or laptop)", "Private MAC (มือถือ/โน้ตบุ๊ก)") : L("Unknown maker", "ไม่ทราบยี่ห้อ")));
+  const role = ip === a.cfg.address ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : "";
+  const who = role ? [role, x?.vendor].filter(Boolean).join(" · ") : x ? maker
     : (h === 0 || h === 255) ? L(`Free, valid on a /${prefixOf(a.cfg.subnet)}`, `ว่าง ใช้ได้ในวง /${prefixOf(a.cfg.subnet)}`) : L("Free, click to use", "ว่าง กดเพื่อใช้");
-  return [ip, who, x?.ms ? `${x.ms} ms` : ""].filter(Boolean).join(" · ") + (x?.mac ? `\n${x.mac}` : "");
+  return [[ip, x?.ms ? `${x.ms} ms` : ""].filter(Boolean).join(" · "), who, x?.mac].filter(Boolean).join("\n");
 }
 // Footer: the key and the tally.
 function scanTell() {
