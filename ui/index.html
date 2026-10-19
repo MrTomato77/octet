@@ -203,9 +203,41 @@ button, input, select { font: inherit; color: inherit; }
 .ptab .diff { position: static; display: none; margin: 0; }
 .ptab.pending .diff { display: block; }
 .ptabs + .break { margin-top: var(--s3); }
-/* Pages share one cell, so the old one can leave while the new one arrives */
-.pages { display: grid; }
-.page { grid-area: 1 / 1; min-width: 0; }
+/* Pages share one cell, so the old one can leave while the new one arrives.
+   The cell fills what's left under the tabs; a page longer than that scrolls on its own. */
+.scroll { display: flex; flex-direction: column; min-height: 0; }
+.pages { display: grid; grid-template-rows: minmax(0, 1fr); flex: 1; min-height: 0; }
+.page { grid-area: 1 / 1; min-width: 0; min-height: 0; }
+/* Only Advanced grows past the window (many rows); 2px of room so focus rings at its edges aren't cut */
+#page-adv { overflow-y: auto; scrollbar-width: none; padding: 2px; margin: -2px; }
+/* No scrollbar: the edge that has more past it fades out instead */
+#page-adv.below { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
+#page-adv.above { mask-image: linear-gradient(to top, #000 calc(100% - 28px), transparent); }
+#page-adv.above.below { mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+/* Advanced: rows carry their own bottom gap, so a row grows from nothing without a gap that jumps */
+.form > .alist { grid-column: 1 / -1; display: block; min-height: 0; margin-bottom: calc(-1 * var(--row-gap)); }
+.arow { display: grid; grid-template-columns: var(--label-w) var(--field-w); column-gap: var(--col-gap); align-items: center;
+  height: calc(var(--row-h) + var(--row-gap)); padding-bottom: var(--row-gap); box-sizing: border-box; }
+.arow > label { color: var(--muted); }
+.arow .pair { display: flex; align-items: center; }
+.rm { display: inline-flex; align-items: center; gap: 6px; height: var(--row-h); padding: 0; border: 0; background: none;
+  color: var(--muted); font: 13px var(--font); cursor: pointer; justify-self: start; transition: color var(--t-fast) var(--ease-out); }
+.rm .ph { font-size: 16px; }
+.rm:hover { color: var(--bad); }
+.rm:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-input); }
+.add-row { width: var(--field-w); height: var(--row-h); display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px dashed var(--border-strong); border-radius: var(--r-input); background: none; color: var(--muted); font: 13px var(--font); cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out), transform var(--t-press) var(--ease-out); }
+.add-row:hover { background: var(--hover); color: var(--ink); }
+.add-row:active { transform: scale(0.98); }
+.add-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.add-row[hidden], .adv-note[hidden] { display: none; }
+.adv-note { display: flex; align-items: center; font-size: 12px; color: var(--muted); gap: 6px; }
+.link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.col-head { justify-content: flex-end; font-size: 12px; color: var(--faint); min-height: 16px !important; }
+.col-head span { width: 40px; text-align: center; }
+.metric { width: 40px; }
+.metric::placeholder { color: var(--faint); }
 .page[hidden] { display: none; }
 .page.leaving { pointer-events: none; }
 .page.soon { display: grid; place-content: center; justify-items: center; gap: var(--s2); min-height: 280px; color: var(--muted); font-size: 13px; }
@@ -294,7 +326,7 @@ button, input, select { font: inherit; color: inherit; }
 
 /* Action bar */
 .actions { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s6); border-top: 1px solid var(--border); background: var(--surface); }
-.status { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status { flex: 1; min-width: 0; min-height: var(--row-h); line-height: var(--row-h); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status.bad { color: var(--bad); }
 /* Confirm: a tinted mark, a one-line question, the detail underneath */
 #ask { width: 360px; }
@@ -625,7 +657,31 @@ html.app, html.app body { overflow: hidden; }
         </div>
         </div>
         <!-- ponytail: placeholders until each page is built (docs/plan-0.2.md) -->
-        <div class="page soon" id="page-adv" data-page="adv" role="tabpanel" hidden><i class="ph ph-stack"></i><span data-t="soonAdv">Extra addresses, gateways and metric</span></div>
+        <div class="page" id="page-adv" data-page="adv" role="tabpanel" hidden>
+          <div class="grid form" role="group" aria-label="IP addresses">
+            <div class="alist" id="adv-ips"></div>
+            <span></span><span><button class="add-row" id="add-ip"><i class="ph ph-plus"></i><span data-t="addIp">Add address</span></button>
+              <span class="adv-note" id="adv-dhcp" hidden><span data-t="byDhcp">Set by DHCP.</span><button class="link" id="adv-manual" data-t="toManual">Switch to Manual</button></span></span>
+          </div>
+          <hr class="break">
+          <div class="grid form" role="group" aria-label="Gateways">
+            <span class="col-head"></span><span class="col-head"><span data-t="metric">Metric</span></span>
+            <div class="alist" id="adv-gws"></div>
+            <span></span><button class="add-row" id="add-gw"><i class="ph ph-plus"></i><span data-t="addGw">Add gateway</span></button>
+          </div>
+          <hr class="break">
+          <div class="grid form" role="group" aria-label="Interface metric">
+            <span class="lbl" data-t="ifMetric">Interface metric</span>
+            <div class="ctl">
+              <div class="seg" role="radiogroup" aria-label="Interface metric">
+                <span class="thumb"></span>
+                <label class="choice" title="Windows picks it from the link speed"><input type="radio" name="metricmode" value="auto"><span data-t="auto">Automatic</span></label>
+                <label class="choice"><input type="radio" name="metricmode" value="manual"><span data-t="manual">Manual</span></label>
+              </div>
+              <span class="ext"><input class="prefix metric" id="f-metric" maxlength="4" inputmode="numeric" aria-label="Interface metric" title="1 to 9999. Lower wins when two adapters can reach the same place."></span>
+            </div>
+          </div>
+        </div>
         <div class="page soon" id="page-probe" data-page="probe" role="tabpanel" hidden><i class="ph ph-pulse"></i><span data-t="soonProbe">Ping with a live graph</span></div>
         <div class="page soon" id="page-scan" data-page="scan" role="tabpanel" hidden><i class="ph ph-magnifying-glass"></i><span data-t="soonScan">Free addresses on this subnet</span></div>
         <div class="page soon" id="page-info" data-page="info" role="tabpanel" hidden><i class="ph ph-clipboard-text"></i><span data-t="soonInfo">A summary to copy and send</span></div>
@@ -800,7 +856,8 @@ const T = {
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
     up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabProbe: "Probe", tabScan: "Scan", tabInfo: "Info",
     soonAdv: "Extra addresses, gateways and metric", soonProbe: "Ping with a live graph", soonScan: "Free addresses on this subnet", soonInfo: "A summary to copy and send",
-    kPages: "Go to a page",
+    kPages: "Go to a page", addIp: "Add address", addGw: "Add gateway", byDhcp: "Set by DHCP.", toManual: "Switch to Manual",
+    metric: "Metric", ifMetric: "Interface metric",
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
   },
   th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", refresh: "รีเฟรช", release: "Release IP", renew: "Renew IP", cycle: "Release แล้ว Renew",
@@ -815,7 +872,8 @@ const T = {
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
     up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabProbe: "ทดสอบ", tabScan: "หา IP", tabInfo: "ข้อมูล",
     soonAdv: "หลาย IP, หลาย Gateway และ Metric", soonProbe: "Ping พร้อมกราฟสด", soonScan: "IP ที่ยังว่างใน subnet นี้", soonInfo: "สรุปข้อมูลไว้คัดลอกส่งต่อ",
-    kPages: "ไปที่หน้า",
+    kPages: "ไปที่หน้า", addIp: "เพิ่ม IP", addGw: "เพิ่ม Gateway", byDhcp: "ได้จาก DHCP", toManual: "เปลี่ยนเป็นกำหนดเอง",
+    metric: "Metric", ifMetric: "Interface metric",
     changes: n => `แก้ไว้ ${n} จุด ยังไม่ได้บันทึก`, applied: n => `บันทึกค่าของ ${n} แล้ว`, disable: "ปิดการใช้งาน", enable: "เปิดการใช้งาน",
   },
 };
@@ -930,7 +988,7 @@ const masks = Array.from({ length: 33 }, (_, n) => {
 });
 const prefixOf = m => masks.indexOf(m);
 
-function ipField(host, key, short, ext) {
+function ipField(host, key, short, ext, put) {
   host.innerHTML = "";
   const box = document.createElement("div");
   box.className = "ip" + (short ? " short" : "");
@@ -982,7 +1040,9 @@ function ipField(host, key, short, ext) {
     inputs.forEach(x => { x._count = (x._count || 0) + 1; delete x.dataset.final; });  // typing stops a count
     const v = inputs.map(x => x.value);
     box.classList.remove("flagged");
-    draft[key] = v.every(x => x === "") ? "" : v.map(x => x === "" ? x : String(+x)).join(".");
+    const value = v.every(x => x === "") ? "" : v.map(x => x === "" ? x : String(+x)).join(".");
+    if (put) return put(value);
+    draft[key] = value;
     sync(key);
   }
   return {
@@ -1045,20 +1105,33 @@ function problems() {
     if (!validIp(draft.address) || host === 0 || host === 2 ** (32 - p) - 1) out.push(["address", t("ip")]);
     if (prefixOf(draft.subnet) < 1) out.push(["subnet", t("subnet")]);
     if (draft.gateway && !validIp(draft.gateway)) out.push(["gateway", t("gateway")]);
+    draft.extra.forEach((x, i) => { if (!validIp(x.address) || prefixOf(x.subnet) < 1 || x.address === draft.address) out.push([`extra${i}`, `${t("ip")} ${i + 2}`]); });
+    draft.gws.forEach((g, i) => { if (!validIp(g.gateway) || !okMetric(g.metric)) out.push([`gw${i}`, `${t("gateway")} ${i + 2}`]); });
+    if (!okMetric(draft.gwMetric)) out.push(["gwMetric", t("metric")]);
   }
+  if (!okMetric(draft.metric) || (draft.metric === "" && $("f-metric") && document.querySelector("input[name=metricmode][value=manual]").checked)) out.push(["metric", t("ifMetric")]);
   if (!draft.dnsAuto) {
     if (draft.dns1 && !validIp(draft.dns1)) out.push(["dns1", t("dns1")]);
     if (draft.dns2 && !validIp(draft.dns2)) out.push(["dns2", t("dns2")]);
   }
   return out;
 }
-const keys = ["ipAuto", "address", "subnet", "gateway", "dnsAuto", "dns1", "dns2", "register"];
+const keys = ["ipAuto", "address", "subnet", "gateway", "extra", "gws", "gwMetric", "metric", "dnsAuto", "dns1", "dns2", "register"];
+const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
 const changed = () => !draft ? [] : keys.filter(k => {
   const a = adapters[sel].cfg;
-  if (draft.ipAuto && ["address", "subnet", "gateway"].includes(k)) return false;
+  if (draft.ipAuto && ["address", "subnet", "gateway", "extra", "gws", "gwMetric"].includes(k)) return false;
   if (draft.dnsAuto && ["dns1", "dns2"].includes(k)) return false;
-  return a[k] !== draft[k];
+  return !same(a[k], draft[k]);
 });
+// The Advanced values (more addresses and gateways, metrics) with what Windows reported.
+// ponytail: extra addresses take the main mask until the Rust side reads each one's own.
+function cfgOf(a) {
+  a.cfg.extra ??= (a.extraIps || []).map(address => ({ address, subnet: a.cfg.subnet }));
+  a.cfg.gws ??= []; a.cfg.gwMetric ??= ""; a.cfg.metric ??= "";
+  return a.cfg;
+}
+const okMetric = v => v === "" || (/^\d{1,4}$/.test(v) && +v >= 1);
 
 function say(text, kind = "", ic = "", quiet = false) {
   const st = $("status");
@@ -1074,7 +1147,7 @@ const icon = (button, name) => window.morph?.[button]?.(name);
 
 function sync(from) {
   if (!draft) return;
-  const diff = changed(), bad = problems(), extra = !draft.ipAuto ? adapters[sel].extraIps || [] : [];
+  const diff = changed(), bad = problems();
   for (const k of ["address", "subnet", "gateway", "dns1", "dns2"]) {
     const f = fields[k];
     f.box.classList.toggle("changed", diff.includes(k));
@@ -1082,12 +1155,8 @@ function sync(from) {
   }
   if (from !== "prefix") { const shownMask = fields.subnet.inputs.map(shownOf).join("."), p = prefixOf(shownMask); prefix.value = p >= 0 ? p : ""; }
   updateTags();
+  if (window.pagesReady) markAdv(diff, bad);
   if (bad.length && diff.length) say(bad.map(b => b[1]).join(", ") + L(" needs a valid value", " ไม่ถูกต้อง"), "bad");
-  // Manual IP replaces every address on the adapter: the line says which ones go.
-  else if (extra.length) {
-    say(L(`Apply removes ${extra.join(", ")}`, `บันทึกแล้วจะลบ ${extra.join(", ")}`), "", "info", true);
-    $("status").title = L(`This adapter also has ${extra.join(", ")}. A manual IP keeps only the address above.`, `อะแดปเตอร์นี้มี ${extra.join(", ")} อยู่ด้วย ถ้าตั้ง IP เอง จะเหลือแค่ IP ข้างบน`);
-  }
   else if (diff.length) say(t("changes")(diff.length), "", "", true);
   // Idle: the line explains an adapter that is down or off instead of "No changes".
   else if (adapters[sel].state === "disabled") {
@@ -1129,6 +1198,7 @@ function renderForm(roll = false) {
   // set address source=static replaces every IPv4 on the adapter
   // Same gateway (switching Automatic/Manual, a refresh): same text, so retext leaves it still.
   gatewayName();
+  if (window.pagesReady) renderAdv(roll);
   sync();
   renderSlots();
 }
@@ -1263,7 +1333,7 @@ function renderAdapter(roll = false) {
     return;
   }
   renderAdapterFacts();
-  draft = structuredClone(adapters[sel].cfg);
+  draft = structuredClone(cfgOf(adapters[sel]));
   renderForm(roll);
 }
 // In-page confirm: native confirm() blocks and may not show inside the WebView.
@@ -1381,7 +1451,7 @@ function renderRegister() {
 }
 $("revert").onclick = () => {
   const b = $("revert"); b.classList.remove("rewind"); void b.offsetWidth; b.classList.add("rewind");
-  draft = structuredClone(adapters[sel].cfg);
+  draft = structuredClone(cfgOf(adapters[sel]));
   renderForm(true);
   say(L("Back to current values", "คืนค่าเดิมแล้ว"));
 };
@@ -1902,6 +1972,9 @@ function showPage(next) {
   page = next;
   for (const b of ptabs) { const on = b.dataset.page === page; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; }
   placePill(true);
+  if (next === "adv") renderAdv();
+  if (next === "ip" && draft) for (const k of ["address", "subnet", "gateway"]) fields[k].set(draft.ipAuto ? adapters[sel].cfg[k] : draft[k], !draft.ipAuto);
+  if (next === "ip") sync();
   now.hidden = false;
   footer(editable(page));
   pending();
@@ -1952,7 +2025,135 @@ ptabs.forEach((b, i) => {
     showPage(t.dataset.page); t.focus();
   };
 });
-placePill(); window.pagesReady = true;
+placePill();
+
+// ---------- Advanced: more addresses, more gateways, metrics ----------
+// Row 0 of each list is the address or gateway on IP & DNS (same draft value). Rows grow from
+// nothing and fold away; what's below glides with them. The draft changes at once, the motion follows.
+const adv = { ip: [], gw: [] };
+let advDrawn = false;
+const advData = kind => kind === "ip" ? draft.extra : draft.gws;
+function advRow(kind, i) {
+  const rows = adv[kind], el = document.createElement("div");
+  el.className = "arow";
+  const row = { el };
+  const at = () => rows.indexOf(row);
+  if (i === 0) { const l = document.createElement("label"); l.textContent = t(kind === "ip" ? "ip" : "gateway"); el.append(l); row.lbl = l; }
+  else {
+    const b = document.createElement("button");
+    b.className = "rm"; b.innerHTML = `<i class="ph ph-minus-circle"></i><span>${L("Remove", "ลบ")}</span>`;
+    b.onclick = () => removeRow(kind, row);
+    el.append(b); row.rm = b;
+  }
+  const pair = document.createElement("div"); pair.className = "pair"; el.append(pair);
+  const key = `${kind}${i}`;
+  const write = (k, v) => { const n = at(); if (n === 0) draft[k === "address" || k === "gateway" ? k : k === "subnet" ? "subnet" : "gwMetric"] = v; else advData(kind)[n - 1][k] = v; sync("adv"); };
+  row.f = ipField(pair, key, true, false, v => write(kind === "ip" ? "address" : "gateway", v));
+  if (kind === "ip") {
+    const sl = document.createElement("span"); sl.className = "slash"; sl.textContent = "/";
+    const pre = document.createElement("input"); pre.className = "prefix"; pre.maxLength = 2; pre.inputMode = "numeric"; pre.setAttribute("aria-label", "Prefix length");
+    pre.oninput = () => { pre.value = pre.value.replace(/\D/g, ""); const n = +pre.value; write("subnet", pre.value !== "" && n <= 32 ? masks[n] : ""); };
+    row.f.box.addEventListener("exit-right", () => { pre.focus(); pre.select(); });
+    pair.append(sl, pre); row.pre = pre;
+  } else {
+    const ext = document.createElement("span"); ext.className = "ext";
+    const m = document.createElement("input"); m.className = "prefix metric"; m.maxLength = 4; m.inputMode = "numeric"; m.placeholder = L("Auto", "อัตโนมัติ");
+    m.setAttribute("aria-label", "Gateway metric"); m.title = L("Blank: Windows picks it", "เว้นว่าง: ให้ Windows เลือกเอง");
+    m.oninput = () => { m.value = m.value.replace(/\D/g, ""); write("metric", m.value); };
+    row.f.box.addEventListener("exit-right", () => { m.focus(); m.select(); });
+    ext.append(m); pair.append(ext); row.pre = m;
+  }
+  row.set = (d, editable, roll) => {
+    row.f.set(kind === "ip" ? d.address : d.gateway, editable, roll);
+    row.pre.value = kind === "ip" ? (prefixOf(d.subnet) >= 0 ? prefixOf(d.subnet) : "") : d.metric;
+    row.pre.disabled = !editable;
+    if (row.rm) row.rm.hidden = !editable;
+  };
+  return row;
+}
+const rowEase = "cubic-bezier(0.33, 1, 0.68, 1)";
+function rowIn(el) {
+  if (calm.matches) return;
+  el.animate([{ height: "0px", paddingBottom: "0px", opacity: 0, transform: "translateY(4px)" }, {}], { duration: 180, easing: rowEase });
+}
+function rowOut(el) {
+  if (calm.matches) return el.remove();
+  el.style.pointerEvents = "none";
+  el.style.overflow = "hidden";
+  el.animate([{}, { height: "0px", paddingBottom: "0px", opacity: 0, transform: "translateX(8px)" }], { duration: 140, easing: "ease-in", fill: "forwards" })
+    .finished.finally(() => el.remove());
+}
+function fill(kind, host, data, editable, roll) {
+  const rows = adv[kind];
+  while (rows.length < data.length) { const r = advRow(kind, rows.length); rows.push(r); host.append(r.el); if (advDrawn) rowIn(r.el); }
+  while (rows.length > data.length) rowOut(rows.pop().el);
+  data.forEach((d, i) => rows[i].set(d, editable, roll));
+}
+function renderAdv(roll = false) {
+  if (!draft) return;
+  const a = adapters[sel], ed = !draft.ipAuto, src = ed ? draft : cfgOf(a);
+  fill("ip", $("adv-ips"), [{ address: src.address, subnet: src.subnet }, ...src.extra], ed, roll);
+  fill("gw", $("adv-gws"), [{ gateway: src.gateway, metric: src.gwMetric }, ...src.gws], ed, roll);
+  $("add-ip").hidden = $("add-gw").hidden = !ed;
+  $("adv-dhcp").hidden = ed;
+  const manual = draft.metric !== "" || document.activeElement === $("f-metric");
+  document.querySelector(`input[name=metricmode][value=${manual ? "manual" : "auto"}]`).checked = true;
+  // Automatic shows the number Windows picked, read-only.
+  $("f-metric").value = manual ? draft.metric : (a.ifMetric ?? (tauri ? "" : 25));
+  $("f-metric").disabled = !manual;
+  advDrawn = true;
+  markAdv(changed(), problems());
+  if (window.pagesReady) advEdges();
+}
+// Changed rows wear the diamond, bad ones go red once you leave them, like the fields on IP & DNS.
+function markAdv(diff, bad) {
+  const c = cfgOf(adapters[sel]);
+  adv.ip.forEach((r, i) => {
+    const was = i ? c.extra[i - 1] : { address: c.address, subnet: c.subnet }, now = i ? draft.extra[i - 1] : { address: draft.address, subnet: draft.subnet };
+    r.f.box.classList.toggle("changed", !draft.ipAuto && !!now && !same(was, now));
+    r.f.box.classList.toggle("invalid", i > 0 && bad.some(([b]) => b === `extra${i - 1}`) && !!now?.address && !r.el.contains(document.activeElement));
+  });
+  adv.gw.forEach((r, i) => {
+    const was = i ? c.gws[i - 1] : { gateway: c.gateway, metric: c.gwMetric }, now = i ? draft.gws[i - 1] : { gateway: draft.gateway, metric: draft.gwMetric };
+    r.f.box.classList.toggle("changed", !draft.ipAuto && !!now && !same(was, now));
+    r.f.box.classList.toggle("invalid", i > 0 && bad.some(([b]) => b === `gw${i - 1}`) && !!now?.gateway && !r.el.contains(document.activeElement));
+  });
+  $("f-metric").classList.toggle("bad", bad.some(([b]) => b === "metric") && !$("f-metric").matches(":focus"));
+}
+function addRow(kind) {
+  advData(kind).push(kind === "ip" ? { address: "", subnet: draft.subnet } : { gateway: "", metric: "" });
+  renderAdv();
+  sync("adv");
+  const r = adv[kind].at(-1); r.f.inputs[0].focus();
+}
+function removeRow(kind, row) {
+  const rows = adv[kind], n = rows.indexOf(row);
+  advData(kind).splice(n - 1, 1);
+  rows.splice(n, 1);
+  // Rows below now sit one place up: re-label their writes by position (at() reads it live).
+  (rows[n]?.rm ?? $(kind === "ip" ? "add-ip" : "add-gw")).focus();
+  rowOut(row.el);
+  sync("adv");
+}
+$("add-ip").onclick = () => addRow("ip");
+$("add-gw").onclick = () => addRow("gw");
+$("adv-manual").onclick = () => pick("ipmode", "manual");
+document.querySelectorAll("input[name=metricmode]").forEach(x => x.onchange = () => {
+  const a = adapters[sel];
+  draft.metric = x.value === "manual" ? String(a.ifMetric ?? (tauri ? "" : 25)) : "";
+  renderAdv(); sync("adv");
+  if (x.value === "manual") { $("f-metric").focus(); $("f-metric").select(); }
+});
+$("f-metric").oninput = () => { const m = $("f-metric"); m.value = m.value.replace(/\D/g, ""); draft.metric = m.value; sync("adv"); };
+function advEdges() {
+  const p = $("page-adv");
+  p.classList.toggle("above", p.scrollTop > 1);
+  p.classList.toggle("below", p.scrollTop + p.clientHeight < p.scrollHeight - 1);
+}
+$("page-adv").addEventListener("scroll", advEdges, { passive: true });
+const edgeWatch = new ResizeObserver(advEdges);
+["page-adv", "adv-ips", "adv-gws"].forEach(id => edgeWatch.observe($(id)));
+window.pagesReady = true;
 
 // Tooltips replace native titles. In the rail they fly out beside the icon.
 // They show on hover and on keyboard focus, and are linked with aria-describedby.
@@ -1996,7 +2197,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") hideTip(); }
 
 // App open: skeleton first, then the real values count in.
 renderAdapterFacts();
-draft = structuredClone(adapters[sel].cfg);
+draft = structuredClone(cfgOf(adapters[sel]));
 // As many skeleton rows as the list had last time (the sample list only stands in for the demo).
 for (let k = tauri ? +(pref("octet-rows") ?? 3) : adapters.filter(a => !hidden.has(a.id)).length; k > 0; k--) { const li = document.createElement("li"); li.className = "skel"; $("list").append(li); }
 document.querySelector(".scroll").classList.add("loading");
@@ -2055,7 +2256,7 @@ function pick(name, value) { const x = document.querySelector(`input[name=${name
 async function go(i) { closeSettings(); if (sel !== i) await select(i); }
 async function edit(changes, apply = false) {
   await go(0);
-  draft = { ...structuredClone(adapters[0].cfg), ipAuto: false, dnsAuto: false, ...changes };
+  draft = { ...structuredClone(cfgOf(adapters[0])), ipAuto: false, dnsAuto: false, ...changes };
   renderForm();
   if (apply) setTimeout(() => $("apply").click(), 400);
 }
