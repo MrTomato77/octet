@@ -423,8 +423,11 @@ mod native {
             while !u.is_null() {
                 let x = unsafe { &*u };
                 if let Some(ip) = unsafe { ipv4(&x.Address) } {
-                    raw.ip.push(ip.to_string());
-                    raw.subnet.push(mask(x.OnLinkPrefixLength));
+                    // The leased address is the main one, wherever Windows lists it: a typed-in extra can
+                    // come first, and the leased one would then be offered for deletion (which netsh refuses).
+                    let at = if x.PrefixOrigin == 3 { 0 } else { raw.ip.len() };   // IpPrefixOriginDhcp
+                    raw.ip.insert(at, ip.to_string());
+                    raw.subnet.insert(at, mask(x.OnLinkPrefixLength));
                 }
                 u = x.Next;
             }

@@ -2088,9 +2088,13 @@ function setRail(on, instant = false) {
 $("collapse").onclick = () => setRail(!isRail());
 document.querySelector(".main").addEventListener("click", e => { if (!isRail() && e.target.classList.contains("main")) setRail(true); });
 document.querySelector(".side").addEventListener("transitionend", placeIndicator);
+// No browser menu (Back, Refresh, Save as, Print) in the app; text fields keep cut, copy and paste.
+document.addEventListener("contextmenu", e => { if (document.documentElement.classList.contains("app") && !e.target.closest("input, textarea")) e.preventDefault(); });
 document.addEventListener("keydown", e => {
   if (e.key.toLowerCase() === "b" && e.ctrlKey) { e.preventDefault(); $("collapse").click(); }
-  if (e.key === "F5") { e.preventDefault(); $("refresh").click(); }
+  if (e.key === "F5" || e.ctrlKey && e.key.toLowerCase() === "r") { e.preventDefault(); $("refresh").click(); }
+  // The browser's own keys (print, save page, find, zoom, devtools…) have no place in the app.
+  if (document.documentElement.classList.contains("app") && (e.ctrlKey && /^[psfgjhuo+=\-0]$/i.test(e.key) || e.key === "F3" || e.key === "F7" || e.key === "F12")) e.preventDefault();
   if (e.ctrlKey && e.key >= "1" && e.key <= "5" && !settingsOpen()) { e.preventDefault(); showPage(ptabs[e.key - 1].dataset.page); }
   if (e.key === "Escape" && settingsOpen() && !document.querySelector("dialog[open]")) { closeSettings(); return; }
   if (e.key === "Escape" && tools.classList.contains("open")) { setTools(false); $("more").focus(); }
@@ -2767,7 +2771,9 @@ const channelOf = f => !f ? 0 : f < 3000 ? (f === 2484 ? 14 : (f - 2407) / 5) : 
 function infoRows() {
   const a = adapters[sel], c = a.cfg, p = prefixOf(c.subnet), up = a.state === "up";
   const dns = v => { const w = resolver(v, c.gateway); return w ? (w.logo ? w.title.replace(/ Public DNS| DNS| \(.*\)/g, "") : L(w.text, { Router: "Router", Local: "ในวง", Public: "Public" }[w.text] || w.text)) : ""; };
-  const at = t => new Date(t).toLocaleTimeString(lang === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit" });
+  // A day-long lease starts and ends at the same clock time, so any day but today carries its date.
+  const at = t => new Date(t).toLocaleString(lang === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit",
+    ...(new Date(t).toDateString() !== new Date().toDateString() && { day: "numeric", month: "short" }) });
   const pub = info.pub[a.id];
   return [
     { icon: "plugs-connected", head: L("Connection", "การเชื่อมต่อ"), rows: [
