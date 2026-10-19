@@ -262,7 +262,7 @@ button, input, select { font: inherit; color: inherit; }
 .pchip .dot.down { background: var(--bad); }
 .pchip.own { flex: 1; min-width: 0; padding-right: 2px; cursor: default; }
 .pchip.own .host { flex: 1; min-width: 0; display: flex; }
-.pchip.own .ip.short { width: auto; flex: 1; min-width: 0; height: calc(var(--row-h) - 4px); background: transparent; position: relative; z-index: 1; }
+.pchip.own .ip.short { width: auto; flex: 1; min-width: 0; height: calc(var(--row-h) - 4px); padding: 0 8px; background: transparent; position: relative; z-index: 1; }   /* no changed mark here, so less side room */
 .pchip.own.empty .ip { border-style: dashed; }
 .pchip.own .ip:focus-within { border-style: solid; }
 .pgraph { flex: 1; position: relative; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: crosshair; }
