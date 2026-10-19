@@ -234,9 +234,9 @@ button, input, select { font: inherit; color: inherit; }
 .orphan .aview { cursor: default; }
 .orphan .aview .m.warn { color: var(--bad); }
 .aedit { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.aedit > span:not(.slash):not(.to) { flex: 1; min-width: 0; display: flex; }
+.aedit > span:not(.slash):not(.to) { flex: 1 1 0; min-width: 0; display: flex; }
 .aedit[hidden] { display: none; }
-.aedit .ip.short { width: auto; flex: 1; }   /* both boxes share what is left, so the row ends on the same right edge */
+.aedit .ip.short { width: auto; flex: 1 1 0; min-width: 0; }   /* both boxes share what is left, so the row ends on the same right edge */
 .aedit .ip span.sep { width: 10px; }
 .aedit .prefix { width: 34px; }
 .aedit .slash { width: 10px; }
