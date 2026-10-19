@@ -342,6 +342,30 @@ button, input, select { font: inherit; color: inherit; }
 .sfoot:not(.busy) > span[data-k]:not(.on):hover { color: var(--ink); background: color-mix(in oklch, var(--ink) 6%, transparent); }
 .sfoot.busy > span[data-k] { cursor: default; color: var(--muted); }   /* nothing to point at until the sweep is done */
 .sfoot > span[data-k].on { background: color-mix(in oklch, var(--accent) 12%, transparent); color: var(--ink); }
+/* Info: what this adapter has, read-only, grouped. A row copies its value; the footer copies it all as text. */
+#page-info:not([hidden]) { display: flex; flex-direction: column; overflow-y: auto; scrollbar-width: none; }
+.info { display: flex; flex-direction: column; }
+.igroup { display: grid; grid-template-columns: 112px minmax(0, 1fr) 20px; padding: var(--s2) 0; }
+.igroup + .igroup { border-top: 1px solid var(--border); }
+.ihead { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; height: 26px; font-size: 12px; color: var(--faint); }
+.ihead i { font-size: 14px; }
+.itag::before { content: "·"; margin-right: 6px; }   /* how it is set, said as quietly as the heading */
+.irow { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; min-height: 30px; margin: 0 -8px; padding: 0 8px;
+  border: 0; border-radius: var(--r-input); background: transparent; color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; transition: background 140ms; }
+.irow:hover { background: var(--hover); }
+.irow .k { color: var(--muted); }
+.irow .v { color: var(--ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.irow .v em { font-style: normal; color: var(--faint); margin-left: 6px; }
+.irow .v .pfx { color: var(--muted); margin-left: 0; }
+.irow > i { justify-self: end; font-size: 15px; color: var(--faint); opacity: 0; transition: opacity 140ms, color 140ms; }
+.irow:hover > i, .irow:focus-visible > i { opacity: 1; }
+.irow.done > i { opacity: 1; color: var(--ok); }
+.irow.ask .v { color: var(--accent); }
+.ifoot { flex: 1; display: flex; align-items: center; gap: var(--s3); min-height: var(--row-h); }
+.ifoot[hidden] { display: none; }
+#info-copy { border-color: transparent; background: transparent; color: var(--muted); padding: 0 var(--s3); }
+#info-copy:hover { background: var(--hover); color: var(--ink); }
+.ifoot-say { flex: 1; min-width: 0; font-size: 13px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .smenu { min-width: 200px; }
 .smenu button { white-space: nowrap; }
 .sfoot { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--s3); min-height: var(--row-h); font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; }
@@ -780,13 +804,14 @@ html.app, html.app body { overflow: hidden; }
           <div class="sgrid" id="scan-grid" role="grid" aria-label="Addresses on this subnet"></div>
           <div class="menu smenu" id="scan-menu" role="menu"></div>
         </div>
-        <div class="page soon" id="page-info" data-page="info" role="tabpanel" hidden><i class="ph ph-clipboard-text"></i><span data-t="soonInfo">A summary to copy and send</span></div>
+        <div class="page" id="page-info" data-page="info" role="tabpanel" hidden><div class="info" id="info-list"></div></div>
         </div>
       </div>
 
       <div class="actions">
         <span class="status" id="status" role="status"></span>
         <span class="sfoot" id="scan-foot" hidden></span>
+        <span class="ifoot" id="info-foot" hidden><span class="ifoot-say" id="info-say"></span><button class="btn" id="info-copy"><i class="ph ph-copy"></i><span></span></button></span>
         <span class="pfoot" id="probe-foot" hidden><span><i class="ph ph-chart-line"></i><span data-t="pAvg">Avg</span><b id="ps-avg">-</b><i class="u">ms</i></span><span><i class="ph ph-arrow-line-up"></i><span data-t="pMax">Max</span><b id="ps-max">-</b><i class="u">ms</i></span><span><i class="ph ph-wave-sine"></i><span data-t="pJit">Jitter</span><b id="ps-jit">-</b><i class="u">ms</i></span><span><i class="ph ph-link-break"></i><span data-t="pLoss">Loss</span><b id="ps-loss">-</b></span></span>
         <button class="btn" id="revert" disabled><i class="ph ph-arrow-counter-clockwise"></i><span data-t="revert">Revert</span></button>
         <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
@@ -883,7 +908,8 @@ html.app, html.app body { overflow: hidden; }
 // Sample adapters modelled on a real read. Mock data only.
 const adapters = [
   { id: 1, name: "Wi-Fi", ssid: "Office-5G", phy: "802.11be", mhz: 6115, speed: 2882e6, desc: "Qualcomm FastConnect 7800 Wi-Fi 7 High Band Simultaneous (HBS) Network Adapter",
-    mac: "02-00-00-00-00-01", state: "up", dhcpServer: "10.0.0.1",
+    mac: "02-00-00-00-00-01", state: "up", dhcpServer: "10.0.0.1", leaseGot: Date.now() - 4 * 3600e3, leaseEnds: Date.now() + 3 * 3600e3 + 17 * 60e3,
+    suffix: "corp.local", ipv6: ["fe80::1c2a:5ff:fe3b:9a01"], wifi: { signal: 82, bssid: "5C-E9-31-7A-10-C4", security: "WPA3-Personal" },
     cfg: { ipAuto: true, address: "10.0.1.124", subnet: "255.255.254.0", gateway: "10.0.0.1", dnsAuto: true, dns1: "8.8.8.8", dns2: "8.8.4.4", register: true } },
   { id: 2, name: "Ethernet", desc: "Realtek USB GbE Family Controller", mac: "02-00-00-00-00-02", state: "down", dhcpServer: "",
     cfg: { ipAuto: false, address: "192.168.50.20", subnet: "255.255.255.0", gateway: "192.168.50.254", dnsAuto: false, dns1: "192.168.50.254", dns2: "1.1.1.1", register: true } },
@@ -918,6 +944,7 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   if (cmd === "who_has") return res(demo.taken[a.address]?.[0] ?? demo.macs[a.address] ?? null);
   if (cmd === "vendor") return res(demo.vendors[a.mac.replace(/[^0-9A-F]/gi, "").slice(0, 6).toUpperCase()] ?? null);
   if (cmd === "hostname") return res(demo.names[a.address] ?? demo.taken[a.address]?.[1] ?? null);
+  if (cmd === "public_ip") return demo.outcome === "fail" ? rej("offline") : res("203.0.113.48");
   if (cmd === "scan_host") {
     const [n3, h] = [a.address.split(".").slice(0, 3).join("."), +a.address.split(".")[3]];
     const me = adapters.find(x => x.cfg.address === a.address), gw = adapters.some(x => x.cfg.gateway === a.address);
@@ -934,7 +961,7 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
     return res();
   }
   rej(`demo: ${cmd}`);
-}, cmd === "change" ? 900 : cmd === "scan_host" ? 40 + Math.random() * 160
+}, cmd === "change" ? 900 : cmd === "scan_host" ? 40 + Math.random() * 160 : cmd === "public_ip" ? 700
   // A name nobody answers for takes seconds on a real network (DNS, LLMNR and NetBIOS all time out).
   : cmd === "hostname" && !(demo.names[a.address] ?? demo.taken[a.address]) ? 2500 : 300));
 const net = (cmd, args) => tauri ? invoke(cmd, args) : demoInvoke(cmd, args);
@@ -1016,6 +1043,13 @@ function scope(v) {
   return ["Public", "Reachable on the internet"];
 }
 // Simple Icons slugs; the mark is drawn in the text colour through a CSS mask.
+// "802.11be · 6 GHz · 2.9 Gbps": the link as one line (status line and Info).
+function linkText(a) {
+  const sp = a.speed || 0;
+  const speed = !sp ? "" : sp >= 1e9 ? `${+(sp / 1e9).toFixed(1)} Gbps` : `${Math.round(sp / 1e6)} Mbps`;
+  const band = !a.mhz ? "" : a.mhz < 3000 ? "2.4 GHz" : a.mhz < 5925 ? "5 GHz" : "6 GHz";
+  return [a.phy, band, speed].filter(Boolean).join(" · ");
+}
 const resolvers = [
   [["8.8.8.8", "8.8.4.4"], "Google Public DNS", "google"],
   [["1.1.1.1", "1.0.0.1", "1.1.1.2", "1.0.0.2", "1.1.1.3", "1.0.0.3"], "Cloudflare", "cloudflare"],
@@ -1275,10 +1309,7 @@ function sync(from) {
     say(L("Settings apply once it connects", "ค่าจะมีผลเมื่อเชื่อมต่อ"), "", "plugs", true);
   } else {
     // Connected and nothing pending: the line tells how well it is connected instead of "No changes".
-    const a = adapters[sel], sp = a.speed || 0;
-    const speed = !sp ? "" : sp >= 1e9 ? `${+(sp / 1e9).toFixed(1)} Gbps` : `${Math.round(sp / 1e6)} Mbps`;
-    const band = !a.mhz ? "" : a.mhz < 3000 ? "2.4 GHz" : a.mhz < 5925 ? "5 GHz" : "6 GHz";
-    const link = [a.phy, band, speed].filter(Boolean).join(" · ");
+    const a = adapters[sel], link = linkText(a), band = a.mhz;
     say(link || t("noChanges"), "", link ? "lightning" : "", true);
     if (band) $("status").title = L(`Channel at ${a.mhz} MHz · no changes`, `ช่องสัญญาณ ${a.mhz} MHz · ยังไม่ได้แก้อะไร`);
   }
@@ -1434,7 +1465,7 @@ function renderAdapterFacts() {
 }
 function renderAdapter(roll = false) {
   const none = !adapters[sel] || hidden.has(adapters[sel].id);
-  if (window.pagesReady && !none) { probeBuild(); if (page === "probe") paintProbe(); if (page === "scan") scanStart(); }   // Probe follows the adapter at once
+  if (window.pagesReady && !none) { probeBuild(); if (page === "probe") paintProbe(); if (page === "scan") scanStart(); if (page === "info") renderInfo(); }   // Probe follows the adapter at once
   document.querySelector(".window").classList.toggle("empty", none);
   if (none) {
     draft = null; $("apply").disabled = $("revert").disabled = true;
@@ -2086,6 +2117,7 @@ function showPage(next) {
   if (next === "adv") renderAdv();
   probeShow(next === "probe");
   scanShow(next === "scan");
+  infoShow(next === "info");
   if (next === "ip" && draft) renderForm();   // Advanced may have switched it to Manual
   now.hidden = false;
   footer(editable(page));
@@ -2444,7 +2476,7 @@ function drawGraph() {
 $("probe-graph").addEventListener("pointermove", e => { probe.hx = e.clientX - e.currentTarget.getBoundingClientRect().left; });
 $("probe-graph").addEventListener("pointerleave", () => { probe.hx = null; });
 function probeShow(on) {
-  $("status").hidden = on || page === "scan"; $("probe-foot").hidden = !on;
+  $("status").hidden = on || page === "scan" || page === "info"; $("probe-foot").hidden = !on;
   if (!on) return;
   if (adapters[sel]) probeBuild();
   paintProbe(); placeThumb(false); alignFoot();
@@ -2655,6 +2687,96 @@ function scanShow(on) {
   if (on) { $("status").hidden = true; scanStart(); centreUnder($("scan-foot"), $("scan-grid"), $("page-scan")); } else scanMenu(null);
 }
 new ResizeObserver(() => centreUnder($("scan-foot"), $("scan-grid"), $("page-scan"))).observe($("scan-grid"));
+// ---------- Info: a summary to read, copy one value, or copy all as text ----------
+// ponytail: the public address is asked for only when you click it (it leaves this machine), and kept per adapter for the session.
+const info = { pub: {} };
+const hostName = "MRTOMATO-PC";   // demo; the app reads it from Windows
+// Wi-Fi channel from the centre frequency.
+const channelOf = f => !f ? 0 : f < 3000 ? (f === 2484 ? 14 : (f - 2407) / 5) : f < 5925 ? (f - 5000) / 5 : (f - 5950) / 5;
+function infoRows() {
+  const a = adapters[sel], c = a.cfg, p = prefixOf(c.subnet), up = a.state === "up";
+  const dns = v => { const w = resolver(v, c.gateway); return w ? (w.logo ? w.title.replace(/ Public DNS| DNS| \(.*\)/g, "") : L(w.text, { Router: "Router", Local: "ในวง", Public: "Public" }[w.text] || w.text)) : ""; };
+  const at = t => new Date(t).toLocaleTimeString(lang === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit" });
+  const pub = info.pub[a.id];
+  return [
+    { icon: "plugs-connected", head: L("Connection", "การเชื่อมต่อ"), rows: [
+      [L("Computer", "ชื่อเครื่อง"), hostName, ""],
+      [L("Adapter", "อะแดปเตอร์"), a.name + (a.ssid ? ` (${a.ssid})` : ""), ""],
+      [L("Device", "อุปกรณ์"), a.desc !== a.name ? a.desc : "", ""],
+      [L("Link", "ลิงก์"), up ? linkText(a) : "", ""],
+      [L("State", "สถานะ"), { up: L("Connected", "เชื่อมต่อแล้ว"), down: L("Not connected", "ยังไม่ได้เชื่อมต่อ"), disabled: L("Disabled", "ปิดอยู่") }[a.state] || a.state, ""],
+      ["MAC", a.mac, ""],
+    ] },
+    { icon: "wifi-high", head: "Wi-Fi", rows: up && a.wifi ? [
+      [L("Signal", "สัญญาณ"), `${a.wifi.signal}%`, a.wifi.signal >= 70 ? L("strong", "แรง") : a.wifi.signal >= 40 ? L("fair", "พอใช้") : L("weak", "อ่อน")],
+      [L("Channel", "ช่อง"), a.mhz ? String(channelOf(a.mhz)) : "", a.mhz ? `${a.mhz} MHz` : ""],
+      ["BSSID", a.wifi.bssid, L("the access point", "ตัวกระจายสัญญาณ")],
+      [L("Security", "การเข้ารหัส"), a.wifi.security, ""],
+    ] : [] },
+    { icon: "map-pin", head: L("Address", "ที่อยู่"), tag: c.ipAuto ? "DHCP" : "Manual", rows: [
+      ["IP", c.address, "", validIp(c.address) && p >= 0 ? `/${p}` : ""],
+      ...(a.extraIps || []).map((x, i) => [L(`IP ${i + 2}`, `IP ${i + 2}`), x, ""]),
+      ["Subnet", c.subnet, ""],
+      ["Gateway", c.gateway, ""],
+      ...(a.ipv6 || []).map(x => ["IPv6", x, x.startsWith("fe80") ? "link-local" : ""]),
+      ...(c.ipAuto && a.dhcpServer ? [[L("DHCP server", "DHCP server"), a.dhcpServer, a.leaseEnds ? (a.leaseGot ? L(`${at(a.leaseGot)} to ${at(a.leaseEnds)}`, `${at(a.leaseGot)} ถึง ${at(a.leaseEnds)}`) : L(`until ${at(a.leaseEnds)}`, `ถึง ${at(a.leaseEnds)}`)) : ""]] : []),
+      ...(up && validIp(c.gateway) ? [["Public IP", pub === undefined ? L("Look up", "ดูค่า") : pub === null ? L("Looking up…", "กำลังดู…") : pub || L("Couldn't reach the internet", "ออกอินเทอร์เน็ตไม่ได้"), pub === undefined ? L("asks a web service", "ถามจากเว็บภายนอก") : "", "", "pub"]] : []),
+    ] },
+    { icon: "globe-simple", head: "DNS", tag: c.dnsAuto ? "DHCP" : "Manual", rows: [
+      [L("Preferred", "หลัก"), c.dns1, dns(c.dns1)],
+      [L("Alternate", "สำรอง"), c.dns2, dns(c.dns2)],
+      [L("Suffix", "Suffix"), a.suffix || "", ""],
+    ] },
+  ].map(g => ({ ...g, rows: g.rows.filter(r => r[1]) })).filter(g => g.rows.length);
+}
+function renderInfo() {
+  const groups = infoRows();
+  $("info-list").replaceChildren(...groups.map(g => {
+    const el = document.createElement("div"); el.className = "igroup";
+    el.innerHTML = `<div class="ihead"><i class="ph ph-${g.icon}"></i><span></span>${g.tag ? `<span class="itag">${g.tag}</span>` : ""}</div>`;
+    el.querySelector(".ihead span").textContent = g.head;
+    for (const [k, v, note, pfx, kind] of g.rows) {
+      const b = document.createElement("button"); b.className = "irow" + (kind === "pub" && !validIp(v) ? " ask" : "");
+      b.innerHTML = `<span class="k"></span><span class="v"><span></span>${pfx ? `<em class="pfx">${pfx}</em>` : ""}${note ? "<em></em>" : ""}</span><i class="ph ph-${kind === "pub" && !validIp(v) ? "arrow-right" : "copy"}"></i>`;
+      b.querySelector(".k").textContent = k; b.querySelector(".v > span").textContent = v;
+      if (note) b.querySelector(".v em:last-child").textContent = note;
+      b.onclick = () => kind === "pub" && !validIp(v) ? infoPublic() : infoCopy(b, v + (pfx || ""));
+      el.append(b);
+    }
+    return el;
+  }));
+  $("info-copy").querySelector("span").textContent = L("Copy all", "คัดลอกทั้งหมด");
+  $("info-say").textContent = L("Plain text, for a chat or a ticket", "เป็นข้อความธรรมดา วางในแชทหรือ ticket ได้");
+}
+// All of it as aligned plain text.
+function infoText() {
+  const groups = infoRows(), w = Math.max(...groups.flatMap(g => g.rows.map(r => r[0].length))) + 2;
+  return groups.map(g => [g.head + (g.tag ? ` (${g.tag})` : ""), ...g.rows.filter(r => r[4] !== "pub" || validIp(r[1]))
+    .map(([k, v, note, pfx]) => `  ${k.padEnd(w)}${v}${pfx || ""}${note ? `  ${note}` : ""}`)].join("\n")).join("\n\n");
+}
+function infoCopy(row, text) {
+  navigator.clipboard?.writeText(text).catch(() => {});
+  if (!row) return;
+  const i = row.querySelector(":scope > i");
+  row.classList.add("done"); i.className = "ph ph-check";
+  clearTimeout(row.t); row.t = setTimeout(() => { row.classList.remove("done"); i.className = "ph ph-copy"; }, 1200);
+}
+$("info-copy").onclick = () => {
+  infoCopy(null, infoText());
+  const b = $("info-copy"), i = b.querySelector("i"), sp = b.querySelector("span");
+  i.className = "ph ph-check"; sp.textContent = L("Copied", "คัดลอกแล้ว");
+  clearTimeout(b.t); b.t = setTimeout(() => { i.className = "ph ph-copy"; sp.textContent = L("Copy all", "คัดลอกทั้งหมด"); }, 1400);
+};
+async function infoPublic() {
+  const id = adapters[sel].id;
+  info.pub[id] = null; renderInfo();
+  info.pub[id] = await net("public_ip").catch(() => "");
+  if (page === "info") renderInfo();
+}
+function infoShow(on) {
+  $("info-foot").hidden = !on;
+  if (on) { $("status").hidden = true; renderInfo(); }
+}
 window.pagesReady = true;
 
 // Tooltips replace native titles. In the rail they fly out beside the icon.
