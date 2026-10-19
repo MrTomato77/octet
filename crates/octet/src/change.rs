@@ -51,6 +51,8 @@ pub fn parse_subnet(value: &str) -> Result<u8, String> {
 
 /// Not a program: `run` does this step itself (DNS servers through the API).
 const DNS: &str = "octet:set-dns";
+/// Same: release or renew the DHCP lease through the API.
+const LEASE: &str = "octet:lease";
 
 /// An extra address's mask: a dotted mask or a prefix length.
 fn mask_of(v: &str) -> Result<Ipv4Addr, String> {
@@ -88,8 +90,8 @@ pub fn commands(r: &Request) -> Result<Vec<Vec<String>>, String> {
     let cmd = |args: &[&str]| args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     let iface = format!("name={index}");
     Ok(match r {
-        Request::Release { .. } => vec![cmd(&["ipconfig", "/release", name])],
-        Request::Renew { .. } => vec![cmd(&["ipconfig", "/renew", name])],
+        Request::Release { .. } => vec![cmd(&[LEASE, &index.to_string(), "release"])],
+        Request::Renew { .. } => vec![cmd(&[LEASE, &index.to_string(), "renew"])],
         // `netsh interface set interface` only takes names, never an index.
         Request::Enable { on, .. } => {
             vec![cmd(&["netsh", "interface", "set", "interface", &format!("name={name}"), if *on { "admin=enable" } else { "admin=disable" }])]
@@ -286,6 +288,11 @@ fn run(cmds: Vec<Vec<String>>) -> Result<(), String> {
         if c[0] == DNS {
             let index = c[1].parse().map_err(|_| "Bad interface index".to_string())?;
             crate::net::set_dns(index, &c[2], c[3] == "register")?;
+            continue;
+        }
+        if c[0] == LEASE {
+            let index = c[1].parse().map_err(|_| "Bad interface index".to_string())?;
+            crate::net::dhcp(index, c[2] == "renew")?;
             continue;
         }
         let o = crate::hidden(&c[0]).args(&c[1..]).output().map_err(|e| e.to_string())?;

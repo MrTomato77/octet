@@ -69,7 +69,7 @@ pub fn computer_name() -> String {
 }
 
 /// The address the internet sees, with who it belongs to. Asked only when the user clicks
-/// (it leaves this machine): one request to ipinfo.io through curl.exe, which Windows ships.
+/// (it leaves this machine): one HTTPS request to ipinfo.io through WinHTTP.
 #[derive(serde::Serialize, Debug, PartialEq)]
 pub struct Public {
     pub ip: String,
@@ -77,11 +77,75 @@ pub struct Public {
     pub city: String,
 }
 pub fn public_ip() -> Result<Public, String> {
-    let o = crate::hidden("curl.exe").args(["-s", "--max-time", "6", "https://ipinfo.io/json"]).output().map_err(|e| e.to_string())?;
-    if !o.status.success() {
-        return Err("Could not reach the internet".into());
+    parse_public(&https_get("ipinfo.io", "/json").ok_or("Could not reach the internet")?)
+}
+
+/// GET https://{host}{path}: the body when the answer is 200, else None. Windows' own HTTP
+/// stack, so the system proxy and certificate store apply; gives up after 6 s per step.
+#[cfg(windows)]
+pub fn https_get(host: &str, path: &str) -> Option<Vec<u8>> {
+    use windows_sys::Win32::Networking::WinHttp::*;
+    let w = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
+    let (agent, host, verb, path) = (w(concat!("Octet/", env!("CARGO_PKG_VERSION"))), w(host), w("GET"), w(path));
+    unsafe {
+        let session = WinHttpOpen(agent.as_ptr(), WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, std::ptr::null(), std::ptr::null(), 0);
+        if session.is_null() {
+            return None;
+        }
+        WinHttpSetTimeouts(session, 6000, 6000, 6000, 6000);
+        let conn = WinHttpConnect(session, host.as_ptr(), INTERNET_DEFAULT_HTTPS_PORT, 0);
+        let req = if conn.is_null() { std::ptr::null_mut() } else {
+            WinHttpOpenRequest(conn, verb.as_ptr(), path.as_ptr(), std::ptr::null(), std::ptr::null(), std::ptr::null(), WINHTTP_FLAG_SECURE)
+        };
+        let mut body = None;
+        if !req.is_null() && WinHttpSendRequest(req, std::ptr::null(), 0, std::ptr::null(), 0, 0, 0) != 0 && WinHttpReceiveResponse(req, std::ptr::null_mut()) != 0 {
+            let (mut status, mut len) = (0u32, 4u32);
+            WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, std::ptr::null(), (&mut status as *mut u32).cast(), &mut len, std::ptr::null_mut());
+            if status == 200 {
+                let (mut out, mut buf) = (Vec::new(), [0u8; 8192]);
+                loop {
+                    let mut n = 0u32;
+                    if WinHttpReadData(req, buf.as_mut_ptr().cast(), buf.len() as u32, &mut n) == 0 { out.clear(); break; }
+                    if n == 0 { body = Some(out); break; }
+                    out.extend_from_slice(&buf[..n as usize]);
+                }
+            }
+        }
+        for h in [req, conn, session] {
+            if !h.is_null() { WinHttpCloseHandle(h); }
+        }
+        body
     }
-    parse_public(&o.stdout)
+}
+#[cfg(not(windows))]
+pub fn https_get(_: &str, _: &str) -> Option<Vec<u8>> {
+    None
+}
+
+/// Gives up the DHCP lease (`renew` false) or asks for one (true), like ipconfig /release and
+/// /renew but in-process. Needs administrator rights; renew waits for the DHCP server.
+#[cfg(windows)]
+pub fn dhcp(index: u32, renew: bool) -> Result<(), String> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{GetInterfaceInfo, IP_ADAPTER_INDEX_MAP, IP_INTERFACE_INFO, IpReleaseAddress, IpRenewAddress};
+    let mut size = 0u32;
+    unsafe { GetInterfaceInfo(std::ptr::null_mut(), &mut size) };
+    let mut buf = vec![0u64; size as usize / 8 + 1];   // u64 for the struct's alignment
+    if unsafe { GetInterfaceInfo(buf.as_mut_ptr().cast(), &mut size) } != 0 {
+        return Err("Could not list the adapters".into());
+    }
+    let info = buf.as_ptr() as *const IP_INTERFACE_INFO;
+    let maps = unsafe { std::slice::from_raw_parts((*info).Adapter.as_ptr(), (*info).NumAdapters.max(0) as usize) };
+    let map: &IP_ADAPTER_INDEX_MAP = maps.iter().find(|m| m.Index == index).ok_or("That adapter has no DHCP to release or renew")?;
+    match unsafe { if renew { IpRenewAddress(map) } else { IpReleaseAddress(map) } } {
+        0 => Ok(()),
+        5 => Err("This needs administrator rights".into()),
+        121 | 1460 => Err("No DHCP server answered".into()),   // semaphore timeout / timeout
+        e => Err(format!("Windows could not {} the lease (error {e})", if renew { "renew" } else { "release" })),
+    }
+}
+#[cfg(not(windows))]
+pub fn dhcp(_: u32, _: bool) -> Result<(), String> {
+    Err("Octet only changes settings on Windows".into())
 }
 /// ipinfo's answer: {"ip": "...", "city": "...", "org": "AS7470 True Internet ..."}.
 fn parse_public(json: &[u8]) -> Result<Public, String> {
@@ -277,10 +341,18 @@ mod tests {
         assert!(!super::computer_name().is_empty());
     }
 
-    /// Only a made-up interface: this test must never change a real adapter's DNS.
+    /// Only made-up interfaces: these must never change a real adapter.
     #[test]
-    fn dns_refuses_a_missing_adapter() {
+    fn refuses_a_missing_adapter() {
         assert_eq!(super::set_dns(999_999, "1.1.1.1", false), Err("That adapter is gone".into()));
+        assert!(super::dhcp(999_999, true).is_err());
+    }
+
+    /// Reaches the internet: `cargo test -p octet asks_ipinfo -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn asks_ipinfo() {
+        println!("{:?}", super::public_ip());
     }
 
     #[test]
