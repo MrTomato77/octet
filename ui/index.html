@@ -242,6 +242,48 @@ button, input, select { font: inherit; color: inherit; }
 .page.soon { display: grid; place-content: center; justify-items: center; gap: var(--s2); min-height: 280px; color: var(--muted); font-size: 13px; }
 .page.soon[hidden] { display: none; }
 .page.soon .ph { font-size: 28px; color: var(--faint); }
+/* Probe: the targets as chips (a thumb slides to the picked one), then its last minute as a graph you can hover.
+   Its address and numbers sit in the footer. */
+#page-probe:not([hidden]) { display: flex; flex-direction: column; gap: var(--s3); }
+.pchips { position: relative; display: flex; gap: 4px; }
+.pchips .thumb { position: absolute; left: 0; top: 0; height: 100%; border-radius: 8px; background: color-mix(in oklch, var(--accent) 16%, transparent); pointer-events: none;
+  transition: transform 240ms cubic-bezier(0.33, 1, 0.68, 1), width 240ms cubic-bezier(0.33, 1, 0.68, 1), top 240ms, height 240ms; }
+.pchips .thumb.in-box { top: 2px; height: calc(100% - 4px); border-radius: var(--r-input); }
+.pchip.own.on .ip { border-color: var(--accent); }
+.pchip { position: relative; display: flex; align-items: center; gap: 6px; height: var(--row-h); padding: 0 var(--s3); border: 1px solid transparent; border-radius: 8px;
+  background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; transition: color 140ms; }
+.pchip:hover { color: var(--ink); }
+.pchip.on { color: var(--ink); }
+.pchip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background 240ms; }
+.pchip .dot.up { background: var(--ok); }
+.pchip .dot.down { background: var(--bad); }
+.pchip.own { flex: 1; min-width: 0; padding-right: 2px; cursor: default; }
+.pchip.own .host { flex: 1; min-width: 0; display: flex; }
+.pchip.own .ip.short { width: auto; flex: 1; min-width: 0; height: calc(var(--row-h) - 4px); background: transparent; position: relative; z-index: 1; }
+.pchip.own.empty .ip { border-style: dashed; }
+.pchip.own .ip:focus-within { border-style: solid; }
+.pgraph { flex: 1; position: relative; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: crosshair; }
+.pgraph svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pgraph .grid { stroke: color-mix(in oklch, var(--border) 45%, transparent); stroke-width: 1; }
+.pgraph .tick { fill: var(--faint); font-size: 11px; }
+.pgraph .line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; }
+.pgraph .area { fill: var(--accent); opacity: 0.22; }
+.pgraph .lost { fill: var(--bad); }
+.pgraph .cursor { stroke: var(--muted); stroke-width: 1; }
+.pgraph .knob { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.ptip { position: absolute; top: var(--s2); left: 0; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; color: var(--ink);
+  white-space: nowrap; pointer-events: none; opacity: 0; font-variant-numeric: tabular-nums; }
+.ptip small { color: var(--muted); font-size: 12px; margin-left: 6px; }
+/* Fixed columns, so a value changing width never pushes the next one along. */
+/* Each item keeps icon, label, value and unit together; it is as wide as its widest reading (measured once),
+   so the spare room falls after it, between items, and nothing moves as values change. */
+.pfoot { flex: 1; display: flex; justify-content: center; gap: var(--s3); align-items: center; min-height: var(--row-h); font-size: 13px; }
+.pfoot > span { display: flex; align-items: baseline; gap: 6px; min-width: 0; color: var(--muted); white-space: nowrap; }
+.pfoot .u { font-style: normal; font-size: 11px; color: var(--faint); margin-left: -3px; }
+.pfoot .ph { font-size: 15px; color: var(--faint); flex: none; }
+.pfoot[hidden] { display: none; }
+.pfoot b { display: inline-block; font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pfoot b.bad { color: var(--bad); }
 .form { row-gap: var(--row-gap); }
 .form > label, .form > .lbl { color: var(--muted); }
 .form > * { min-height: var(--row-h); display: flex; align-items: center; }
@@ -261,6 +303,7 @@ button, input, select { font: inherit; color: inherit; }
 #presets { right: 0; top: 36px; min-width: 168px; }
 #presets.up { top: auto; bottom: 36px; transform-origin: bottom right; }
 #presets button { grid-template-columns: 20px 1fr; }
+.pchip.on .plogo { background: var(--ink); }
 .plogo { width: 16px; height: 16px; background: var(--muted); -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
 #presets button:disabled { opacity: 0.45; cursor: not-allowed; }
 /* Same width as the subnet octet box, so mode rows and address rows share one edge */
@@ -660,7 +703,10 @@ html.app, html.app body { overflow: hidden; }
           <div class="ahead" aria-hidden="true"><span class="host">IP address</span><span class="slash"></span><span class="cidr">CIDR</span><span class="to"></span><span class="host">Gateway</span></div>
           <div class="alist" id="adv-list" role="list" aria-label="Addresses"></div>
         </div>
-        <div class="page soon" id="page-probe" data-page="probe" role="tabpanel" hidden><i class="ph ph-pulse"></i><span data-t="soonProbe">Ping with a live graph</span></div>
+        <div class="page" id="page-probe" data-page="probe" role="tabpanel" hidden>
+          <div class="pchips" id="probe-list" role="tablist" aria-label="Targets"><span class="thumb" id="probe-thumb"></span></div>
+          <div class="pgraph" id="probe-graph" role="img" aria-label="Round trips in ms, last 60 seconds"><svg id="probe-svg" preserveAspectRatio="none"></svg><div class="ptip" id="probe-tip"></div></div>
+        </div>
         <div class="page soon" id="page-scan" data-page="scan" role="tabpanel" hidden><i class="ph ph-magnifying-glass"></i><span data-t="soonScan">Free addresses on this subnet</span></div>
         <div class="page soon" id="page-info" data-page="info" role="tabpanel" hidden><i class="ph ph-clipboard-text"></i><span data-t="soonInfo">A summary to copy and send</span></div>
         </div>
@@ -668,6 +714,7 @@ html.app, html.app body { overflow: hidden; }
 
       <div class="actions">
         <span class="status" id="status" role="status"></span>
+        <span class="pfoot" id="probe-foot" hidden><span><i class="ph ph-chart-line"></i>Avg<b id="ps-avg">-</b><i class="u">ms</i></span><span><i class="ph ph-arrow-line-up"></i>Max<b id="ps-max">-</b><i class="u">ms</i></span><span><i class="ph ph-wave-sine"></i>Jitter<b id="ps-jit">-</b><i class="u">ms</i></span><span><i class="ph ph-link-break"></i>Loss<b id="ps-loss">-</b></span></span>
         <button class="btn" id="revert" disabled><i class="ph ph-arrow-counter-clockwise"></i><span data-t="revert">Revert</span></button>
         <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
       </div>
@@ -798,7 +845,7 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   if (cmd === "who_has") return res(demo.taken[a.address]?.[0] ?? demo.macs[a.address] ?? null);
   if (cmd === "vendor") return res(demo.vendors[a.mac.replace(/[^0-9A-F]/gi, "").slice(0, 6).toUpperCase()] ?? null);
   if (cmd === "hostname") return res(demo.names[a.address] ?? demo.taken[a.address]?.[1] ?? null);
-  if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" ? null : 2 + Math.floor(Math.random() * 14));
+  if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" ? null : { ms: 2 + Math.floor(Math.random() * 14), ttl: /^(10|192\.168)\./.test(a.address) ? 64 : 117 });
   if (cmd === "change") {
     if (demo.outcome === "cancel") return rej("Cancelled");
     if (demo.outcome === "fail") return rej("The object already exists.");
@@ -1508,7 +1555,7 @@ $("apply").onclick = async () => {
       if (!a.cfg.gateway && !a.cfg.dns1) { say(t("applied")(a.name), "ok", "check"); return; }
       say(t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…"));
       await new Promise(res => setTimeout(res, 1000));   // let the new address settle
-      const probe = ip => ip ? net("ping", { address: ip }).catch(() => null) : Promise.resolve(undefined);
+      const probe = ip => ip ? net("ping", { address: ip }).then(v => v?.ms ?? v, () => null) : Promise.resolve(undefined);
       const [gw, dns] = await Promise.all([probe(a.cfg.gateway), probe(a.cfg.dns1 === a.cfg.gateway ? "" : a.cfg.dns1)]);
       const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${ms} ms`;
       const fail = gw === null || dns === null;
@@ -1953,6 +2000,7 @@ function showPage(next) {
   for (const b of ptabs) { const on = b.dataset.page === page; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; }
   placePill(true);
   if (next === "adv") renderAdv();
+  probeShow(next === "probe");
   if (next === "ip" && draft) renderForm();   // Advanced may have switched it to Manual
   now.hidden = false;
   footer(editable(page));
@@ -2132,6 +2180,180 @@ function advEdges() {
 $("page-adv").addEventListener("scroll", advEdges, { passive: true });
 const edgeWatch = new ResizeObserver(advEdges);
 ["page-adv", "adv-list"].forEach(id => edgeWatch.observe($(id)));
+// ---------- Probe: the gateway, DNS and a target of your own, pinged once a second all the time ----------
+// It keeps going on other pages (so the graph already holds the last minute), and rests while the window is out of focus.
+// ping answers a number (ms) or { ms }; null is a loss.
+// ponytail: the Rust ping takes IPv4 only; a host name needs it to resolve first.
+const SLOTS = 60;
+const probe = { rows: [], pick: 0, own: "", hx: null, cx: 0, show: 0, slept: 0 };
+const clock = () => (probe.asleep ? probe.sleptAt : performance.now()) - probe.slept;
+function probeRow(target, label, own) {
+  const el = document.createElement(own ? "div" : "button");
+  el.className = "pchip" + (own ? " own" : ""); el.setAttribute("role", "tab");
+  const who = label === "DNS" && resolver(target, adapters[sel]?.cfg.gateway);
+  if (who?.logo) label = who.title.replace(/ Public DNS| DNS| \(.*\)/g, "");
+  el.innerHTML = `<span class="dot"></span>${own ? `<span class="host"></span>` : `${who?.logo ? `<span class="plogo" style="--logo:url(vendor/logos/${who.logo}.svg)"></span>` : ""}<span></span>`}`;
+  const row = { el, target, label, got: [], pts: [] };
+  if (own) {
+    // Only a whole address is pinged; a half-typed one keeps the line empty.
+    const f = ipField(el.querySelector(".host"), "probe", true, false, v => {
+      const t = validIp(v) ? v : "";
+      el.classList.toggle("empty", !v.replace(/\./g, ""));
+      if (t === row.target) return;
+      probe.own = row.target = t; row.got = []; row.pts = []; paintProbe();
+    });
+    f.set(target, true); el.classList.toggle("empty", !target);
+    f.inputs.forEach(x => x.setAttribute("aria-label", "Target octet"));
+    row.f = f;
+    // The box shows whatever is picked. Going into it makes that address your own target,
+    // carrying its last minute along so the graph doesn't start over.
+    el.addEventListener("focusin", () => {
+      const from = probe.rows[probe.pick];
+      if (from && from !== row && from.target) Object.assign(row, { target: from.target, got: [...from.got], pts: [...from.pts] }), probe.own = from.target;
+      pickRow(row);
+    });
+    el.onclick = () => pickRow(row);
+  } else { el.querySelector("span:last-child").textContent = label; el.title = target; el.onclick = () => pickRow(row); }
+  return row;
+}
+function pickRow(row) { probe.pick = probe.rows.indexOf(row); paintProbe(); }
+function probeBuild() {
+  const c = adapters[sel]?.cfg || {};
+  const want = [c.gateway && [c.gateway, "Gateway"], [c.dns1 && c.dns1 !== c.gateway ? c.dns1 : "8.8.8.8", "DNS"]].filter(Boolean);
+  if (probe.rows.length && same(probe.rows.slice(0, -1).map(r => r.target), want.map(w => w[0]))) return;
+  probe.rows = [...want.map(([t, l]) => probeRow(t, l)), probeRow(probe.own, "", true)];
+  probe.pick = Math.min(probe.pick, probe.rows.length - 1);
+  $("probe-list").replaceChildren($("probe-thumb"), ...probe.rows.map(r => r.el));
+  placeThumb(false);
+}
+async function probeTick() {
+  // Out of focus: no pinging until the window comes back.
+  // The graph's clock stops with it, so it picks up where it left off instead of stretching a line across the gap.
+  if (!document.hasFocus()) { probe.asleep = true; probe.sleptAt = performance.now(); return; }
+  const t0 = Date.now();
+  if (adapters[sel]) probeBuild();
+  await Promise.all(probe.rows.filter(r => r.target).map(async r => {
+    const t = r.target, v = await net("ping", { address: t }).catch(() => null);
+    if (r.target !== t || !probe.rows.includes(r)) return;
+    const ms = v === null ? null : v.ms ?? v;
+    r.got.push(ms); if (r.got.length > SLOTS) r.got.shift();
+    // The graph keeps its own copy with arrival times: it moves by the clock, not by the pings.
+    r.pts.push({ t: clock(), v: ms, from: r.pts.findLast(q => q.v !== null)?.v ?? ms });
+    while (r.pts.length > SLOTS + 4) r.pts.shift();
+  }));
+  if (page === "probe") paintProbe();
+  setTimeout(probeTick, Math.max(0, 1000 - (Date.now() - t0)));
+}
+function placeThumb(move = true) {
+  const on = probe.rows[probe.pick]?.el, th = $("probe-thumb"); if (!on) return;
+  if (!move || calm.matches) { th.style.transition = "none"; requestAnimationFrame(() => th.style.transition = ""); }
+  // On your own target the thumb becomes the fill of its IP box, so the box itself reads as picked.
+  const box = on.querySelector(".ip"), x = on.offsetLeft + (box ? on.clientLeft + box.offsetLeft : 0);
+  th.style.width = (box ? box.offsetWidth : on.offsetWidth) + "px"; th.style.transform = `translateX(${x}px)`;
+  th.classList.toggle("in-box", !!box);
+}
+function paintProbe() {
+  probe.rows.forEach((r, i) => {
+    const down = r.got.length > 0 && r.got.at(-1) === null;
+    r.el.classList.toggle("on", i === probe.pick); r.el.setAttribute("aria-selected", i === probe.pick);
+    r.el.querySelector(".dot").className = "dot" + (!r.got.length ? "" : down ? " down" : " up");
+  });
+  placeThumb();
+  const r = probe.rows[probe.pick]; if (!r) return;
+  const own = probe.rows.at(-1);
+  if (r !== own && own?.f && !own.el.contains(document.activeElement)) { own.f.set(r.target, true, true); own.el.classList.toggle("empty", !r.target); }
+  const ok = r.got.filter(v => v !== null), ms = v => v === null ? "-" : String(v);   // the unit sits after it, small
+  roll($("ps-max"), ms(ok.length ? Math.max(...ok) : null));
+  roll($("ps-avg"), ms(ok.length ? Math.round(ok.reduce((a, b) => a + b) / ok.length) : null));
+  // Jitter: how far each reply is from the one before, on average.
+  roll($("ps-jit"), ms(ok.length > 1 ? Math.round(ok.slice(1).reduce((a, v, i) => a + Math.abs(v - ok[i]), 0) / (ok.length - 1)) : null));
+  const loss = r.got.length ? Math.round(100 * (r.got.length - ok.length) / r.got.length) : null;
+  roll($("ps-loss"), loss === null ? "-" : `${loss}%`); $("ps-loss").classList.toggle("bad", loss > 0);
+}
+// A changed value leaves upward and the new one rises in; the same text stays put.
+function roll(el, text) {
+  if (el.textContent === text) return;
+  if (calm.matches || !el.textContent) { el.textContent = text; return; }
+  el.getAnimations().forEach(a => a.cancel());
+  el.animate([{ transform: "none", opacity: 1 }, { transform: "translateY(-40%)", opacity: 0 }], { duration: 110, easing: "ease-in" })
+    .finished.then(() => {
+      el.textContent = text;
+      el.animate([{ transform: "translateY(40%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 180, easing: "cubic-bezier(0.33, 1, 0.68, 1)" });
+    }, () => {});
+}
+// The graph runs DELAY behind the clock, so a new point is born past the right edge and scrolls in;
+// its height eases from the one before. The ceiling eases too. Rows: a line on each ms tick
+// (labelled on the left) that follows the scale; the columns stay put.
+// Hover: a line follows the pointer (eased), with the reading of the nearest ping.
+const SPAN = 60000, DELAY = 1500, RISE = 600;
+let graphRaf = 0, ceil = 20;
+const ease = k => 1 - (1 - k) ** 3;
+function drawGraph() {
+  const now = clock();
+  const svg = $("probe-svg"), w = svg.clientWidth || 1, h = svg.clientHeight || 1;
+  const pick = probe.rows[probe.pick], pts = pick?.pts ?? [], all = pts.filter(q => q.v !== null).map(q => q.v);
+  const want = Math.max(10, ...all) * 1.6;
+  ceil = calm.matches ? want : ceil + (want - ceil) * 0.06;
+  const x = t => w - (now - DELAY - t) / SPAN * w, y = v => h - 1 - (h - 2) * Math.min(v, ceil) / ceil;
+  const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].find(v => ceil / v <= 4) ?? 1000;
+  let out = "";
+  for (let v = step; v < ceil; v += step) out += `<line class="grid" x1="0" x2="${w}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="4" y="${y(v) - 3}">${v} ms</text>`;
+  for (let k = 1; k < 12; k++) out += `<line class="grid" x1="${w * k / 12}" x2="${w * k / 12}" y1="0" y2="${h}"/>`;   // fixed columns, 5 s each
+  const shown = pts.filter(q => q.v !== null).map(q => {
+    const k = calm.matches ? 1 : ease(Math.min(1, (now - q.t) / RISE));
+    return { q, x: x(q.t), y: y(q.from + (q.v - q.from) * k) };
+  });
+  if (shown.length > 1) {
+    let d = `M${shown[0].x},${shown[0].y}`;
+    for (let i = 1; i < shown.length; i++) { const a = shown[i - 1], b = shown[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
+    out += `<path class="area" d="${d}L${shown.at(-1).x},${h}L${shown[0].x},${h}Z"/><path class="line" d="${d}"/>`;
+  }
+  for (const q of pts) if (q.v === null) out += `<rect class="lost" x="${x(q.t) - 1}" y="${h - 4}" width="2" height="4"/>`;
+  // Hover reading: fades in and out; the line glides after the pointer.
+  probe.show += ((probe.hx !== null && shown.length ? 1 : 0) - probe.show) * (calm.matches ? 1 : 0.2);
+  if (probe.hx !== null) probe.cx = calm.matches || probe.show < 0.05 ? probe.hx : probe.cx + (probe.hx - probe.cx) * 0.3;
+  const tip = $("probe-tip");
+  if (probe.show > 0.01 && shown.length) {
+    const near = shown.reduce((a, b) => Math.abs(b.x - probe.cx) < Math.abs(a.x - probe.cx) ? b : a);
+    out += `<line class="cursor" x1="${probe.cx}" x2="${probe.cx}" y1="0" y2="${h}" opacity="${0.6 * probe.show}"/><circle class="knob" cx="${near.x}" cy="${near.y}" r="4" opacity="${probe.show}"/>`;
+    const ago = Math.max(0, Math.round((now - near.q.t) / 1000));
+    tip.innerHTML = `${near.q.v} ms<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
+    tip.style.transform = `translateX(${Math.min(Math.max(probe.cx + 10, 4), w - tip.offsetWidth - 4)}px)`;
+  }
+  tip.style.opacity = probe.show > 0.01 ? probe.show : 0;
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.innerHTML = out;
+  graphRaf = page === "probe" ? requestAnimationFrame(drawGraph) : 0;
+}
+$("probe-graph").addEventListener("pointermove", e => { probe.hx = e.clientX - e.currentTarget.getBoundingClientRect().left; });
+$("probe-graph").addEventListener("pointerleave", () => { probe.hx = null; });
+function probeShow(on) {
+  $("status").hidden = on; $("probe-foot").hidden = !on;
+  if (!on) return;
+  if (adapters[sel]) probeBuild();
+  paintProbe(); placeThumb(false); alignFoot();
+  if (!graphRaf) graphRaf = requestAnimationFrame(drawGraph);
+}
+setTimeout(probeTick, 1000);
+// Measure each footer item at its widest ("999 ms", "100%") and keep that width (once the fonts are in).
+document.fonts.ready.then(() => {
+  const vals = [...$("probe-foot").querySelectorAll("b")], was = vals.map(b => b.textContent);
+  $("probe-foot").hidden = false;
+  vals.forEach(b => b.textContent = b.id === "ps-loss" ? "100%" : "999");
+  vals.forEach(b => b.parentElement.style.minWidth = Math.ceil(b.parentElement.getBoundingClientRect().width) + "px");
+  vals.forEach((b, i) => b.textContent = was[i]);
+  $("probe-foot").hidden = page !== "probe";
+});
+// The footer row is centred under the graph, not under the bar: its sides follow the graph's edges.
+function alignFoot() {
+  const g = $("probe-graph").getBoundingClientRect(), bar = document.querySelector(".actions"), b = bar.getBoundingClientRect(), pad = parseFloat(getComputedStyle(bar).paddingLeft);
+  if (!g.width) return;
+  // The page may be mid-slide when this runs: take its offset out, or the row lands where the slide was.
+  const dx = new DOMMatrix(getComputedStyle($("page-probe")).transform).m41;
+  Object.assign($("probe-foot").style, { marginLeft: `${g.left - dx - b.left - pad}px`, marginRight: `${b.right - pad - (g.right - dx)}px` });
+}
+new ResizeObserver(alignFoot).observe($("probe-graph"));
+addEventListener("focus", () => { if (probe.asleep) { probe.asleep = false; probe.slept += performance.now() - probe.sleptAt; probeTick(); } });
 window.pagesReady = true;
 
 // Tooltips replace native titles. In the rail they fly out beside the icon.
