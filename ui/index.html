@@ -10,7 +10,7 @@
 /* Layout spec. Every size in the window comes from these tokens. */
 :root {
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px;
-  --win-w: 520px; --win-h: 542px;
+  --win-w: 520px; --win-h: 582px;
   --side-w: 216px;
   --label-w: 112px;          /* shared by adapter facts and the form */
   --col-gap: 16px;
@@ -188,6 +188,30 @@ button, input, select { font: inherit; color: inherit; }
 /* One grid shape for facts and form rows, so all values share one left edge */
 .grid { display: grid; grid-template-columns: var(--label-w) var(--field-w); column-gap: var(--col-gap); align-items: center; }
 .break { border: 0; border-top: 1px solid var(--border); margin: var(--group-gap) 0; }
+/* Adapter pages: words on the surface, one pill slides under the current one and takes its width.
+   No box around them, so they read as places to go, not as a mode to pick. One weight for all,
+   so a selected word never gets wider and pushes its neighbours. */
+.ptabs { position: relative; display: flex; gap: 2px; margin-top: var(--s3); }
+.ptab { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 var(--s3);
+  border: 0; border-radius: var(--r-input); background: none; color: var(--muted); font: 500 13px/1 var(--font); cursor: pointer;
+  transition: color var(--t-fast) var(--ease-out), background-color var(--t-fast) var(--ease-out); }
+.ptab:hover:not([aria-selected="true"]) { background: var(--hover); color: var(--ink); }
+.ptab[aria-selected="true"] { color: var(--sel-ink); }
+.ptab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#ptab-pill { position: absolute; left: 0; top: 0; height: 28px; border-radius: var(--r-input); background: var(--sel-fill);
+  transition: transform var(--t-slow) var(--ease-out), width var(--t-slow) var(--ease-out); }
+/* Edits not applied yet, seen from another page: the same diamond the changed fields carry */
+.ptab .diff { position: static; display: none; margin: 0; }
+.ptab.pending .diff { display: block; }
+.ptabs + .break { margin-top: var(--s3); }
+/* Pages share one cell, so the old one can leave while the new one arrives */
+.pages { display: grid; }
+.page { grid-area: 1 / 1; min-width: 0; }
+.page[hidden] { display: none; }
+.page.leaving { pointer-events: none; }
+.page.soon { display: grid; place-content: center; justify-items: center; gap: var(--s2); min-height: 280px; color: var(--muted); font-size: 13px; }
+.page.soon[hidden] { display: none; }
+.page.soon .ph { font-size: 28px; color: var(--faint); }
 .form { row-gap: var(--row-gap); }
 .form > label, .form > .lbl { color: var(--muted); }
 .form > * { min-height: var(--row-h); display: flex; align-items: center; }
@@ -553,8 +577,19 @@ html.app, html.app body { overflow: hidden; }
           </div>
         </div>
 
+        <div class="ptabs" id="ptabs" role="tablist" aria-label="Adapter pages">
+          <span id="ptab-pill" aria-hidden="true"></span>
+          <button class="ptab" role="tab" data-page="ip" aria-selected="true" aria-controls="page-ip" title="Ctrl+1"><span data-t="tabIp">IP &amp; DNS</span><span class="diff" aria-hidden="true"></span></button>
+          <button class="ptab" role="tab" data-page="adv" aria-selected="false" aria-controls="page-adv" tabindex="-1" title="Ctrl+2"><span data-t="tabAdv">Advanced</span></button>
+          <button class="ptab" role="tab" data-page="probe" aria-selected="false" aria-controls="page-probe" tabindex="-1" title="Ctrl+3"><span data-t="tabProbe">Probe</span></button>
+          <button class="ptab" role="tab" data-page="scan" aria-selected="false" aria-controls="page-scan" tabindex="-1" title="Ctrl+4"><span data-t="tabScan">Scan</span></button>
+          <button class="ptab" role="tab" data-page="info" aria-selected="false" aria-controls="page-info" tabindex="-1" title="Ctrl+5"><span data-t="tabInfo">Info</span></button>
+        </div>
+
         <hr class="break">
 
+        <div class="pages">
+        <div class="page" id="page-ip" data-page="ip" role="tabpanel">
         <div class="grid form" role="group" aria-label="IP">
           <span class="lbl">IP</span>
           <div class="ctl">
@@ -587,6 +622,13 @@ html.app, html.app body { overflow: hidden; }
           </div>
           <label data-t="dns1" for="f-dns1-0">Preferred</label><div id="f-dns1"></div>
           <label data-t="dns2" for="f-dns2-0">Alternate</label><div id="f-dns2"></div>
+        </div>
+        </div>
+        <!-- ponytail: placeholders until each page is built (docs/plan-0.2.md) -->
+        <div class="page soon" id="page-adv" data-page="adv" role="tabpanel" hidden><i class="ph ph-stack"></i><span data-t="soonAdv">Extra addresses, gateways and metric</span></div>
+        <div class="page soon" id="page-probe" data-page="probe" role="tabpanel" hidden><i class="ph ph-pulse"></i><span data-t="soonProbe">Ping with a live graph</span></div>
+        <div class="page soon" id="page-scan" data-page="scan" role="tabpanel" hidden><i class="ph ph-magnifying-glass"></i><span data-t="soonScan">Free addresses on this subnet</span></div>
+        <div class="page soon" id="page-info" data-page="info" role="tabpanel" hidden><i class="ph ph-clipboard-text"></i><span data-t="soonInfo">A summary to copy and send</span></div>
         </div>
       </div>
 
@@ -634,6 +676,7 @@ html.app, html.app body { overflow: hidden; }
               <div class="pane keys" data-pane="keys" hidden>
                 <kbd>Ctrl</kbd><kbd>Enter</kbd><span data-t="kApply">Apply changes</span>
                 <kbd>F5</kbd><span></span><span data-t="kRefresh">Read adapters again</span>
+                <kbd>Ctrl</kbd><kbd>1-5</kbd><span data-t="kPages">Go to a page</span>
                 <kbd>Ctrl</kbd><kbd>B</kbd><span data-t="kSide">Expand or collapse the sidebar</span>
                 <kbd>Ctrl</kbd><kbd>C</kbd><span data-t="kCopy">Copy the whole configuration</span>
                 <kbd>Ctrl</kbd><kbd>V</kbd><span data-t="kPaste">Paste a whole configuration</span>
@@ -755,7 +798,9 @@ const T = {
     kOctet: "Move between octets", kEsc: "Close a menu or the sidebar", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
-    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes",
+    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabProbe: "Probe", tabScan: "Scan", tabInfo: "Info",
+    soonAdv: "Extra addresses, gateways and metric", soonProbe: "Ping with a live graph", soonScan: "Free addresses on this subnet", soonInfo: "A summary to copy and send",
+    kPages: "Go to a page",
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
   },
   th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", refresh: "รีเฟรช", release: "Release IP", renew: "Renew IP", cycle: "Release แล้ว Renew",
@@ -768,7 +813,9 @@ const T = {
     kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนูหรือแถบซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
-    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร",
+    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabProbe: "ทดสอบ", tabScan: "หา IP", tabInfo: "ข้อมูล",
+    soonAdv: "หลาย IP, หลาย Gateway และ Metric", soonProbe: "Ping พร้อมกราฟสด", soonScan: "IP ที่ยังว่างใน subnet นี้", soonInfo: "สรุปข้อมูลไว้คัดลอกส่งต่อ",
+    kPages: "ไปที่หน้า",
     changes: n => `แก้ไว้ ${n} จุด ยังไม่ได้บันทึก`, applied: n => `บันทึกค่าของ ${n} แล้ว`, disable: "ปิดการใช้งาน", enable: "เปิดการใช้งาน",
   },
 };
@@ -1058,6 +1105,7 @@ function sync(from) {
     say(link || t("noChanges"), "", link ? "lightning" : "", true);
     if (band) $("status").title = L(`Channel at ${a.mhz} MHz · no changes`, `ช่องสัญญาณ ${a.mhz} MHz · ยังไม่ได้แก้อะไร`);
   }
+  if (window.pagesReady) pending();   // sync can run before the pages code below has loaded
   for (const [id, off] of [["apply", busyNow || !diff.length || bad.length > 0], ["revert", busyNow || !diff.length]]) {
     const b = $(id);
     b.disabled = off;
@@ -1814,11 +1862,88 @@ document.querySelector(".side").addEventListener("transitionend", placeIndicator
 document.addEventListener("keydown", e => {
   if (e.key.toLowerCase() === "b" && e.ctrlKey) { e.preventDefault(); $("collapse").click(); }
   if (e.key === "F5") { e.preventDefault(); $("refresh").click(); }
+  if (e.ctrlKey && e.key >= "1" && e.key <= "5" && !settingsOpen()) { e.preventDefault(); showPage(ptabs[e.key - 1].dataset.page); }
   if (e.key === "Escape" && settingsOpen() && !document.querySelector("dialog[open]")) { closeSettings(); return; }
   if (e.key === "Escape" && tools.classList.contains("open")) { setTools(false); $("more").focus(); }
   else if (e.key === "Escape" && !isRail() && !document.querySelector("dialog[open]")) setRail(true);
   if (e.key === "Enter" && e.ctrlKey && !$("apply").disabled && !settingsOpen()) $("apply").click();
 });
+
+// ---------- adapter pages ----------
+// The pill slides to the new tab; the old page steps aside (away from where you're going) while the
+// new one comes in from that side. A new click cancels what's running and goes straight to the end.
+const ptabs = [...document.querySelectorAll("#ptabs [role=tab]")];
+const editable = p => p === "ip" || p === "adv";   // the pages that share the draft and its Revert/Apply
+let page = "ip", pageMotion = [], footMotion = [];
+function placePill(instant) {
+  const t = ptabs.find(b => b.dataset.page === page), pill = $("ptab-pill");
+  if (instant) pill.style.transition = "none";
+  pill.style.width = t.offsetWidth + "px";
+  pill.style.transform = `translateX(${t.offsetLeft}px)`;
+  if (instant) { void pill.offsetWidth; pill.style.transition = ""; }
+}
+// Labels change width with the language and the font: keep the pill under its word.
+new ResizeObserver(() => placePill(true)).observe($("ptabs"));
+function showPage(next) {
+  if (next === page) return;
+  const at = p => ptabs.findIndex(b => b.dataset.page === p), dir = Math.sign(at(next) - at(page));
+  const old = document.querySelector(`.page[data-page="${page}"]`), now = document.querySelector(`.page[data-page="${next}"]`);
+  pageMotion.forEach(a => a.cancel());
+  for (const p of document.querySelectorAll(".page")) { p.hidden = p !== old && p !== now; p.classList.remove("leaving"); }
+  page = next;
+  for (const b of ptabs) { const on = b.dataset.page === page; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; }
+  placePill();
+  now.hidden = false;
+  footer(editable(page));
+  pending();
+  if (calm.matches) { old.hidden = true; return; }
+  old.classList.add("leaving");
+  const out = old.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateX(${-10 * dir}px)` }],
+    { duration: 140, easing: "ease-in", fill: "forwards" });
+  const into = now.animate([{ opacity: 0, transform: `translateX(${16 * dir}px)` }, { opacity: 1, transform: "none" }],
+    { duration: 240, delay: 80, easing: "cubic-bezier(0.33, 1, 0.68, 1)", fill: "backwards" });
+  pageMotion = [out, into];
+  out.finished.then(() => { old.hidden = true; old.classList.remove("leaving"); out.cancel(); }, () => {});
+}
+// Revert/Apply only belong to the pages that edit: they sink away elsewhere and rise back.
+function footer(on) {
+  const bs = [$("revert"), $("apply")];
+  if (bs[1].hidden === !on && !footMotion.length) return;
+  footMotion.forEach(a => a.cancel()); footMotion = [];
+  bs.forEach(b => b.hidden = false);
+  if (calm.matches) { bs.forEach(b => b.hidden = !on); return; }
+  const motion = footMotion = bs.map(b => b.animate(on ? [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }]
+    : [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(8px)" }],
+    { duration: on ? 240 : 140, easing: on ? "cubic-bezier(0.33, 1, 0.68, 1)" : "ease-in", fill: "forwards" }));
+  Promise.all(motion.map(a => a.finished)).then(() => {
+    if (!on) bs.forEach(b => b.hidden = true);
+    motion.forEach(a => a.cancel()); if (footMotion === motion) footMotion = [];
+  }, () => {});
+}
+// Edits not applied yet, while you look at another page: a diamond on IP & DNS pops in, and folds away.
+function pending() {
+  const t = ptabs[0], d = t.querySelector(".diff"), on = !editable(page) && !!draft && changed().length > 0;
+  if (on === t.classList.contains("pending")) return;
+  if (on) {
+    t.classList.add("pending");
+    if (!calm.matches) d.animate([{ transform: "rotate(45deg) scale(0)" }, { transform: "rotate(45deg) scale(1)" }], { duration: 180, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
+    return;
+  }
+  if (calm.matches) { t.classList.remove("pending"); return; }
+  d.animate([{ transform: "rotate(45deg) scale(1)" }, { transform: "rotate(45deg) scale(0)" }], { duration: 140, easing: "ease-in", fill: "forwards" })
+    .finished.finally(() => { t.classList.remove("pending"); d.getAnimations().forEach(a => a.cancel()); pending(); });
+}
+ptabs.forEach((b, i) => {
+  b.onclick = () => showPage(b.dataset.page);
+  b.onkeydown = e => {
+    const k = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: ptabs.length - 1 }[e.key];
+    if (k === undefined) return;
+    e.preventDefault();
+    const t = ptabs[(k + ptabs.length) % ptabs.length];
+    showPage(t.dataset.page); t.focus();
+  };
+});
+placePill(true); window.pagesReady = true;
 
 // Tooltips replace native titles. In the rail they fly out beside the icon.
 // They show on hover and on keyboard focus, and are linked with aria-describedby.
