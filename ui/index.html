@@ -191,15 +191,14 @@ button, input, select { font: inherit; color: inherit; }
 /* Adapter pages: words on the surface, one pill slides under the current one and takes its width.
    No box around them, so they read as places to go, not as a mode to pick. One weight for all,
    so a selected word never gets wider and pushes its neighbours. */
-.ptabs { position: relative; display: flex; gap: 2px; margin-top: var(--s3); }
-.ptab { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 var(--s3);
+.ptabs { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; margin-top: var(--s3); }
+.ptab { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px; padding: 0 var(--s2);
   border: 0; border-radius: var(--r-input); background: none; color: var(--muted); font: 500 13px/1 var(--font); cursor: pointer;
   transition: color var(--t-fast) var(--ease-out), background-color var(--t-fast) var(--ease-out); }
 .ptab:hover:not([aria-selected="true"]) { background: var(--hover); color: var(--ink); }
 .ptab[aria-selected="true"] { color: var(--sel-ink); }
 .ptab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-#ptab-pill { position: absolute; left: 0; top: 0; height: 28px; border-radius: var(--r-input); background: var(--sel-fill);
-  transition: transform var(--t-slow) var(--ease-out), width var(--t-slow) var(--ease-out); }
+#ptab-pill { position: absolute; left: 0; top: 0; height: 28px; border-radius: var(--r-input); background: var(--sel-fill); }
 /* Edits not applied yet, seen from another page: the same diamond the changed fields carry */
 .ptab .diff { position: static; display: none; margin: 0; }
 .ptab.pending .diff { display: block; }
@@ -328,6 +327,7 @@ button, input, select { font: inherit; color: inherit; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn i { font-size: 16px; }
 /* Buttons wake up when there is something to apply, rewind when reverting */
+.btn[hidden] { display: none; }
 .btn { transition: opacity 240ms var(--ease-out), background-color 240ms var(--ease-out), border-color 240ms var(--ease-out),
   color 240ms var(--ease-out), transform var(--t-press) var(--ease-out); }
 .btn.rewind i { animation: rewind 420ms var(--ease-out); }
@@ -1875,15 +1875,24 @@ document.addEventListener("keydown", e => {
 const ptabs = [...document.querySelectorAll("#ptabs [role=tab]")];
 const editable = p => p === "ip" || p === "adv";   // the pages that share the draft and its Revert/Apply
 let page = "ip", pageMotion = [], footMotion = [];
-function placePill(instant) {
+// Same move as the sidebar indicator: stretch over both tabs, then contract onto the new one.
+function placePill(animate = false) {
   const t = ptabs.find(b => b.dataset.page === page), pill = $("ptab-pill");
-  if (instant) pill.style.transition = "none";
-  pill.style.width = t.offsetWidth + "px";
-  pill.style.transform = `translateX(${t.offsetLeft}px)`;
-  if (instant) { void pill.offsetWidth; pill.style.transition = ""; }
+  const to = t.offsetLeft, w = t.offsetWidth, from = pill.dataset.x === undefined ? to : +pill.dataset.x;
+  pill.dataset.x = to;
+  pill.style.width = w + "px";
+  pill.style.transform = `translateX(${to}px)`;
+  pill.getAnimations().forEach(a => a.cancel());
+  if (!animate || from === to || calm.matches) return;
+  const left = Math.min(from, to), span = Math.abs(to - from) + w;
+  pill.animate([
+    { transform: `translateX(${from}px)`, width: w + "px", easing: "cubic-bezier(0.5, 0, 0.75, 0)" },
+    { transform: `translateX(${left}px)`, width: span + "px", offset: 0.4, easing: "cubic-bezier(0.33, 1, 0.68, 1)" },
+    { transform: `translateX(${to}px)`, width: w + "px" },
+  ], { duration: 320 });
 }
 // Labels change width with the language and the font: keep the pill under its word.
-new ResizeObserver(() => placePill(true)).observe($("ptabs"));
+new ResizeObserver(() => placePill()).observe($("ptabs"));
 function showPage(next) {
   if (next === page) return;
   const at = p => ptabs.findIndex(b => b.dataset.page === p), dir = Math.sign(at(next) - at(page));
@@ -1892,7 +1901,7 @@ function showPage(next) {
   for (const p of document.querySelectorAll(".page")) { p.hidden = p !== old && p !== now; p.classList.remove("leaving"); }
   page = next;
   for (const b of ptabs) { const on = b.dataset.page === page; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; }
-  placePill();
+  placePill(true);
   now.hidden = false;
   footer(editable(page));
   pending();
@@ -1912,8 +1921,8 @@ function footer(on) {
   footMotion.forEach(a => a.cancel()); footMotion = [];
   bs.forEach(b => b.hidden = false);
   if (calm.matches) { bs.forEach(b => b.hidden = !on); return; }
-  const motion = footMotion = bs.map(b => b.animate(on ? [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }]
-    : [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(8px)" }],
+  const away = { opacity: 0, transform: "translateY(8px)" };
+  const motion = footMotion = bs.map(b => b.animate([on ? { ...away, offset: 0 } : { ...away, offset: 1 }],
     { duration: on ? 240 : 140, easing: on ? "cubic-bezier(0.33, 1, 0.68, 1)" : "ease-in", fill: "forwards" }));
   Promise.all(motion.map(a => a.finished)).then(() => {
     if (!on) bs.forEach(b => b.hidden = true);
@@ -1943,7 +1952,7 @@ ptabs.forEach((b, i) => {
     showPage(t.dataset.page); t.focus();
   };
 });
-placePill(true); window.pagesReady = true;
+placePill(); window.pagesReady = true;
 
 // Tooltips replace native titles. In the rail they fly out beside the icon.
 // They show on hover and on keyboard focus, and are linked with aria-describedby.
