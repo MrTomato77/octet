@@ -223,7 +223,8 @@ button, input, select { font: inherit; color: inherit; }
 .ahead .cidr { width: 34px; text-align: center; }
 .ahead .slash { width: 10px; } .ahead .to { width: 22px; }
 /* The first line is the main address: its numbers stand out (weight, full ink), the rest sit back */
-.arow:first-child .ip input, .arow:first-child .prefix { font-weight: 600; color: var(--ink); }
+.arow:first-child .ip input, .arow:first-child .prefix { font-weight: 600; color: var(--ink); transition: color 240ms; }
+.alist.dhcp .arow:first-child .ip input, .alist.dhcp .arow:first-child .prefix { color: var(--accent); }
 .arow:not(:first-child) .ip input, .arow:not(:first-child) .prefix { color: var(--muted); }
 .arow:not(:first-child) .ip:focus-within input { color: var(--ink); }
 .arow { display: flex; align-items: center; gap: 4px; height: calc(var(--row-h) + var(--row-gap)); padding-bottom: var(--row-gap); box-sizing: border-box; }
@@ -232,7 +233,7 @@ button, input, select { font: inherit; color: inherit; }
 .arow .ip span.sep { width: 10px; }
 .arow .prefix { width: 34px; }
 .arow .slash { width: 10px; }
-.arow .to { width: 22px; text-align: center; color: var(--faint); }
+.arow .to { width: 22px; text-align: center; color: var(--faint); font-size: 14px; }
 .arow.ph .ip, .arow.ph .prefix { border-style: dashed; }
 .arow.ph .ip:focus-within, .arow.ph .prefix:focus { border-style: solid; }
 .arow .ip.shared input { color: var(--faint); }
@@ -1082,6 +1083,8 @@ function problems() {
     if (!validIp(draft.address) || host === 0 || host === 2 ** (32 - p) - 1) out.push(["address", t("ip")]);
     if (prefixOf(draft.subnet) < 1) out.push(["subnet", t("subnet")]);
     if (draft.gateway && !validIp(draft.gateway)) out.push(["gateway", t("gateway")]);
+  }
+  {
     draft.extra.forEach((x, i) => { if (!validIp(x.address) || prefixOf(x.subnet) < 1 || x.address === draft.address) out.push([`extra${i}`, `${t("ip")} ${i + 2}`]); });
     draft.gws.forEach((g, i) => { if (!validIp(g.gateway) || !okMetric(g.metric)) out.push([`gw${i}`, `${t("gateway")} ${i + 2}`]); });
     if (!okMetric(draft.gwMetric)) out.push(["gwMetric", t("metric")]);
@@ -1096,7 +1099,7 @@ const keys = ["ipAuto", "address", "subnet", "gateway", "extra", "gws", "gwMetri
 const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
 const changed = () => !draft ? [] : keys.filter(k => {
   const a = adapters[sel].cfg;
-  if (draft.ipAuto && ["address", "subnet", "gateway", "extra", "gws", "gwMetric"].includes(k)) return false;
+  if (draft.ipAuto && ["address", "subnet", "gateway", "gwMetric"].includes(k)) return false;
   if (draft.dnsAuto && ["dns1", "dns2"].includes(k)) return false;
   return !same(a[k], draft[k]);
 });
@@ -2031,7 +2034,7 @@ function advRow() {
   ipHost.className = gwHost.className = "host";
   const sl = document.createElement("span"); sl.className = "slash"; sl.textContent = "/";
   const pre = document.createElement("input"); pre.className = "prefix"; pre.maxLength = 2; pre.inputMode = "numeric"; pre.setAttribute("aria-label", "Prefix length");
-  const to = document.createElement("span"); to.className = "to"; to.textContent = "→"; to.setAttribute("aria-hidden", "true");
+  const to = document.createElement("i"); to.className = "to ph ph-arrow-right"; to.setAttribute("aria-hidden", "true");
   el.append(ipHost, sl, pre, to, gwHost);
   // The empty row turns real on the first keystroke.
   const real = () => { if (row === adv.ph) promote(row); return at(); };
@@ -2056,15 +2059,13 @@ function advRow() {
 function newPh() {
   const row = advRow();
   row.el.classList.add("ph");
-  row.ipf.set("", true); row.gwf.set("", true); row.pre.value = prefixOf(draft.subnet) >= 0 ? prefixOf(draft.subnet) : "";
+  row.ipf.set("", true); row.gwf.set("", true); row.pre.value = "";
   row.ipf.inputs[0].placeholder = "";
   return row;
 }
-// Typing a second address is what Manual means: the adapter switches on the first keystroke,
-// keeping what DHCP gave as the starting values (and DNS goes static with it, as on IP & DNS).
+// Extra addresses sit beside DHCP (Windows' dhcpstaticipcoexistence): typing one keeps the adapter as it is.
 function promote(row) {
-  if (draft.ipAuto) { draft.ipAuto = false; draft.dnsAuto = false; setTimeout(() => renderAdv()); }
-  draft.extra.push({ address: "", subnet: masks[+row.pre.value] ?? draft.subnet });
+  draft.extra.push({ address: "", subnet: row.pre.value === "" ? "" : masks[+row.pre.value] ?? "" });
   adv.rows.push(row); row.el.classList.remove("ph");
   adv.ph = newPh(); $("adv-list").append(adv.ph.el); rowIn(adv.ph.el);
 }
@@ -2089,28 +2090,32 @@ function rowOut(el) {
 // Fill the boxes from the draft (Automatic: what Windows has, read-only). A box being typed in is left alone.
 function paintAdv(roll = false) {
   if (!draft) return;
-  const ed = !draft.ipAuto, c = ed ? draft : cfgOf(adapters[sel]), rs = routes(c), was = routes(cfgOf(adapters[sel])), bad = problems();
+  // On DHCP the first line is what Windows leased (read-only); the added lines stay editable.
+  const ed = !draft.ipAuto, cur = adapters[sel].cfg;
+  if (!ed) Object.assign(draft, { address: cur.address, subnet: cur.subnet, gateway: cur.gateway });
+  $("adv-list").classList.toggle("dhcp", !ed);
+  const c = draft, rs = routes(c), was = routes(cfgOf(adapters[sel])), bad = problems();
   adv.rows.forEach((row, i) => {
     const r = rs[i]; if (!r) return;
     const typing = row.el.contains(document.activeElement);
     if (!typing) {
       row.gi = r.shared ? -1 : r.gi;
-      row.ipf.set(r.address, ed, roll);
+      row.ipf.set(r.address, ed || i > 0, roll);
       row.pre.value = prefixOf(r.subnet) >= 0 ? prefixOf(r.subnet) : "";
-      row.gwf.set(r.gw, ed && !r.shared, roll);
+      row.gwf.set(r.gw, (ed || i > 0) && !r.shared, roll);
     }
-    row.pre.disabled = !ed;
+    row.pre.disabled = !ed && i === 0;
     row.gwf.box.classList.toggle("shared", r.shared);
     row.gwf.box.title = r.shared ? L("Same gateway as the address above (same subnet)", "gateway เดียวกับ IP ข้างบน (subnet เดียวกัน)") : "";
     const o = was[i];
-    row.ipf.box.classList.toggle("changed", ed && (!o || o.address !== r.address || o.subnet !== r.subnet));
-    row.gwf.box.classList.toggle("changed", ed && !r.shared && (!o || o.gw !== r.gw));
+    row.ipf.box.classList.toggle("changed", (ed || i > 0) && (!o || o.address !== r.address || o.subnet !== r.subnet));
+    row.gwf.box.classList.toggle("changed", (ed || i > 0) && !r.shared && (!o || o.gw !== r.gw));
     row.ipf.box.classList.toggle("invalid", i > 0 && bad.some(([b]) => b === `extra${i - 1}`) && !typing);
   });
 }
 function renderAdv(roll = false) {
   if (!draft) return;
-  const ed = !draft.ipAuto, c = ed ? draft : cfgOf(adapters[sel]), n = addrsOf(c).length, host = $("adv-list");
+  const n = addrsOf(draft).length, host = $("adv-list");
   while (adv.rows.length < n) { const r = advRow(); adv.rows.push(r); host.insertBefore(r.el, adv.ph?.el ?? null); rowIn(r.el); }
   while (adv.rows.length > n) rowOut(adv.rows.pop().el);
   if (!adv.ph) { adv.ph = newPh(); host.append(adv.ph.el); rowIn(adv.ph.el); }
