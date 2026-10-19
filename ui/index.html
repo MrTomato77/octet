@@ -355,7 +355,9 @@ button, input, select { font: inherit; color: inherit; }
 .irow:hover { background: var(--hover); }
 .irow .k { color: var(--muted); }
 .irow .v { color: var(--ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.irow .v em { font-style: normal; color: var(--faint); margin-left: 6px; }
+.irow .v em { display: inline-block; font-style: normal; color: var(--faint); margin-left: 6px; }
+.irow .v em:empty { margin: 0; }
+.irow .v > span { display: inline-block; }
 .irow .v .pfx { color: var(--muted); margin-left: 0; }
 .irow > i { justify-self: end; font-size: 15px; color: var(--faint); opacity: 0; transition: opacity 140ms, color 140ms; }
 .irow:hover > i, .irow:focus-visible > i { opacity: 1; }
@@ -365,6 +367,8 @@ button, input, select { font: inherit; color: inherit; }
 .ifoot[hidden] { display: none; }
 #info-copy { border-color: transparent; background: transparent; color: var(--muted); padding: 0 var(--s3); }
 #info-copy:hover { background: var(--hover); color: var(--ink); }
+#info-copy span { display: inline-block; }
+#scan-net, #scan-pfx { display: inline-block; }
 .ifoot-say { flex: 1; min-width: 0; font-size: 13px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .smenu { min-width: 200px; }
 .smenu button { white-space: nowrap; }
@@ -745,7 +749,7 @@ html.app, html.app body { overflow: hidden; }
           <span id="ptab-pill" aria-hidden="true"></span>
           <button class="ptab" role="tab" data-page="ip" aria-selected="true" aria-controls="page-ip" title="Ctrl+1"><span data-t="tabIp">IP &amp; DNS</span><span class="diff" aria-hidden="true"></span></button>
           <button class="ptab" role="tab" data-page="adv" aria-selected="false" aria-controls="page-adv" tabindex="-1" title="Ctrl+2"><span data-t="tabAdv">Advanced</span></button>
-          <button class="ptab" role="tab" data-page="probe" aria-selected="false" aria-controls="page-probe" tabindex="-1" title="Ctrl+3"><span data-t="tabProbe">Probe</span></button>
+          <button class="ptab" role="tab" data-page="probe" aria-selected="false" aria-controls="page-probe" tabindex="-1" title="Ctrl+3"><span data-t="tabProbe">Ping</span></button>
           <button class="ptab" role="tab" data-page="scan" aria-selected="false" aria-controls="page-scan" tabindex="-1" title="Ctrl+4"><span data-t="tabScan">Scan</span></button>
           <button class="ptab" role="tab" data-page="info" aria-selected="false" aria-controls="page-info" tabindex="-1" title="Ctrl+5"><span data-t="tabInfo">Info</span></button>
         </div>
@@ -944,7 +948,7 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   if (cmd === "who_has") return res(demo.taken[a.address]?.[0] ?? demo.macs[a.address] ?? null);
   if (cmd === "vendor") return res(demo.vendors[a.mac.replace(/[^0-9A-F]/gi, "").slice(0, 6).toUpperCase()] ?? null);
   if (cmd === "hostname") return res(demo.names[a.address] ?? demo.taken[a.address]?.[1] ?? null);
-  if (cmd === "public_ip") return demo.outcome === "fail" ? rej("offline") : res("203.0.113.48");
+  if (cmd === "public_ip") return demo.outcome === "fail" ? rej("offline") : res({ ip: "203.0.113.48", isp: "True Internet", city: "Bangkok" });   // one ipinfo-style answer: address and who it belongs to
   if (cmd === "scan_host") {
     const [n3, h] = [a.address.split(".").slice(0, 3).join("."), +a.address.split(".")[3]];
     const me = adapters.find(x => x.cfg.address === a.address), gw = adapters.some(x => x.cfg.gateway === a.address);
@@ -988,7 +992,7 @@ const T = {
     kOctet: "Move between octets", kEsc: "Close a menu or the sidebar", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
-    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabProbe: "Probe", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
+    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabProbe: "Ping", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
     soonAdv: "Extra addresses, gateways and metric", soonProbe: "Ping with a live graph", soonScan: "Free addresses on this subnet", soonInfo: "A summary to copy and send",
     kPages: "Go to a page", addIp: "Add address", addGw: "Add gateway", byDhcp: "Set by DHCP.", toManual: "Switch to Manual",
     metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateways",
@@ -1004,7 +1008,7 @@ const T = {
     kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนูหรือแถบซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
-    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabProbe: "ทดสอบ", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
+    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabProbe: "Ping", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
     soonAdv: "หลาย IP, หลาย Gateway และ Metric", soonProbe: "Ping พร้อมกราฟสด", soonScan: "IP ที่ยังว่างใน subnet นี้", soonInfo: "สรุปข้อมูลไว้คัดลอกส่งต่อ",
     kPages: "ไปที่หน้า", addIp: "เพิ่ม IP", addGw: "เพิ่ม Gateway", byDhcp: "ได้จาก DHCP", toManual: "เปลี่ยนเป็นกำหนดเอง",
     metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateway",
@@ -2120,7 +2124,10 @@ function showPage(next) {
   infoShow(next === "info");
   if (next === "ip" && draft) renderForm();   // Advanced may have switched it to Manual
   now.hidden = false;
-  footer(editable(page));
+  // Revert/Apply leave with the old footer, and come back with the new one.
+  const edit = editable(page);
+  if (!edit) footer(false);
+  footSwap(footOf(page), () => { if (edit) footer(true); if (page === "probe") alignFoot(); if (page === "scan") centreUnder($("scan-foot"), $("scan-grid"), $("page-scan")); });
   pending();
   if (calm.matches) { old.hidden = true; return; }
   old.classList.add("leaving");
@@ -2130,6 +2137,24 @@ function showPage(next) {
     { duration: 240, delay: 80, easing: "cubic-bezier(0.33, 1, 0.68, 1)", fill: "backwards" });
   pageMotion = [out, into];
   out.finished.then(() => { old.hidden = true; old.classList.remove("leaving"); out.cancel(); }, () => {});
+}
+// The bar holds one page's footer at a time. Switching, the old one sinks away (as the old page leaves),
+// then the new one rises; they never share the row, so nothing gets pushed aside mid-swap.
+let footNow = $("status"), footRun = 0;
+const footOf = p => $({ probe: "probe-foot", scan: "scan-foot", info: "info-foot" }[p] || "status");
+function footSwap(el, atSwap) {
+  const old = footNow, run = ++footRun;
+  footNow = el;
+  for (const x of [$("status"), $("probe-foot"), $("scan-foot"), $("info-foot")]) { x.getAnimations().forEach(a => a.cancel()); if (x !== old) x.hidden = x !== el || !!old; }
+  const rise = () => {
+    if (run !== footRun) return;
+    if (old && old !== el) old.hidden = true;
+    el.hidden = false; atSwap?.();
+    if (old && old !== el && !calm.matches) el.animate([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], { duration: 240, easing: "cubic-bezier(0.33, 1, 0.68, 1)" });
+  };
+  if (!old || old === el || calm.matches) return rise();
+  old.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(8px)" }], { duration: 140, easing: "ease-in", fill: "forwards" })
+    .finished.then(() => { old.getAnimations().forEach(a => a.cancel()); rise(); }, () => {});
 }
 // Revert/Apply only belong to the pages that edit: they sink away elsewhere and rise back.
 function footer(on) {
@@ -2476,7 +2501,6 @@ function drawGraph() {
 $("probe-graph").addEventListener("pointermove", e => { probe.hx = e.clientX - e.currentTarget.getBoundingClientRect().left; });
 $("probe-graph").addEventListener("pointerleave", () => { probe.hx = null; });
 function probeShow(on) {
-  $("status").hidden = on || page === "scan" || page === "info"; $("probe-foot").hidden = !on;
   if (!on) return;
   if (adapters[sel]) probeBuild();
   paintProbe(); placeThumb(false); alignFoot();
@@ -2492,7 +2516,7 @@ function measureFoot() {
   vals.forEach(b => b.parentElement.style.minWidth = "");
   vals.forEach(b => b.parentElement.style.minWidth = Math.ceil(b.parentElement.getBoundingClientRect().width) + "px");
   vals.forEach((b, i) => b.textContent = was[i]);
-  $("probe-foot").hidden = page !== "probe";
+  $("probe-foot").hidden = $("probe-foot") !== footNow;
 }
 document.fonts.ready.then(measureFoot);
 // The footer row is centred under the graph, not under the bar: its sides follow the graph's edges.
@@ -2540,8 +2564,8 @@ function scanStart(again = false) {
   // Blocks: the whole subnet when it fits, else just the adapter's own /24.
   const n = live && p > 0 && p < 24 && 2 ** (24 - p) <= MAXB ? 2 ** (24 - p) : 1;
   const mine = (base >>> 8) << 8 >>> 0, first = n > 1 ? netA : mine, own = (mine - first) / 256;
-  $("scan-net").textContent = !live ? L("Not connected", "ยังไม่ได้เชื่อมต่อ") : numIp(p > 0 && p < 24 ? netA : mine);
-  $("scan-pfx").textContent = live ? `/${p > 0 && p < 24 ? p : 24}` : "";
+  roll($("scan-net"), !live ? L("Not connected", "ยังไม่ได้เชื่อมต่อ") : numIp(p > 0 && p < 24 ? netA : mine));
+  roll($("scan-pfx"), live ? `/${p > 0 && p < 24 ? p : 24}` : "");
   $("scan-sub").textContent = live && n === 1 && p > 0 && p < 24 ? L(`showing ${net}.x, too wide to scan all`, `แสดง ${net}.x วงใหญ่เกินจะสแกนทั้งหมด`) : "";
   const key = `${net}|${n}|${first}`;
   if (!again && key === scan.key && scan.done) { scanTell(null); return; }
@@ -2683,8 +2707,7 @@ document.addEventListener("keydown", e => {
   if (scan.menu !== null) scanMenu(null); else if (scan.hold) { scan.hold = null; scanOnly(null); scanTell(); }
 });
 function scanShow(on) {
-  $("scan-foot").hidden = !on;
-  if (on) { $("status").hidden = true; scanStart(); centreUnder($("scan-foot"), $("scan-grid"), $("page-scan")); } else scanMenu(null);
+  if (on) { scanStart(); centreUnder($("scan-foot"), $("scan-grid"), $("page-scan")); } else scanMenu(null);
 }
 new ResizeObserver(() => centreUnder($("scan-foot"), $("scan-grid"), $("page-scan"))).observe($("scan-grid"));
 // ---------- Info: a summary to read, copy one value, or copy all as text ----------
@@ -2720,7 +2743,7 @@ function infoRows() {
       ["Gateway", c.gateway, ""],
       ...(a.ipv6 || []).map(x => ["IPv6", x, x.startsWith("fe80") ? "link-local" : ""]),
       ...(c.ipAuto && a.dhcpServer ? [[L("DHCP server", "DHCP server"), a.dhcpServer, a.leaseEnds ? (a.leaseGot ? L(`${at(a.leaseGot)} to ${at(a.leaseEnds)}`, `${at(a.leaseGot)} ถึง ${at(a.leaseEnds)}`) : L(`until ${at(a.leaseEnds)}`, `ถึง ${at(a.leaseEnds)}`)) : ""]] : []),
-      ...(up && validIp(c.gateway) ? [["Public IP", pub === undefined ? L("Look up", "ดูค่า") : pub === null ? L("Looking up…", "กำลังดู…") : pub || L("Couldn't reach the internet", "ออกอินเทอร์เน็ตไม่ได้"), pub === undefined ? L("asks a web service", "ถามจากเว็บภายนอก") : "", "", "pub"]] : []),
+      ...(up && validIp(c.gateway) ? [["Public IP", pub === undefined ? L("Look up", "ดูค่า") : pub === null ? L("Looking up…", "กำลังดู…") : pub?.ip || L("Couldn't reach the internet", "ออกอินเทอร์เน็ตไม่ได้"), pub === undefined ? L("asks a web service", "ถามจากเว็บภายนอก") : [pub?.isp, pub?.city].filter(Boolean).join(" · "), "", "pub"]] : []),
     ] },
     { icon: "globe-simple", head: "DNS", tag: c.dnsAuto ? "DHCP" : "Manual", rows: [
       [L("Preferred", "หลัก"), c.dns1, dns(c.dns1)],
@@ -2730,21 +2753,37 @@ function infoRows() {
   ].map(g => ({ ...g, rows: g.rows.filter(r => r[1]) })).filter(g => g.rows.length);
 }
 function renderInfo() {
-  const groups = infoRows();
-  $("info-list").replaceChildren(...groups.map(g => {
+  const groups = infoRows(), list = $("info-list");
+  // Same rows as on screen (only values differ): roll the values that changed and keep the rest still.
+  const shape = JSON.stringify(groups.map(g => [g.head, g.tag, g.rows.map(r => [r[0], r[4] || ""])]));
+  if (shape === info.shape && list.children.length) {
+    const rows = [...list.querySelectorAll(".irow")], flat = groups.flatMap(g => g.rows);
+    rows.forEach((b, i) => {
+      const [, v, note, pfx, kind] = flat[i], vs = b.querySelector(".v > span"), em = b.querySelector(".v em:not(.pfx)"), pe = b.querySelector(".pfx");
+      roll(vs, v); if (em) roll(em, note || ""); if (pe) roll(pe, pfx || "");
+      const ask = kind === "pub" && !validIp(v), ic = b.querySelector(":scope > i"), want = `ph ph-${ask ? "arrow-right" : "copy"}`;
+      b.classList.toggle("ask", ask); if (ic.className !== want && !b.classList.contains("done")) popIcon(ic, want);
+      b.onclick = () => ask ? infoPublic() : infoCopy(b, v + (pfx || ""));
+    });
+    return;
+  }
+  const fresh = !!info.shape;
+  info.shape = shape;
+  list.replaceChildren(...groups.map(g => {
     const el = document.createElement("div"); el.className = "igroup";
     el.innerHTML = `<div class="ihead"><i class="ph ph-${g.icon}"></i><span></span>${g.tag ? `<span class="itag">${g.tag}</span>` : ""}</div>`;
     el.querySelector(".ihead span").textContent = g.head;
     for (const [k, v, note, pfx, kind] of g.rows) {
       const b = document.createElement("button"); b.className = "irow" + (kind === "pub" && !validIp(v) ? " ask" : "");
-      b.innerHTML = `<span class="k"></span><span class="v"><span></span>${pfx ? `<em class="pfx">${pfx}</em>` : ""}${note ? "<em></em>" : ""}</span><i class="ph ph-${kind === "pub" && !validIp(v) ? "arrow-right" : "copy"}"></i>`;
+      b.innerHTML = `<span class="k"></span><span class="v"><span></span>${pfx ? `<em class="pfx">${pfx}</em>` : ""}<em></em></span><i class="ph ph-${kind === "pub" && !validIp(v) ? "arrow-right" : "copy"}"></i>`;
       b.querySelector(".k").textContent = k; b.querySelector(".v > span").textContent = v;
-      if (note) b.querySelector(".v em:last-child").textContent = note;
+      if (note) b.querySelector(".v em:not(.pfx)").textContent = note;
       b.onclick = () => kind === "pub" && !validIp(v) ? infoPublic() : infoCopy(b, v + (pfx || ""));
       el.append(b);
     }
     return el;
   }));
+  if (fresh && !calm.matches) list.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "cubic-bezier(0.33, 1, 0.68, 1)" });
   $("info-copy").querySelector("span").textContent = L("Copy all", "คัดลอกทั้งหมด");
   $("info-say").textContent = L("Plain text, for a chat or a ticket", "เป็นข้อความธรรมดา วางในแชทหรือ ticket ได้");
 }
@@ -2754,18 +2793,23 @@ function infoText() {
   return groups.map(g => [g.head + (g.tag ? ` (${g.tag})` : ""), ...g.rows.filter(r => r[4] !== "pub" || validIp(r[1]))
     .map(([k, v, note, pfx]) => `  ${k.padEnd(w)}${v}${pfx || ""}${note ? `  ${note}` : ""}`)].join("\n")).join("\n\n");
 }
+// An icon that changes pops in rather than blinking over.
+function popIcon(i, cls) {
+  i.className = cls;
+  if (!calm.matches) i.animate([{ transform: "scale(0.5)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 220, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
+}
 function infoCopy(row, text) {
   navigator.clipboard?.writeText(text).catch(() => {});
   if (!row) return;
   const i = row.querySelector(":scope > i");
-  row.classList.add("done"); i.className = "ph ph-check";
-  clearTimeout(row.t); row.t = setTimeout(() => { row.classList.remove("done"); i.className = "ph ph-copy"; }, 1200);
+  row.classList.add("done"); popIcon(i, "ph ph-check");
+  clearTimeout(row.t); row.t = setTimeout(() => { row.classList.remove("done"); popIcon(i, "ph ph-copy"); }, 1200);
 }
 $("info-copy").onclick = () => {
   infoCopy(null, infoText());
   const b = $("info-copy"), i = b.querySelector("i"), sp = b.querySelector("span");
-  i.className = "ph ph-check"; sp.textContent = L("Copied", "คัดลอกแล้ว");
-  clearTimeout(b.t); b.t = setTimeout(() => { i.className = "ph ph-copy"; sp.textContent = L("Copy all", "คัดลอกทั้งหมด"); }, 1400);
+  popIcon(i, "ph ph-check"); roll(sp, L("Copied", "คัดลอกแล้ว"));
+  clearTimeout(b.t); b.t = setTimeout(() => { popIcon(i, "ph ph-copy"); roll(sp, L("Copy all", "คัดลอกทั้งหมด")); }, 1400);
 };
 async function infoPublic() {
   const id = adapters[sel].id;
@@ -2774,8 +2818,7 @@ async function infoPublic() {
   if (page === "info") renderInfo();
 }
 function infoShow(on) {
-  $("info-foot").hidden = !on;
-  if (on) { $("status").hidden = true; renderInfo(); }
+  if (on) renderInfo();
 }
 window.pagesReady = true;
 
