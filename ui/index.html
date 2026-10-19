@@ -287,6 +287,69 @@ button, input, select { font: inherit; color: inherit; }
 .pfoot[hidden] { display: none; }
 .pfoot b { display: inline-block; font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums; }
 .pfoot b.bad { color: var(--bad); }
+/* Scan: every address of the /24 as a cell, filled in as the sweep reaches it. Hover tells who is there
+   (in the footer); a free one can be used or added. */
+#page-scan:not([hidden]) { display: flex; flex-direction: column; gap: var(--s3); position: relative; }
+.shead { display: flex; align-items: center; gap: var(--s2); font-size: 13px; min-height: var(--row-h); }
+/* One line: the subnet as one address (the prefix just quieter), then which /24 of it the grid holds. */
+.snet { display: flex; align-items: center; min-width: 0; color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.snet > i { font-size: 16px; color: var(--muted); margin-right: 8px; }
+.spfx { color: var(--muted); }
+.snet-sub { color: var(--faint); font-size: 12px; margin-left: 10px; overflow: hidden; text-overflow: ellipsis; }
+.snet-sub:empty { display: none; }
+/* The sweep's progress is a ring around the rescan button; the % sits where the arrow was, and the arrow comes back when it is done. */
+.sstate { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.sagain { margin-left: auto; position: relative; }
+.sagain svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); fill: none; stroke-width: 2; opacity: 0; transition: opacity 260ms; }
+.sagain .track { stroke: var(--border); }
+.sagain .arc { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; }   /* 254 small steps: smooth without a transition that would lag the number */
+.sagain i, .sagain b { grid-area: 1 / 1; transition: opacity 200ms, transform 260ms cubic-bezier(0.33, 1, 0.68, 1); }
+.sagain b { font-weight: 400; font-size: 10px; color: var(--ink); font-variant-numeric: tabular-nums; opacity: 0; transform: scale(0.8); }
+.sagain.run svg, .sagain.run b { opacity: 1; transform: none; }
+.sagain.run i { opacity: 0; transform: scale(0.8) rotate(-90deg); }
+/* The grid scrolls a whole /24 at a time; each block fills the view. */
+.sgrid { flex: 1; min-height: 0; overflow-y: auto; scroll-snap-type: y proximity; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; }
+.sgrid::-webkit-scrollbar { display: none; }
+.sblock { flex: 0 0 100%; scroll-snap-align: start; display: grid; grid-template-columns: repeat(16, 1fr); grid-auto-rows: 1fr; gap: 3px; }
+.sblock[hidden] { display: none; }
+.sdiv { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; height: 26px; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.sdiv::before, .sdiv::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.sdiv[hidden] { display: none; }
+.sdiv span { color: var(--muted); }
+.sdiv i { font-style: normal; color: var(--faint); }   /* like the header: the prefix quieter */
+.smap { display: flex; gap: 3px; margin-left: 12px; }
+.smap:empty { display: none; }
+.sseg { width: 18px; height: 8px; padding: 0; border: 0; border-radius: 2px; background: var(--border-strong); cursor: pointer; transition: background 200ms; }
+.sseg:hover { background: color-mix(in oklch, var(--ink) 35%, transparent); }
+.sseg.on { background: var(--accent); }
+.scell { border: 0; padding: 0; border-radius: 3px; background: color-mix(in oklch, var(--border) 55%, transparent); cursor: default;
+  transition: background 260ms, box-shadow 140ms, opacity 150ms; }
+.scell.free { background: color-mix(in oklch, var(--faint) 22%, transparent); cursor: pointer; }
+.scell.used { background: color-mix(in oklch, var(--accent) 70%, transparent); }
+/* The gateway gets its own hue: it is the one cell people look for. */
+.scell.gw { background: var(--gw); }
+.sgrid, .sfoot { --gw: oklch(0.78 0.13 75); }
+.scell.me { background: var(--ok); }
+.scell.edge { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--border) 60%, transparent); color: var(--faint); font: inherit; font-size: 10px; line-height: 1; }
+.scell:not(.edge):hover, .scell.pick { box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--ink) 70%, transparent); }
+.sgrid.off .scell { opacity: 0.4; }
+/* A key in the footer points at its cells: a click holds it, another lets go. */
+.sgrid[data-only=me] .scell:not(.me), .sgrid[data-only=gw] .scell:not(.gw),
+.sgrid[data-only=used] .scell:not(.used) { opacity: 0.2; }
+/* Free is the dim colour itself: the rest fades much further. */
+.sgrid[data-only=free] .scell:not(.free) { opacity: 0.05; }
+.sfoot > span[data-k] { padding: 2px 6px; border-radius: var(--r-input); cursor: pointer; transition: background 140ms, color 140ms; }
+.sfoot:not(.busy) > span[data-k]:not(.on):hover { color: var(--ink); background: color-mix(in oklch, var(--ink) 6%, transparent); }
+.sfoot.busy > span[data-k] { cursor: default; color: var(--muted); }   /* nothing to point at until the sweep is done */
+.sfoot > span[data-k].on { background: color-mix(in oklch, var(--accent) 12%, transparent); color: var(--ink); }
+.smenu { min-width: 200px; }
+.smenu button { white-space: nowrap; }
+.sfoot { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--s3); min-height: var(--row-h); font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.sfoot[hidden] { display: none; }
+.sfoot b { font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sfoot > span > b { display: inline-block; min-width: 3ch; }   /* room for 254: the tally never shifts as it counts */
+.sfoot .key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 2px; }
+.sfoot .sep { width: var(--s3); }
 .form { row-gap: var(--row-gap); }
 .form > label, .form > .lbl { color: var(--muted); }
 .form > * { min-height: var(--row-h); display: flex; align-items: center; }
@@ -710,13 +773,20 @@ html.app, html.app body { overflow: hidden; }
           <div class="pchips" id="probe-list" role="tablist" aria-label="Targets"><span class="thumb" id="probe-thumb"></span></div>
           <div class="pgraph" id="probe-graph" role="img" aria-label="Round trips in ms, last 60 seconds"><svg id="probe-svg" preserveAspectRatio="none"></svg><div class="ptip" id="probe-tip"></div></div>
         </div>
-        <div class="page soon" id="page-scan" data-page="scan" role="tabpanel" hidden><i class="ph ph-magnifying-glass"></i><span data-t="soonScan">Free addresses on this subnet</span></div>
+        <div class="page" id="page-scan" data-page="scan" role="tabpanel" hidden>
+          <div class="shead"><span class="snet"><i class="ph ph-network"></i><span id="scan-net"></span><span class="spfx" id="scan-pfx"></span><span class="smap" id="scan-map"></span><span class="snet-sub" id="scan-sub"></span></span>
+            <span class="sstate" id="scan-state" aria-live="polite"></span>
+            <button class="icon-btn sagain" id="scan-again" title="Scan again" aria-label="Scan again"><svg viewBox="0 0 32 32" aria-hidden="true"><circle class="track" cx="16" cy="16" r="13"/><circle class="arc" id="scan-arc" cx="16" cy="16" r="13" pathLength="100"/></svg><i class="ph ph-arrow-clockwise"></i><b id="scan-pct"></b></button></div>
+          <div class="sgrid" id="scan-grid" role="grid" aria-label="Addresses on this subnet"></div>
+          <div class="menu smenu" id="scan-menu" role="menu"></div>
+        </div>
         <div class="page soon" id="page-info" data-page="info" role="tabpanel" hidden><i class="ph ph-clipboard-text"></i><span data-t="soonInfo">A summary to copy and send</span></div>
         </div>
       </div>
 
       <div class="actions">
         <span class="status" id="status" role="status"></span>
+        <span class="sfoot" id="scan-foot" hidden></span>
         <span class="pfoot" id="probe-foot" hidden><span><i class="ph ph-chart-line"></i><span data-t="pAvg">Avg</span><b id="ps-avg">-</b><i class="u">ms</i></span><span><i class="ph ph-arrow-line-up"></i><span data-t="pMax">Max</span><b id="ps-max">-</b><i class="u">ms</i></span><span><i class="ph ph-wave-sine"></i><span data-t="pJit">Jitter</span><b id="ps-jit">-</b><i class="u">ms</i></span><span><i class="ph ph-link-break"></i><span data-t="pLoss">Loss</span><b id="ps-loss">-</b></span></span>
         <button class="btn" id="revert" disabled><i class="ph ph-arrow-counter-clockwise"></i><span data-t="revert">Revert</span></button>
         <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
@@ -848,6 +918,15 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   if (cmd === "who_has") return res(demo.taken[a.address]?.[0] ?? demo.macs[a.address] ?? null);
   if (cmd === "vendor") return res(demo.vendors[a.mac.replace(/[^0-9A-F]/gi, "").slice(0, 6).toUpperCase()] ?? null);
   if (cmd === "hostname") return res(demo.names[a.address] ?? demo.taken[a.address]?.[1] ?? null);
+  if (cmd === "scan_host") {
+    const [n3, h] = [a.address.split(".").slice(0, 3).join("."), +a.address.split(".")[3]];
+    const me = adapters.find(x => x.cfg.address === a.address), gw = adapters.some(x => x.cfg.gateway === a.address);
+    const seed = [...n3].reduce((n, ch) => n * 31 + ch.charCodeAt(0) >>> 0, 7), hit = ((seed ^ h * 2654435761) >>> 0) % 100 < 9;
+    const makers = ["TP-Link", "Hikvision", "Apple", "Samsung", "Ubiquiti", "HP", "Xiaomi", "Dahua", "Intel"];
+    if (me) return res({ mac: me.mac, vendor: null, ms: 0 });
+    if (gw || hit || demo.taken[a.address]) return res({ mac: demo.macs[a.address] ?? demo.taken[a.address]?.[0] ?? "02-00-00-00-AA-" + h.toString(16).padStart(2, "0").toUpperCase(), vendor: gw ? "Ubiquiti" : makers[h % makers.length], ms: 1 + h % 9 });
+    return res(null);
+  }
   if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" ? null : { ms: 2 + Math.floor(Math.random() * 14), ttl: /^(10|192\.168)\./.test(a.address) ? 64 : 117 });
   if (cmd === "change") {
     if (demo.outcome === "cancel") return rej("Cancelled");
@@ -855,7 +934,7 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
     return res();
   }
   rej(`demo: ${cmd}`);
-}, cmd === "change" ? 900
+}, cmd === "change" ? 900 : cmd === "scan_host" ? 40 + Math.random() * 160
   // A name nobody answers for takes seconds on a real network (DNS, LLMNR and NetBIOS all time out).
   : cmd === "hostname" && !(demo.names[a.address] ?? demo.taken[a.address]) ? 2500 : 300));
 const net = (cmd, args) => tauri ? invoke(cmd, args) : demoInvoke(cmd, args);
@@ -1355,7 +1434,7 @@ function renderAdapterFacts() {
 }
 function renderAdapter(roll = false) {
   const none = !adapters[sel] || hidden.has(adapters[sel].id);
-  if (window.pagesReady && !none) { probeBuild(); if (page === "probe") paintProbe(); }   // Probe follows the adapter at once
+  if (window.pagesReady && !none) { probeBuild(); if (page === "probe") paintProbe(); if (page === "scan") scanStart(); }   // Probe follows the adapter at once
   document.querySelector(".window").classList.toggle("empty", none);
   if (none) {
     draft = null; $("apply").disabled = $("revert").disabled = true;
@@ -2006,6 +2085,7 @@ function showPage(next) {
   placePill(true);
   if (next === "adv") renderAdv();
   probeShow(next === "probe");
+  scanShow(next === "scan");
   if (next === "ip" && draft) renderForm();   // Advanced may have switched it to Manual
   now.hidden = false;
   footer(editable(page));
@@ -2364,7 +2444,7 @@ function drawGraph() {
 $("probe-graph").addEventListener("pointermove", e => { probe.hx = e.clientX - e.currentTarget.getBoundingClientRect().left; });
 $("probe-graph").addEventListener("pointerleave", () => { probe.hx = null; });
 function probeShow(on) {
-  $("status").hidden = on; $("probe-foot").hidden = !on;
+  $("status").hidden = on || page === "scan"; $("probe-foot").hidden = !on;
   if (!on) return;
   if (adapters[sel]) probeBuild();
   paintProbe(); placeThumb(false); alignFoot();
@@ -2384,15 +2464,197 @@ function measureFoot() {
 }
 document.fonts.ready.then(measureFoot);
 // The footer row is centred under the graph, not under the bar: its sides follow the graph's edges.
-function alignFoot() {
-  const g = $("probe-graph").getBoundingClientRect(), bar = document.querySelector(".actions"), b = bar.getBoundingClientRect(), pad = parseFloat(getComputedStyle(bar).paddingLeft);
+const alignFoot = () => centreUnder($("probe-foot"), $("probe-graph"), $("page-probe"));
+function centreUnder(foot, over, pageEl) {
+  const g = over.getBoundingClientRect(), bar = document.querySelector(".actions"), b = bar.getBoundingClientRect(), pad = parseFloat(getComputedStyle(bar).paddingLeft);
   if (!g.width) return;
   // The page may be mid-slide when this runs: take its offset out, or the row lands where the slide was.
-  const dx = new DOMMatrix(getComputedStyle($("page-probe")).transform).m41;
-  Object.assign($("probe-foot").style, { marginLeft: `${g.left - dx - b.left - pad}px`, marginRight: `${b.right - pad - (g.right - dx)}px` });
+  const dx = new DOMMatrix(getComputedStyle(pageEl).transform).m41;
+  Object.assign(foot.style, { marginLeft: `${g.left - dx - b.left - pad}px`, marginRight: `${b.right - pad - (g.right - dx)}px` });
 }
 new ResizeObserver(alignFoot).observe($("probe-graph"));
 document.addEventListener("visibilitychange", () => { if (!document.hidden && probe.asleep) { probe.asleep = false; probe.slept += performance.now() - probe.sleptAt; probeTick(); } });
+// ---------- Scan: who answers on this subnet ----------
+// scan_host answers { mac, vendor, ms } for an address something holds (ARP or ping), or null.
+// The page scrolls one /24 at a time, snapping, with a map in the header that lights the one on screen.
+// ponytail: up to a /22 (4 blocks, 1024 addresses); wider shows only the adapter's own /24, raise MAXB if needed.
+const MAXB = 4;
+const scan = { net: "", cells: [], blocks: [], hosts: {}, run: 0, done: 0, menu: null, first: 0, n: 1 };
+const numIp = n => [24, 16, 8, 0].map(b => (n >>> b) & 255).join(".");
+for (let b = 0; b < MAXB; b++) {
+  const g = document.createElement("div"); g.className = "sblock"; g.setAttribute("role", "rowgroup");
+  for (let h = 0; h < 256; h++) {
+    const i = b * 256 + h, c = document.createElement("button"); c.className = "scell"; c.tabIndex = -1; c.setAttribute("role", "gridcell");
+    c.onclick = e => scanPick(i, e.currentTarget);
+    scan.cells.push(c); g.append(c);
+  }
+  scan.blocks.push(g);
+}
+scan.divs = scan.blocks.map(() => { const d = document.createElement("div"); d.className = "sdiv"; d.setAttribute("aria-hidden", "true"); return d; });
+$("scan-grid").append(...scan.blocks.flatMap((g, b) => b ? [scan.divs[b], g] : [g]));
+// Where block b starts, in the grid's scroll space.
+const scanTop = b => scan.blocks[b].offsetTop - $("scan-grid").offsetTop;
+const scanGo = (b, how = "smooth") => $("scan-grid").scrollTo({ top: scanTop(b), behavior: how });
+$("scan-again").onclick = () => scanStart(true);
+const scanBase = () => { const a = adapters[sel]?.cfg.address; return a && validIp(a) ? a.split(".").slice(0, 3).join(".") : ""; };
+// Is this address anywhere on the grid?
+scan.has = ip => !!scan.net && validIp(ip || "") && ipNum(ip) >= scan.first && ipNum(ip) < scan.first + scan.n * 256;
+function scanStart(again = false) {
+  const a = adapters[sel], live = a?.state === "up" && !!scanBase(), net = live ? scanBase() : "";
+  $("scan-grid").classList.toggle("off", !live);
+  $("scan-again").disabled = !live;
+  const p = prefixOf(a?.cfg.subnet || ""), base = live ? ipNum(a.cfg.address) : 0;
+  const netA = p > 0 ? (base >>> (32 - p)) << (32 - p) >>> 0 : -1, bcA = p > 0 ? (netA | (2 ** (32 - p) - 1)) >>> 0 : -1;
+  // Blocks: the whole subnet when it fits, else just the adapter's own /24.
+  const n = live && p > 0 && p < 24 && 2 ** (24 - p) <= MAXB ? 2 ** (24 - p) : 1;
+  const mine = (base >>> 8) << 8 >>> 0, first = n > 1 ? netA : mine, own = (mine - first) / 256;
+  $("scan-net").textContent = !live ? L("Not connected", "ยังไม่ได้เชื่อมต่อ") : numIp(p > 0 && p < 24 ? netA : mine);
+  $("scan-pfx").textContent = live ? `/${p > 0 && p < 24 ? p : 24}` : "";
+  $("scan-sub").textContent = live && n === 1 && p > 0 && p < 24 ? L(`showing ${net}.x, too wide to scan all`, `แสดง ${net}.x วงใหญ่เกินจะสแกนทั้งหมด`) : "";
+  const key = `${net}|${n}|${first}`;
+  if (!again && key === scan.key && scan.done) { scanTell(null); return; }
+  const run = ++scan.run; Object.assign(scan, { key, net, n, first, hosts: {}, done: 0 });
+  scanMenu(null);
+  scan.blocks.forEach((g, b) => { g.hidden = scan.divs[b].hidden = b >= n; scan.divs[b].innerHTML = `<span>${numIp(first + b * 256)}<i>/24</i></span>`; });
+  scanMap(n);
+  // The view rides along with the sweep (top to bottom), unless you scroll yourself; then it ends on your own block.
+  scan.follow = n > 1; scan.own = own;
+  scanGo(n > 1 ? 0 : own, "instant");
+  scanSpy();
+  // The network and broadcast addresses are the real subnet's, wherever they fall on the grid.
+  scan.edge = i => { const v = first + i; return !live || i >= n * 256 ? "" : v === netA ? "net" : v === bcA ? "bc" : ""; };
+  scan.cells.forEach((c, i) => {
+    const e = scan.edge(i); c.className = "scell" + (e ? " edge" : ""); c.textContent = e === "net" ? "NET" : e === "bc" ? "BC" : "";
+    delete c.dataset.ip; delete c.dataset.tip; c.removeAttribute("aria-label");
+    if (e) c.dataset.tip = `${numIp(first + i)} · ` + (e === "bc" ? L("Broadcast: reaches every device here, not one", "Broadcast: ส่งถึงทุกเครื่องในวง ใช้เป็น IP ไม่ได้") : L("Network: names the subnet itself", "Network: ชื่อของวงนี้ ใช้เป็น IP ไม่ได้"));
+  });
+  scanTell(null);
+  if (!live) return;
+  const todo = [...Array(n * 256).keys()].filter(i => !scan.edge(i));
+  scan.total = todo.length;
+  const worker = async () => {
+    while (todo.length && run === scan.run) {
+      const i = todo.shift(), ip = numIp(first + i), got = await net_("scan_host", ip);
+      if (run !== scan.run) return;
+      const c = scan.cells[i]; c.dataset.ip = ip;
+      scan.hosts[i] = got;
+      c.classList.add(ip === a.cfg.address ? "me" : ip === a.cfg.gateway ? "gw" : got ? "used" : "free");
+      c.dataset.tip = scanSays(ip, got, a); c.setAttribute("aria-label", c.dataset.tip);
+      scan.done++;
+      if (scan.follow && Math.floor(i / 256) > scan.at) scanGo(scan.at = Math.floor(i / 256));
+      scanState();
+      if (scan.tell === null || scan.tell === undefined) scanTell(null);
+    }
+  };
+  scan.at = 0;
+  Promise.all(Array.from({ length: 16 }, worker)).then(() => {
+    if (run !== scan.run) return;
+    if (scan.follow) setTimeout(() => run === scan.run && scan.follow && scanGo(scan.own), 400);
+    scanTell(scan.tell ?? null);
+  });
+}
+// The header map: one segment per /24 (none for a single one). Click one to go there.
+function scanMap(n) {
+  $("scan-map").replaceChildren(...[...Array(n > 1 ? n : 0)].map((_, b) => {
+    const s = document.createElement("button"); s.className = "sseg"; s.tabIndex = -1;
+    s.dataset.tip = `${numIp(scan.first + b * 256)}/24`;
+    s.setAttribute("aria-label", s.dataset.tip);
+    s.onclick = () => { scan.follow = false; scanGo(b); };
+    return s;
+  }));
+}
+// The segment of the block on screen is lit, following the scroll.
+function scanSpy() {
+  const g = $("scan-grid"), at = g.scrollTop + g.clientHeight / 2;
+  const on = scan.blocks.findLastIndex((x, b) => b < scan.n && scanTop(b) <= at);
+  [...$("scan-map").children].forEach((s, b) => s.classList.toggle("on", b === on));
+}
+$("scan-grid").addEventListener("scroll", () => { scanSpy(); if (scan.menu !== null) scanMenu(null); }, { passive: true });
+// Your own scroll takes over from the sweep.
+for (const ev of ["wheel", "touchstart", "keydown"]) $("scan-grid").addEventListener(ev, () => scan.follow = false, { passive: true });
+const net_ = (cmd, address) => net(cmd, { address }).catch(() => null);
+// What a cell's tooltip says.
+function scanSays(ip, x, a) {
+  const h = +ip.split(".")[3];
+  const who = ip === a.cfg.address ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : x ? (x.vendor || L("Unknown maker", "ไม่ทราบยี่ห้อ"))
+    : (h === 0 || h === 255) ? L(`Free, valid on a /${prefixOf(a.cfg.subnet)}`, `ว่าง ใช้ได้ในวง /${prefixOf(a.cfg.subnet)}`) : L("Free, click to use", "ว่าง กดเพื่อใช้");
+  return [ip, who, x?.ms ? `${x.ms} ms` : ""].filter(Boolean).join(" · ") + (x?.mac ? `\n${x.mac}` : "");
+}
+// Footer: the key and the tally.
+function scanTell() {
+  const f = $("scan-foot");
+  const count = k => scan.cells.filter(c => c.classList.contains(k)).length, used = count("used"), free = count("free");
+  const key = (k, cls, label, n) => `<span data-k="${k}" role="button" tabindex="0"><i class="key" style="background:${cls}"></i>${label}${n !== undefined ? ` <b>${n}</b>` : ""}</span>`;
+  f.innerHTML = !scan.net ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway")
+    + key("used", "color-mix(in oklch, var(--accent) 70%, transparent)", L("In use", "ใช้อยู่"), used) + key("free", "color-mix(in oklch, var(--faint) 40%, transparent)", L("Free", "ว่าง"), free);
+  const gw = adapters[sel]?.cfg.gateway, busy = scan.done < scan.total;
+  f.classList.toggle("busy", busy);
+  if (busy) { scan.hold = null; scanOnly(null); }
+  f.querySelectorAll("[data-k]").forEach(k => k.setAttribute("aria-disabled", busy));
+  f.querySelectorAll("[data-k]").forEach(k => {
+    k.classList.toggle("on", k.dataset.k === scan.hold);
+    if (k.dataset.k === "gw" && gw && !scan.has(gw)) k.dataset.tip = L(`${gw}, outside this range`, `${gw} อยู่นอกช่วงที่แสดง`);
+  });
+  scanState();
+}
+// Which cells stand out: the one held, or the one peeked at. A gateway off this /24 has nothing to show.
+function scanOnly(k) {
+  const gw = adapters[sel]?.cfg.gateway;
+  if (k === "gw" && gw && !scan.has(gw)) k = null;
+  if (k) $("scan-grid").dataset.only = k; else delete $("scan-grid").dataset.only;
+}
+{
+  const f = $("scan-foot"), k = e => f.classList.contains("busy") ? null : e.target.closest("[data-k]")?.dataset.k;
+  const hold = e => { const x = k(e); if (!x) return; scan.hold = scan.hold === x ? null : x; scanOnly(scan.hold); scanTell(); };
+  f.addEventListener("click", hold);
+  f.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); hold(e); } });
+}
+function scanState() {
+  const run = !!scan.net && scan.done < scan.total, pct = scan.total ? Math.round(100 * scan.done / scan.total) : 0;
+  $("scan-state").textContent = !scan.net ? "" : run ? `${L("Scanning", "กำลังสแกน")} ${pct}%` : L("Done", "เสร็จแล้ว");
+  $("scan-again").classList.toggle("run", run);
+  const arc = $("scan-arc");
+  arc.style.strokeDashoffset = `${run ? 100 - pct : 0}px`;
+  if (run) $("scan-pct").textContent = pct;
+}
+// A free address: put it on this adapter, as its address (IP & DNS) or as one more (Advanced).
+function scanPick(h, cell) {
+  if (!cell.classList.contains("free") || !draft) return;
+  const ip = cell.dataset.ip, m = $("scan-menu");
+  m.innerHTML = "";
+  const item = (icon, text, go) => { const b = document.createElement("button"); b.setAttribute("role", "menuitem"); b.innerHTML = `<i class="ph ${icon}"></i><span></span>`; b.children[1].textContent = text; b.onclick = () => { scanMenu(null); go(); }; m.append(b); };
+  // Keep the adapter's own mask when the address falls inside it; otherwise the /24 we scanned.
+  const own = adapters[sel].cfg, pre = prefixOf(own.subnet), mask = pre > 0 && inNet(ip, own.address, pre) ? own.subnet : masks[24];
+  item("ph-arrow-square-in", L(`Use ${ip}`, `ใช้ ${ip}`), () => {
+    const c = adapters[sel].cfg;
+    if (draft.ipAuto) Object.assign(draft, { ipAuto: false, gateway: c.gateway, dnsAuto: false, dns1: c.dns1, dns2: c.dns2 });
+    Object.assign(draft, { address: ip, subnet: mask }); sync(); showPage("ip");
+  });
+  item("ph-plus", L("Add as another IP", "เพิ่มเป็นอีก IP"), () => { draft.extra.push({ address: ip, subnet: mask }); sync(); showPage("adv"); });
+  scanMenu(h, cell);
+}
+function scanMenu(h, cell) {
+  const m = $("scan-menu");
+  scan.cells.forEach(c => c.classList.remove("pick"));
+  if (h === null) { m.classList.remove("open"); scan.menu = null; return; }
+  cell.classList.add("pick"); scan.menu = h;
+  const pg = $("page-scan").getBoundingClientRect(), b = cell.getBoundingClientRect();
+  m.classList.add("open");
+  const left = Math.min(b.left - pg.left, pg.width - m.offsetWidth), below = b.bottom - pg.top + 6;
+  m.style.left = `${Math.max(0, left)}px`;
+  m.style.top = `${below + m.offsetHeight > pg.height ? b.top - pg.top - m.offsetHeight - 6 : below}px`;
+  m.style.transformOrigin = below + m.offsetHeight > pg.height ? "bottom left" : "top left";
+}
+document.addEventListener("pointerdown", e => { if (scan.menu !== null && !e.target.closest("#scan-menu, .scell.free")) scanMenu(null); });
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (scan.menu !== null) scanMenu(null); else if (scan.hold) { scan.hold = null; scanOnly(null); scanTell(); }
+});
+function scanShow(on) {
+  $("scan-foot").hidden = !on;
+  if (on) { $("status").hidden = true; scanStart(); centreUnder($("scan-foot"), $("scan-grid"), $("page-scan")); } else scanMenu(null);
+}
+new ResizeObserver(() => centreUnder($("scan-foot"), $("scan-grid"), $("page-scan"))).observe($("scan-grid"));
 window.pagesReady = true;
 
 // Tooltips replace native titles. In the rail they fly out beside the icon.
