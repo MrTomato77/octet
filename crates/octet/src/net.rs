@@ -109,6 +109,39 @@ pub fn vendor(mac: &str) -> Option<&'static str> {
     OUI.lines().find_map(|l| l.strip_prefix(key.as_str())?.strip_prefix('\t'))
 }
 
+/// Sets an interface's IPv4 DNS servers ("1.1.1.1,8.8.8.8"; empty = from DHCP) and whether it
+/// registers its address in DNS. The same call Windows Settings makes; it is kept across restarts.
+#[cfg(windows)]
+pub fn set_dns(index: u32, servers: &str, register: bool) -> Result<(), String> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::*;
+    use windows_sys::Win32::NetworkManagement::Ndis::NET_LUID_LH;
+    unsafe {
+        let mut luid: NET_LUID_LH = std::mem::zeroed();
+        let mut guid: windows_sys::core::GUID = std::mem::zeroed();
+        if ConvertInterfaceIndexToLuid(index, &mut luid) != 0 || ConvertInterfaceLuidToGuid(&luid, &mut guid) != 0 {
+            return Err("That adapter is gone".into());
+        }
+        let mut ns: Vec<u16> = servers.encode_utf16().chain([0]).collect();
+        let s = DNS_INTERFACE_SETTINGS {
+            Version: DNS_INTERFACE_SETTINGS_VERSION1,
+            Flags: u64::from(DNS_SETTING_NAMESERVER | DNS_SETTING_REGISTRATION_ENABLED | DNS_SETTING_REGISTER_ADAPTER_NAME),
+            NameServer: ns.as_mut_ptr(),
+            RegistrationEnabled: register.into(),
+            RegisterAdapterName: 0,   // "primary only", as before
+            ..Default::default()
+        };
+        match SetInterfaceDnsSettings(guid, &s) {
+            0 => Ok(()),
+            5 => Err("Changing DNS needs administrator rights".into()),
+            e => Err(format!("Windows refused the DNS servers (error {e})")),
+        }
+    }
+}
+#[cfg(not(windows))]
+pub fn set_dns(_: u32, _: &str, _: bool) -> Result<(), String> {
+    Err("Octet only changes settings on Windows".into())
+}
+
 /// Empties the DNS client cache, as `ipconfig /flushdns` does (it calls this same function),
 /// without starting a process: under 1 ms instead of ~45 ms.
 #[cfg(windows)]
@@ -242,6 +275,12 @@ mod tests {
         assert!(super::parse_public(b"<html>rate limited</html>").is_err());
         assert!(super::parse_public(br#"{"ip":"not an ip"}"#).is_err());
         assert!(!super::computer_name().is_empty());
+    }
+
+    /// Only a made-up interface: this test must never change a real adapter's DNS.
+    #[test]
+    fn dns_refuses_a_missing_adapter() {
+        assert_eq!(super::set_dns(999_999, "1.1.1.1", false), Err("That adapter is gone".into()));
     }
 
     #[test]

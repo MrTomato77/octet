@@ -1675,6 +1675,8 @@ $("apply").onclick = async () => {
       if (!a.cfg.gateway && !a.cfg.dns1) { say(t("applied")(a.name), "ok", "check"); return; }
       say(t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…"));
       await new Promise(res => setTimeout(res, 1000));   // let the new address settle
+      // Back on DHCP, the leased DNS servers arrive a moment after Apply: test those, not the old ones.
+      if (tauri) { await reload().catch(() => {}); renderAdapter(); }
       const probe = ip => ip ? net("ping", { address: ip }).then(v => v?.ms ?? v, () => null) : Promise.resolve(undefined);
       const [gw, dns] = await Promise.all([probe(a.cfg.gateway), probe(a.cfg.dns1 === a.cfg.gateway ? "" : a.cfg.dns1)]);
       const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${ms} ms`;

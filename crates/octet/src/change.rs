@@ -49,6 +49,9 @@ pub fn parse_subnet(value: &str) -> Result<u8, String> {
     if u32::from(prefix_mask(prefix)) == mask { Ok(prefix) } else { Err("Subnet mask bits must be contiguous".into()) }
 }
 
+/// Not a program: `run` does this step itself (DNS servers through the API).
+const DNS: &str = "octet:set-dns";
+
 /// An extra address's mask: a dotted mask or a prefix length.
 fn mask_of(v: &str) -> Result<Ipv4Addr, String> {
     let prefix = match v.parse::<u8>() {
@@ -154,22 +157,16 @@ pub fn commands(r: &Request) -> Result<Vec<Vec<String>>, String> {
                 }
             }
             if *dns {
-                let register = if cfg.register { "register=primary" } else { "register=none" };
-                if cfg.dns_auto {
-                    out.push(cmd(&["netsh", "interface", "ipv4", "set", "dnsservers", &iface, "source=dhcp", register]));
-                } else if cfg.dns1.is_empty() {
-                    out.push(cmd(&["netsh", "interface", "ipv4", "set", "dnsservers", &iface, "source=static", "address=none", register]));
-                } else {
-                    let d1 = ipv4(&cfg.dns1, "Preferred DNS")?;
-                    out.push(cmd(&[
-                        "netsh", "interface", "ipv4", "set", "dnsservers", &iface, "source=static",
-                        &format!("address={d1}"), register, "validate=no",
-                    ]));
+                // Done in-process with SetInterfaceDnsSettings (what Windows Settings uses): no netsh,
+                // well under 10 ms. No servers = take them from DHCP.
+                let mut servers = vec![];
+                if !cfg.dns_auto && !cfg.dns1.is_empty() {
+                    servers.push(ipv4(&cfg.dns1, "Preferred DNS")?.to_string());
                     if !cfg.dns2.is_empty() {
-                        let d2 = ipv4(&cfg.dns2, "Alternate DNS")?;
-                        out.push(cmd(&["netsh", "interface", "ipv4", "add", "dnsservers", &iface, &format!("address={d2}"), "index=2", "validate=no"]));
+                        servers.push(ipv4(&cfg.dns2, "Alternate DNS")?.to_string());
                     }
                 }
+                out.push(cmd(&[DNS, &index.to_string(), &servers.join(","), if cfg.register { "register" } else { "noregister" }]));
             }
             out
         }
@@ -286,6 +283,11 @@ pub fn run_elevated(request_hex: &str, out: &str) -> i32 {
 /// Runs validated commands in order; stops at the first failure with its output.
 fn run(cmds: Vec<Vec<String>>) -> Result<(), String> {
     for c in cmds {
+        if c[0] == DNS {
+            let index = c[1].parse().map_err(|_| "Bad interface index".to_string())?;
+            crate::net::set_dns(index, &c[2], c[3] == "register")?;
+            continue;
+        }
         let o = crate::hidden(&c[0]).args(&c[1..]).output().map_err(|e| e.to_string())?;
         if !o.status.success() {
             let text = format!("{}{}", oem_text(&o.stdout), oem_text(&o.stderr));
@@ -360,8 +362,11 @@ mod tests {
             c[0].join(" "),
             "netsh interface ipv4 set address name=12 source=static address=192.168.1.50 mask=255.255.255.0 gateway=192.168.1.1"
         );
-        assert_eq!(c[1].join(" "), "netsh interface ipv4 set dnsservers name=12 source=static address=1.1.1.1 register=none validate=no");
-        assert_eq!(c[2].join(" "), "netsh interface ipv4 add dnsservers name=12 address=8.8.8.8 index=2 validate=no");
+        assert_eq!(c[1].join(" "), "octet:set-dns 12 1.1.1.1,8.8.8.8 noregister");
+        assert_eq!(c.len(), 2);
+        let mut auto = cfg();
+        (auto.ip_auto, auto.dns_auto, auto.register) = (true, true, true);
+        assert_eq!(commands(&apply(auto, false, true)).unwrap()[0].join(" "), "octet:set-dns 12  register", "automatic DNS = no servers");
     }
 
     #[test]
