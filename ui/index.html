@@ -970,7 +970,7 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
     if (gw || hit || demo.taken[a.address]) return res({ mac: demo.macs[a.address] ?? demo.taken[a.address]?.[0] ?? "02-00-00-00-AA-" + h.toString(16).padStart(2, "0").toUpperCase(), vendor: gw ? "Ubiquiti" : makers[h % makers.length], ms: 1 + h % 9 });
     return res(null);
   }
-  if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" ? null : { ms: 2 + Math.floor(Math.random() * 14), ttl: /^(10|192\.168)\./.test(a.address) ? 64 : 117 });
+  if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" ? null : { ms: /^(10|192\.168)\./.test(a.address) ? 1 + Math.floor(Math.random() ** 3 * 5) : 14 + Math.floor(Math.random() ** 2 * 8), ttl: /^(10|192\.168)\./.test(a.address) ? 64 : 117 });
   if (cmd === "change") {
     if (demo.outcome === "cancel") return rej("Cancelled");
     if (demo.outcome === "fail") return rej("The object already exists.");

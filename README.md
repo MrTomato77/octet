@@ -21,62 +21,41 @@ A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simpl
 
 ## Five tabs, one adapter
 
+**IP & DNS** &nbsp;DHCP or manual in one click. Every field is checked as you type, and before Apply Octet asks the network whether someone already has the address. After Apply it pings the gateway and DNS for you.
+
 <table>
 <tr>
-<td width="50%" valign="top">
-
-### IP & DNS
-DHCP or manual in one click. Every field is checked as you type: a gateway outside the subnet, the network or broadcast address, and before Apply, another device already using the address (ARP). After Apply, Octet pings the gateway and DNS for you.
-
+<td width="50%" valign="top" align="center">
+<img src="assets/advanced.png" alt="Advanced tab: addresses and gateways on one adapter"><br>
+<b>Advanced</b><br>
+<sub>Several addresses and gateways, with metrics</sub>
 </td>
-<td width="50%" valign="top">
-
-### Advanced
-<img src="assets/advanced.png" alt="Advanced tab: addresses and gateways on one adapter">
-
-Several addresses and gateways on one adapter, with gateway and interface metrics. Extra addresses can sit beside a DHCP address too.
-
+<td width="50%" valign="top" align="center">
+<img src="assets/ping.png" alt="Ping tab: a live latency graph to the gateway"><br>
+<b>Ping</b><br>
+<sub>Live latency, jitter and loss, out this adapter</sub>
 </td>
 </tr>
 <tr>
-<td valign="top">
-
-### Ping
-<img src="assets/ping.png" alt="Ping tab: a live latency graph to the gateway with average, max, jitter and loss">
-
-A live graph to your gateway, your DNS or any address, with average, max, jitter and loss. It goes out through the adapter on screen, not whichever one has the default route.
-
+<td valign="top" align="center">
+<img src="assets/scan.png" alt="Scan tab: every address on a /23 as a grid"><br>
+<b>Scan</b><br>
+<sub>Who is on the subnet, with maker and MAC</sub>
 </td>
-<td valign="top">
-
-### Scan
-<img src="assets/scan.png" alt="Scan tab: every address on a /23 as a grid, in use and free">
-
-Every address on the subnet as a grid, filled in as the sweep reaches it. Hover a cell for maker, MAC and response time. Click a free one to take it.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-### Info
-<img src="assets/info.png" alt="Info tab: computer name, adapter, link, MAC, Wi-Fi signal">
-
-Everything about the adapter in one place: link, Wi-Fi signal and security, addresses, IPv6, DHCP lease, DNS. Click a row to copy it, or copy it all for a ticket. Your public IP is looked up only when you click.
-
-</td>
-<td valign="top">
-
-### And the small things
-- Follows Windows: cable, Wi-Fi and address changes show up on their own.
-- Release / renew, flush DNS, enable / disable adapters, DNS presets.
-- Copy or paste a whole setup as one line:<br>`192.168.1.50/24 gw 192.168.1.1 dns 1.1.1.1, 8.8.8.8`
-- Ctrl+1 … Ctrl+5 to switch tabs.
-- English and ไทย.
-
+<td valign="top" align="center">
+<img src="assets/info.png" alt="Info tab: adapter details ready to copy"><br>
+<b>Info</b><br>
+<sub>Everything about the adapter, one click to copy</sub>
 </td>
 </tr>
 </table>
+
+### And the small things
+
+- Follows Windows: cable, Wi-Fi and address changes show up on their own.
+- Release / renew, flush DNS, enable / disable adapters, DNS presets.
+- Copy or paste a whole setup as one line: `192.168.1.50/24 gw 192.168.1.1 dns 1.1.1.1, 8.8.8.8`
+- Ctrl+1 to Ctrl+5 switch tabs. English and ไทย.
 
 ## Fast, all the way down
 
