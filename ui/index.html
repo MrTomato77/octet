@@ -233,7 +233,17 @@ button, input, select { font: inherit; color: inherit; }
 .arow .ip span.sep { width: 10px; }
 .arow .prefix { width: 34px; }
 .arow .slash { width: 10px; }
-.arow .to { width: 22px; text-align: center; color: var(--faint); font-size: 14px; }
+.arow .to { width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--r-input); background: transparent; color: var(--faint); font-size: 14px;
+  display: grid; place-items: center; cursor: default; }
+.arow .to i { grid-area: 1 / 1; transition: opacity 140ms, transform 180ms var(--ease-out); }
+.arow .to .ph-x { opacity: 0; transform: rotate(-90deg) scale(0.6); }
+/* Added lines (not the first, not the empty one at the end) can be removed from here. */
+.arow:not(:first-child):not(.ph):is(:hover, :focus-within) .to { cursor: pointer; }
+.arow:not(:first-child):not(.ph):is(:hover, :focus-within) .to .ph-arrow-right { opacity: 0; transform: scale(0.6); }
+.arow:not(:first-child):not(.ph):is(:hover, :focus-within) .to .ph-x { opacity: 1; transform: none; }
+.arow:not(:first-child):not(.ph) .to:hover { background: var(--hover); color: var(--bad); }
+/* Changed-marks belong to IP & DNS; here the lines themselves are the change. */
+#adv-list .ip.changed .diff { display: none; }
 .arow.ph .ip, .arow.ph .prefix { border-style: dashed; }
 .arow.ph .ip:focus-within, .arow.ph .prefix:focus { border-style: solid; }
 .arow .ip.shared input { color: var(--faint); }
@@ -2228,7 +2238,11 @@ function advRow() {
   ipHost.className = gwHost.className = "host";
   const sl = document.createElement("span"); sl.className = "slash"; sl.textContent = "/";
   const pre = document.createElement("input"); pre.className = "prefix"; pre.maxLength = 2; pre.inputMode = "numeric"; pre.setAttribute("aria-label", "Prefix length");
-  const to = document.createElement("i"); to.className = "to ph ph-arrow-right"; to.setAttribute("aria-hidden", "true");
+  // The arrow between address and gateway; on an added line it turns into a remove button while you point at the line.
+  const to = document.createElement("button"); to.type = "button"; to.className = "to"; to.tabIndex = -1;
+  to.innerHTML = `<i class="ph ph-arrow-right"></i><i class="ph ph-x"></i>`;
+  to.setAttribute("aria-label", "Remove this address"); to.title = "Remove";
+  to.onclick = () => { const n = at(); if (n < 1 || row === adv.ph) return; putAddr(n, { ...addrAt(n), address: "" }); foldIfEmpty(row); };
   el.append(ipHost, sl, pre, to, gwHost);
   // The empty row turns real on the first keystroke.
   const real = () => { if (row === adv.ph) promote(row); return at(); };
@@ -2598,7 +2612,7 @@ function scanStart(again = false) {
   const show = (i, got) => {
       const ip = numIp(first + i), c = scan.cells[i]; c.dataset.ip = ip;
       scan.hosts[i] = got;
-      c.classList.add(mine(a, ip) ? "me" : ip === a.cfg.gateway ? "gw" : got ? "used" : "free");
+      c.classList.add(ownsIp(a, ip) ? "me" : ip === a.cfg.gateway ? "gw" : got ? "used" : "free");
       c.dataset.tip = scanSays(ip, got, a); c.setAttribute("aria-label", c.dataset.tip);
       scan.done++;
       if (scan.follow && Math.floor(i / 256) > scan.at) scanGo(scan.at = Math.floor(i / 256));
@@ -2655,7 +2669,7 @@ $("scan-grid").addEventListener("scroll", () => { scanSpy(); if (scan.menu !== n
 // Your own scroll takes over from the sweep.
 for (const ev of ["wheel", "touchstart", "keydown"]) $("scan-grid").addEventListener(ev, () => scan.follow = false, { passive: true });
 // This PC holds the address: its main one or any extra one.
-const mine = (a, ip) => ip === a.cfg.address || (a.extraIps || []).includes(ip);
+const ownsIp = (a, ip) => ip === a.cfg.address || (a.extraIps || []).includes(ip);
 // scanStart has its own `net` (the /24), so the call to Rust lives out here.
 const scanAsk = (ip, a) => net("scan_host", { address: ip, source: a.cfg.address, index: a.index ?? 0 }).catch(() => null);
 // What a cell's tooltip says.
@@ -2664,7 +2678,7 @@ function scanSays(ip, x, a) {
   // A MAC with the "locally administered" bit is made up by the device (phones and laptops do this for privacy): no maker to find.
   const priv = x?.mac && parseInt(x.mac.slice(0, 2), 16) & 2;
   const maker = x && (x.vendor || (priv ? L("Private MAC (phone or laptop)", "Private MAC (มือถือ/โน้ตบุ๊ก)") : L("Unknown maker", "ไม่ทราบยี่ห้อ")));
-  const role = mine(a, ip) ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : "";
+  const role = ownsIp(a, ip) ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : "";
   const who = role ? [role, x?.vendor].filter(Boolean).join(" · ") : x ? maker
     : (h === 0 || h === 255) ? L(`Free, valid on a /${prefixOf(a.cfg.subnet)}`, `ว่าง ใช้ได้ในวง /${prefixOf(a.cfg.subnet)}`) : L("Free, click to use", "ว่าง กดเพื่อใช้");
   return [[ip, x?.ms ? `${x.ms} ms` : ""].filter(Boolean).join(" · "), who, x?.mac].filter(Boolean).join("\n");
