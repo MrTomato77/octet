@@ -365,6 +365,8 @@ button, input, select { font: inherit; color: inherit; }
 .sgrid[data-only=maybe] .scell:not(.maybe) { opacity: 0.05; }
 /* Past a subnet smaller than /24: not part of this network, not scanned, not counted */
 .scell.out { opacity: 0.18; pointer-events: none; }
+/* In use earlier, quiet on this scan */
+.scell.used.seen { background: color-mix(in oklch, var(--accent) 32%, transparent); }
 .sfoot > span[data-k] { padding: 2px 6px; border-radius: var(--r-input); cursor: pointer; transition: background 140ms, color 140ms; }
 .sfoot:not(.busy) > span[data-k]:not(.on):hover { color: var(--ink); background: color-mix(in oklch, var(--ink) 6%, transparent); }
 .sfoot.busy > span[data-k] { cursor: default; color: var(--muted); }   /* nothing to point at until the sweep is done */
@@ -2821,7 +2823,9 @@ function scanStart(again = false) {
     : n === 1 && p > 0 && p < 24 ? L(`Showing ${net}.x, too wide for all`, `แสดง ${net}.x วงใหญ่เกินจะสแกนทั้งหมด`) : "";
   const key = `${net}|${n}|${first}|${scan.src}`;
   if (!again && key === scan.key && scan.done) { scanTell(null); return; }
-  const run = ++scan.run; Object.assign(scan, { key, net, n, first, hosts: {}, done: 0, proxy: false });
+  // What this network showed before (its range and gateway): when each address last answered, and whether the router stands in.
+  const memKey = `${net}|${n}|${a.cfg.gateway}`, mem = seenLoad(memKey);
+  const run = ++scan.run; Object.assign(scan, { key, net, n, first, hosts: {}, done: 0, proxy: !!mem.proxy });
   scanMenu(null);
   scan.blocks.forEach((g, b) => { g.hidden = scan.divs[b].hidden = b >= n; scan.divs[b].innerHTML = `<span>${numIp(first + b * 256)}<i>/24</i></span>`; });
   scanMap(n);
@@ -2849,9 +2853,13 @@ function scanStart(again = false) {
       scan.hosts[i] = got;
       // Behind proxy ARP silence means the same as the router's stand-in answer (it rate-limits): both are likely free.
       if (got?.proxy && !scan.proxy) { scan.proxy = true; scan.cells.forEach(x => x.classList.contains("free") && (x.classList.replace("free", "maybe"), x.dataset.tip = scanSays(x.dataset.ip, { proxy: true }, a))); }
-      const kind = ownsIp(a, ip) ? "me" : ip === a.cfg.gateway ? "gw" : got?.proxy || (!got && scan.proxy) ? "maybe" : got ? "used" : "free";
+      // Quiet now but in use within the hour: a phone asleep, not a free address.
+      const since = (!got || got.proxy) && Date.now() - (mem.ips[ip] ?? 0) < SEEN_MS ? Date.now() - mem.ips[ip] : 0;
+      const kind = ownsIp(a, ip) ? "me" : ip === a.cfg.gateway ? "gw" : since ? "used seen" : got?.proxy || (!got && scan.proxy) ? "maybe" : got ? "used" : "free";
       if (kind === "maybe") got = { proxy: true };
-      c.classList.add(kind);
+      if (since) got = { since };
+      if (kind === "used") mem.ips[ip] = Date.now();
+      c.classList.add(...kind.split(" "));
       c.dataset.tip = scanSays(ip, got, a); c.setAttribute("aria-label", c.dataset.tip);
       scan.done++;
       if (scan.follow && Math.floor(i / 256) > scan.at) scanGo(scan.at = Math.floor(i / 256));
@@ -2881,8 +2889,9 @@ function scanStart(again = false) {
       .then(t => t?.open ? port : Promise.reject()))).catch(() => 0);
     return open ? { mac: null, vendor: null, ms: null, port: open } : { proxy: true };
   };
-  const worker = async () => {
-    while (todo.length && run === scan.run) {
+  // Behind proxy ARP the router rate-limits and may block a burst: 16 at a time instead of 48.
+  const worker = async (_, w) => {
+    while (todo.length && run === scan.run && !(scan.proxy && w >= 16)) {
       const i = todo.shift(), ip = numIp(first + i), res = await confirm(ip, await scanAsk(ip, a, scan.src));
       if (run !== scan.run) return;
       q.push([i, res]); got++;
@@ -2893,6 +2902,7 @@ function scanStart(again = false) {
   // ponytail: an empty address waits ~400 ms; 48 at once sweeps a /24 in ~2 s.
   Promise.all(Array.from({ length: tauri ? 48 : 16 }, worker)).then(() => { fed = true; });
   const done = () => {
+    mem.proxy = scan.proxy; seenSave(memKey, mem);
     if (scan.follow) setTimeout(() => run === scan.run && scan.follow && scanGo(scan.own), 400);
     scanTell(scan.tell ?? null);
   };
@@ -2920,6 +2930,15 @@ for (const ev of ["wheel", "touchstart", "keydown"]) $("scan-grid").addEventList
 const ownsIp = (a, ip) => ip === a.cfg.address || (a.extraIps || []).includes(ip);
 // scanStart has its own `net` (the /24), so the call to Rust lives out here.
 const scanAsk = (ip, a, src) => net("scan_host", { address: ip, source: src || a.cfg.address, index: a.index ?? 0 }).catch(() => null);
+// Addresses seen in use, per network, for an hour: one scan is a snapshot, phones sleep and wake.
+const SEEN_MS = 3600e3;
+const seenAll = () => { try { return JSON.parse(pref("octet-seen") || "{}"); } catch { return {}; } };
+const seenLoad = k => ({ ips: {}, ...seenAll()[k] });
+function seenSave(k, m) {
+  const all = seenAll(), now = Date.now();
+  m.ips = Object.fromEntries(Object.entries(m.ips).filter(([, t]) => now - t < SEEN_MS));
+  all[k] = m; keep("octet-seen", JSON.stringify(all));
+}
 const scanTcp = (ip, port, source) => net("tcping", { address: ip, port, source, timeout: 400 }).catch(() => null);
 // What a cell's tooltip says.
 function scanSays(ip, x, a) {
@@ -2928,6 +2947,7 @@ function scanSays(ip, x, a) {
   const priv = x?.mac && parseInt(x.mac.slice(0, 2), 16) & 2;
   const maker = x && (x.vendor || (priv ? L("Private MAC (phone or laptop)", "Private MAC (มือถือ/โน้ตบุ๊ก)") : L("Unknown maker", "ไม่ทราบยี่ห้อ")));
   const role = ownsIp(a, ip) ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : "";
+  if (x?.since) { const m = Math.max(1, Math.round(x.since / 60000)); return [ip, L(`In use ${m} min ago, quiet now`, `ใช้อยู่เมื่อ ${m} นาทีก่อน ตอนนี้เงียบ`)].join("\n"); }
   if (x?.proxy) return [ip, L("Likely free: only the router answered for it", "น่าจะว่าง: มีแค่ Router ตอบแทน")].join("\n");
   if (x?.port) return [ip, L(`In use: port ${x.port} answers, ping doesn't`, `ใช้อยู่: พอร์ต ${x.port} ตอบ แต่ไม่ตอบ ping`)].join("\n");
   const who = role ? [role, x?.vendor].filter(Boolean).join(" · ") : x && scan.off && !x.mac ? L("Answers ping", "ตอบ ping")
