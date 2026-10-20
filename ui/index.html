@@ -363,6 +363,8 @@ button, input, select { font: inherit; color: inherit; }
 /* Likely free: the router answered for it (proxy ARP), nothing else did */
 .scell.maybe { background: color-mix(in oklch, var(--faint) 22%, transparent); outline: 1px dashed color-mix(in oklch, var(--faint) 35%, transparent); outline-offset: -1px; cursor: pointer; }
 .sgrid[data-only=maybe] .scell:not(.maybe) { opacity: 0.05; }
+/* Past a subnet smaller than /24: not part of this network, not scanned, not counted */
+.scell.out { opacity: 0.18; pointer-events: none; }
 .sfoot > span[data-k] { padding: 2px 6px; border-radius: var(--r-input); cursor: pointer; transition: background 140ms, color 140ms; }
 .sfoot:not(.busy) > span[data-k]:not(.on):hover { color: var(--ink); background: color-mix(in oklch, var(--ink) 6%, transparent); }
 .sfoot.busy > span[data-k] { cursor: default; color: var(--muted); }   /* nothing to point at until the sweep is done */
@@ -2829,11 +2831,11 @@ function scanStart(again = false) {
   scanGo(n > 1 ? 0 : own, "instant");
   scanSpy();
   // The network and broadcast addresses are the real subnet's, wherever they fall on the grid.
-  scan.edge = i => { const v = first + i; return !live || i >= n * 256 ? "" : v === netA ? "net" : v === bcA ? "bc" : ""; };
+  scan.edge = i => { const v = first + i; return !live || i >= n * 256 ? "" : v === netA ? "net" : v === bcA ? "bc" : p > 24 && (v < netA || v > bcA) ? "out" : ""; };
   scan.cells.forEach((c, i) => {
-    const e = scan.edge(i); c.className = "scell" + (e ? " edge" : ""); c.textContent = e === "net" ? "NET" : e === "bc" ? "BC" : "";
+    const e = scan.edge(i); c.className = "scell" + (e === "out" ? " out" : e ? " edge" : ""); c.textContent = e === "net" ? "NET" : e === "bc" ? "BC" : "";
     delete c.dataset.ip; delete c.dataset.tip; c.removeAttribute("aria-label");
-    if (e) c.dataset.tip = `${numIp(first + i)} · ` + (e === "bc" ? L("Broadcast: reaches every device here, not one", "Broadcast: ส่งถึงทุกเครื่องในวง ใช้เป็น IP ไม่ได้") : L("Network: names the subnet itself", "Network: ชื่อของวงนี้ ใช้เป็น IP ไม่ได้"));
+    if (e && e !== "out") c.dataset.tip = `${numIp(first + i)} · ` + (e === "bc" ? L("Broadcast: reaches every device here, not one", "Broadcast: ส่งถึงทุกเครื่องในวง ใช้เป็น IP ไม่ได้") : L("Network: names the subnet itself", "Network: ชื่อของวงนี้ ใช้เป็น IP ไม่ได้"));
   });
   scanTell(null);
   if (!live) return;
