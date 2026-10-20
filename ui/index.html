@@ -391,27 +391,37 @@ button, input, select { font: inherit; color: inherit; }
    The list button next to it holds this adapter's own addresses (main and Advanced). */
 .shead { position: relative; }
 /* One box, like a combo box: type a range, or open the list of this adapter's own. */
-.sown { display: flex; align-items: center; flex: none; height: var(--row-h); padding: 0 2px 0 6px; border: 1px solid var(--border-strong); border-radius: var(--r-input);
+.scombo { position: relative; flex: none; width: 210px; height: var(--row-h); z-index: 4; }
+.sown { position: absolute; left: 0; top: 0; width: 100%; display: flex; flex-direction: column; padding: 0 0 0 6px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--r-input);
   transition: border-color var(--t-fast) var(--ease-out), background-color var(--t-fast) var(--ease-out); }
 .sown:hover:not(:has(:disabled)) { border-color: color-mix(in oklch, var(--ink) 35%, var(--border-strong)); }
-.sown:focus-within, .sown:has([aria-expanded="true"]) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.sown:focus-within, .sown:has([aria-expanded="true"]) { border-color: color-mix(in oklch, var(--accent) 55%, var(--border-strong)); }
 /* The box is the only frame: the parts inside never draw their own focus ring. */
 .sown .ip:focus-within, .sown .prefix:focus { border: 0; box-shadow: none; }
+.srow { display: flex; align-items: center; height: calc(var(--row-h) - 2px); flex: none; }
+/* Open, the same box grows down over the grid (an accordion): its height and the rows' opacity rise together. */
+.sown.open { box-shadow: 0 12px 28px rgb(0 0 0 / 0.35); }
+.slist { height: 0; overflow: hidden; display: grid; align-content: start; margin-left: -6px; padding: 0 6px; transition: height 280ms cubic-bezier(0.22, 1, 0.36, 1); }
+.slist::before { content: ""; height: 1px; margin: 0 -6px 4px -6px; background: var(--border); }   /* edge to edge: the list spans the whole box, the line runs out over its padding */
+.slist button { display: grid; grid-template-columns: 20px 1fr auto; gap: var(--s2); align-items: center; height: 32px; padding: 0 var(--s2) 0 2px; margin-bottom: 4px;
+  border: 0; border-radius: var(--r-input); background: transparent; color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  font-variant-numeric: tabular-nums; opacity: 0; transform: translateY(-4px); transition: background 140ms, opacity 200ms, transform 240ms cubic-bezier(0.22, 1, 0.36, 1); }
+.sown.open .slist button { opacity: 1; transform: none; transition-delay: 0s, calc(60ms + var(--i, 0) * 40ms), calc(60ms + var(--i, 0) * 40ms); }
+.slist button:hover, .slist button:focus-visible { background: var(--hover); outline: none; }
+.slist button i { font-size: 16px; color: var(--muted); }
+.slist button em { font-style: normal; font-size: 12px; color: var(--faint); }
+.slist button.on, .slist button.on i { color: var(--accent); }
 .sown .ip, .sown .prefix { border: 0; background: transparent; box-shadow: none; height: calc(var(--row-h) - 4px); }
 .sown .ip.short { width: 132px; padding: 0 4px; }
 .sown .slash { width: 10px; color: var(--faint); }
 .sown .prefix { width: 26px; padding: 0; text-align: left; }
-.scaret { display: grid; place-items: center; width: 28px; height: 28px; margin-left: 2px; padding: 0; border: 0; border-radius: var(--r-input);
+.scaret { display: grid; place-items: center; width: 30px; height: calc(var(--row-h) - 2px); margin-left: auto; border-radius: 0 calc(var(--r-input) - 1px) calc(var(--r-input) - 1px) 0; padding: 0; border: 0;
   background: transparent; color: var(--muted); cursor: pointer; transition: background 140ms, color 140ms; }
 .scaret:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 .scaret:disabled { opacity: 0; }
+.sown.open .scaret { border-bottom-right-radius: 0; }
 .scaret i { font-size: 13px; transition: transform 180ms var(--ease-out); }
 .scaret[aria-expanded="true"] i { transform: rotate(180deg); }
-#scan-picks { left: 0; top: calc(var(--row-h) + 4px); transform-origin: top left; }
-#scan-picks button { grid-template-columns: 20px 1fr auto; font-variant-numeric: tabular-nums; }
-#scan-picks button em { font-style: normal; font-size: 12px; color: var(--faint); }
-#scan-picks button.on { color: var(--accent); }
-#scan-picks button.on i { color: var(--accent); }
 .smap { margin-left: var(--s2); }
 .snote { color: var(--faint); }
 .ifoot-say { flex: 1; min-width: 0; font-size: 13px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -849,8 +859,7 @@ html.app, html.app body { overflow: hidden; }
         </div>
         <div class="page" id="page-scan" data-page="scan" role="tabpanel" hidden>
           <div class="shead">
-            <div class="sown" id="scan-own"><span class="host"></span><span class="slash">/</span><input class="prefix" id="scan-own-pfx" inputmode="numeric" maxlength="2" placeholder="24" autocomplete="off" aria-label="Prefix"><button class="scaret" id="scan-pick" aria-haspopup="menu" title="This adapter's addresses" aria-label="This adapter's addresses"><i class="ph ph-caret-down"></i></button></div>
-            <div class="menu" id="scan-picks" role="menu"></div>
+            <div class="scombo"><div class="sown" id="scan-own"><div class="srow"><span class="host"></span><span class="slash">/</span><input class="prefix" id="scan-own-pfx" inputmode="numeric" maxlength="2" placeholder="24" autocomplete="off" aria-label="Prefix"><button class="scaret" id="scan-pick" aria-haspopup="menu" title="This adapter's addresses" aria-label="This adapter's addresses"><i class="ph ph-caret-down"></i></button></div><div class="slist" id="scan-picks" role="menu"></div></div></div>
             <span class="smap" id="scan-map"></span>
             <span class="sstate" id="scan-state" aria-live="polite"></span>
             <button class="icon-btn sagain" id="scan-again" title="Scan again" aria-label="Scan again"><svg viewBox="0 0 32 32" aria-hidden="true"><circle class="track" cx="16" cy="16" r="13"/><circle class="arc" id="scan-arc" cx="16" cy="16" r="13" pathLength="100"/></svg><i class="ph ph-arrow-clockwise"></i><b id="scan-pct"></b></button></div>
@@ -2826,14 +2835,15 @@ function scanTyped() {
 $("scan-own").addEventListener("focusout", e => { if (!$("scan-own").contains(e.relatedTarget)) setTimeout(() => !$("scan-own").contains(document.activeElement) && scanChips(adapters[sel], scanBasis(adapters[sel]), !$("scan-pick").disabled)); });
 // The list: this adapter's addresses, each standing for its range.
 function setScanPicks(open) {
-  const m = $("scan-picks"), a = adapters[sel];
-  m.classList.toggle("open", open); $("scan-pick").setAttribute("aria-expanded", open);
-  m.style.minWidth = `${$("scan-own").offsetWidth}px`;   // as wide as the box it drops from
-  if (!open) return;
+  const box = $("scan-own"), m = $("scan-picks"), a = adapters[sel];
+  if (open === box.classList.contains("open")) return;
+  $("scan-pick").setAttribute("aria-expanded", open);
+  box.classList.toggle("open", open);
+  if (!open) { m.style.height = "0px"; return; }
   const cur = scanBasis(a);
   m.innerHTML = "";
   scanRanges(a).forEach((r, i) => {
-    const b = document.createElement("button"); b.setAttribute("role", "menuitem");
+    const b = document.createElement("button"); b.setAttribute("role", "menuitem"); b.style.setProperty("--i", i);
     const on = cur && cur.prefix === r.prefix && netOf(cur.ip, r.prefix) === netOf(r.ip, r.prefix);
     b.className = on ? "on" : "";
     b.innerHTML = `<i class="ph ${i ? "ph-plus-circle" : "ph-house-line"}"></i><span></span><em></em>`;
@@ -2842,11 +2852,12 @@ function setScanPicks(open) {
     b.onclick = e => { e.stopPropagation(); clearTimeout(scanWait); setScanPicks(false); scan.pick = i ? r : null; scan.pickFor = a.id; scanStart(true); $("scan-pick").focus(); };
     m.append(b);
   });
-  (m.querySelector("button.on") || m.querySelector("button"))?.focus();
+  m.style.height = `${m.scrollHeight}px`;
+  (m.querySelector("button.on") || m.querySelector("button"))?.focus({ preventScroll: true });
 }
 menuKeys($("scan-picks"), $("scan-pick"), () => setScanPicks(false));
-$("scan-pick").onclick = e => { e.stopPropagation(); setScanPicks(!$("scan-picks").classList.contains("open")); };
-document.addEventListener("click", () => setScanPicks(false));
+$("scan-pick").onclick = e => { e.stopPropagation(); setScanPicks(!$("scan-own").classList.contains("open")); };
+document.addEventListener("click", e => { if (!e.target.closest("#scan-own")) setScanPicks(false); });
 $("scan-own-pfx").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, ""); scanTyped(); });
 function scanMenu(h, cell) {
   const m = $("scan-menu");
