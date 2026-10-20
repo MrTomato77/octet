@@ -318,8 +318,9 @@ button, input, select { font: inherit; color: inherit; }
 .sagain.run svg, .sagain.run b { opacity: 1; transform: none; }
 .sagain.run i { opacity: 0; transform: scale(0.8) rotate(-90deg); }
 /* The grid scrolls a whole /24 at a time; each block fills the view. */
-.sgrid { flex: 1; min-height: 0; overflow-y: auto; scroll-snap-type: y proximity; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; }
+.sgrid { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scroll-snap-type: y proximity; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; }
 .sgrid::-webkit-scrollbar { display: none; }
+.sgrid.one { overflow-y: hidden; }
 .sblock { flex: 0 0 100%; scroll-snap-align: start; display: grid; grid-template-columns: repeat(16, 1fr); grid-auto-rows: 1fr; gap: 3px; }
 .sblock[hidden] { display: none; }
 .sdiv { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; height: 26px; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -377,7 +378,7 @@ button, input, select { font: inherit; color: inherit; }
 .irow.done > i { opacity: 1; color: var(--ok); }
 .irow.ask .v { color: var(--accent); }
 /* Public IP: who it belongs to goes under the address, small, so a long ISP name never cuts the IP. */
-.irow.pub { padding-block: 4px; }
+.irow.pub { padding-block: 4px; min-height: 46px; }
 .irow.pub .v { flex-direction: column; align-items: flex-start; }
 .irow.pub .v em { margin-left: 0; font-size: 12px; line-height: 1.3; max-width: 100%; }
 .ifoot { flex: 1; display: flex; align-items: center; gap: var(--s3); min-height: var(--row-h); }
@@ -385,9 +386,37 @@ button, input, select { font: inherit; color: inherit; }
 #info-copy { border-color: transparent; background: transparent; color: var(--muted); padding: 0 var(--s3); }
 #info-copy:hover { background: var(--hover); color: var(--ink); }
 #info-copy span { display: inline-block; }
-#scan-net, #scan-pfx { display: inline-block; }
+/* Ranges: this adapter's own (main, then each secondary IP's) as chips; one of your own in the box on the right. */
+/* The range is an address box like everywhere else: it shows the range on screen, and you can type any.
+   The list button next to it holds this adapter's own addresses (main and Advanced). */
+.shead { position: relative; }
+/* One box, like a combo box: type a range, or open the list of this adapter's own. */
+.sown { display: flex; align-items: center; flex: none; height: var(--row-h); padding: 0 2px 0 6px; border: 1px solid var(--border-strong); border-radius: var(--r-input);
+  transition: border-color var(--t-fast) var(--ease-out), background-color var(--t-fast) var(--ease-out); }
+.sown:hover:not(:has(:disabled)) { border-color: color-mix(in oklch, var(--ink) 35%, var(--border-strong)); }
+.sown:focus-within, .sown:has([aria-expanded="true"]) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* The box is the only frame: the parts inside never draw their own focus ring. */
+.sown .ip:focus-within, .sown .prefix:focus { border: 0; box-shadow: none; }
+.sown .ip, .sown .prefix { border: 0; background: transparent; box-shadow: none; height: calc(var(--row-h) - 4px); }
+.sown .ip.short { width: 132px; padding: 0 4px; }
+.sown .slash { width: 10px; color: var(--faint); }
+.sown .prefix { width: 26px; padding: 0; text-align: left; }
+.scaret { display: grid; place-items: center; width: 28px; height: 28px; margin-left: 2px; padding: 0; border: 0; border-radius: var(--r-input);
+  background: transparent; color: var(--muted); cursor: pointer; transition: background 140ms, color 140ms; }
+.scaret:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.scaret:disabled { opacity: 0; }
+.scaret i { font-size: 13px; transition: transform 180ms var(--ease-out); }
+.scaret[aria-expanded="true"] i { transform: rotate(180deg); }
+#scan-picks { left: 0; top: calc(var(--row-h) + 4px); transform-origin: top left; }
+#scan-picks button { grid-template-columns: 20px 1fr auto; font-variant-numeric: tabular-nums; }
+#scan-picks button em { font-style: normal; font-size: 12px; color: var(--faint); }
+#scan-picks button.on { color: var(--accent); }
+#scan-picks button.on i { color: var(--accent); }
+.smap { margin-left: var(--s2); }
+.snote { color: var(--faint); }
 .ifoot-say { flex: 1; min-width: 0; font-size: 13px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .smenu { min-width: 200px; }
+
 .smenu button { white-space: nowrap; }
 .sfoot { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--s3); min-height: var(--row-h); font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; }
 .sfoot[hidden] { display: none; }
@@ -819,7 +848,10 @@ html.app, html.app body { overflow: hidden; }
           <div class="pgraph" id="probe-graph" role="img" aria-label="Round trips in ms, last 60 seconds"><svg id="probe-svg" preserveAspectRatio="none"></svg><div class="ptip" id="probe-tip"></div></div>
         </div>
         <div class="page" id="page-scan" data-page="scan" role="tabpanel" hidden>
-          <div class="shead"><span class="snet"><i class="ph ph-network"></i><span id="scan-net"></span><span class="spfx" id="scan-pfx"></span><span class="smap" id="scan-map"></span><span class="snet-sub" id="scan-sub"></span></span>
+          <div class="shead">
+            <div class="sown" id="scan-own"><span class="host"></span><span class="slash">/</span><input class="prefix" id="scan-own-pfx" inputmode="numeric" maxlength="2" placeholder="24" autocomplete="off" aria-label="Prefix"><button class="scaret" id="scan-pick" aria-haspopup="menu" title="This adapter's addresses" aria-label="This adapter's addresses"><i class="ph ph-caret-down"></i></button></div>
+            <div class="menu" id="scan-picks" role="menu"></div>
+            <span class="smap" id="scan-map"></span>
             <span class="sstate" id="scan-state" aria-live="polite"></span>
             <button class="icon-btn sagain" id="scan-again" title="Scan again" aria-label="Scan again"><svg viewBox="0 0 32 32" aria-hidden="true"><circle class="track" cx="16" cy="16" r="13"/><circle class="arc" id="scan-arc" cx="16" cy="16" r="13" pathLength="100"/></svg><i class="ph ph-arrow-clockwise"></i><b id="scan-pct"></b></button></div>
           <div class="sgrid" id="scan-grid" role="grid" aria-label="Addresses on this subnet"></div>
@@ -972,6 +1004,8 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
     const seed = [...n3].reduce((n, ch) => n * 31 + ch.charCodeAt(0) >>> 0, 7), hit = ((seed ^ h * 2654435761) >>> 0) % 100 < 9;
     const makers = ["TP-Link", "Hikvision", "Apple", "Samsung", "Ubiquiti", "HP", "Xiaomi", "Dahua", "Intel"];
     if (me) return res({ mac: me.mac, vendor: null, ms: 0 });
+    const near = adapters.some(x => [x.cfg.address, ...(x.extraIps || [])].some(o => validIp(o || "") && o.split(".").slice(0, 3).join(".") === n3));
+    if (!near) return res(hit ? { mac: null, vendor: null, ms: 3 + h % 12 } : null);
     if (gw || hit || demo.taken[a.address]) return res({ mac: demo.macs[a.address] ?? demo.taken[a.address]?.[0] ?? "02-00-00-00-AA-" + h.toString(16).padStart(2, "0").toUpperCase(), vendor: gw ? "Ubiquiti" : makers[h % makers.length], ms: 1 + h % 9 });
     return res(null);
   }
@@ -2579,27 +2613,45 @@ $("scan-grid").append(...scan.blocks.flatMap((g, b) => b ? [scan.divs[b], g] : [
 const scanTop = b => scan.blocks[b].offsetTop - $("scan-grid").offsetTop;
 const scanGo = (b, how = "smooth") => $("scan-grid").scrollTo({ top: scanTop(b), behavior: how });
 $("scan-again").onclick = () => scanStart(true);
-const scanBase = () => { const a = adapters[sel]?.cfg.address; return a && validIp(a) ? a.split(".").slice(0, 3).join(".") : ""; };
+// The range swept: the adapter's own unless another was picked from the header (a secondary IP's, or one typed in).
+// `src` is the address the pings go out from: the adapter's own address inside that range, or its main one.
+const netOf = (ip, p) => p > 0 ? (ipNum(ip) >>> (32 - p)) << (32 - p) >>> 0 : 0;
+const scanRanges = a => {
+  const all = [[a.cfg.address, a.cfg.subnet], ...(a.extraIps || []).map((ip, i) => [ip, a.extraSubnets?.[i]])]
+    .filter(([ip]) => validIp(ip || "")).map(([ip, m]) => ({ ip, prefix: prefixOf(m || "") > 0 ? prefixOf(m) : 24 }));
+  return all.filter((x, i) => all.findIndex(y => y.prefix === x.prefix && netOf(y.ip, y.prefix) === netOf(x.ip, x.prefix)) === i);
+};
+const scanBasis = a => {
+  if (scan.pickFor !== a?.id) { scan.pick = null; scan.typed = false; scan.pickFor = a?.id; }
+  const own = a ? scanRanges(a) : [], r = scan.pick ?? own[0];
+  if (!r) return null;
+  const home = own.find(o => inNet(r.ip, o.ip, Math.max(o.prefix, 1)));
+  return { ...r, src: home?.ip ?? a.cfg.address, off: !home };
+};
+const scanBase = () => { const b = scanBasis(adapters[sel]); return b ? b.ip.split(".").slice(0, 3).join(".") : ""; };
 // Is this address anywhere on the grid?
 scan.has = ip => !!scan.net && validIp(ip || "") && ipNum(ip) >= scan.first && ipNum(ip) < scan.first + scan.n * 256;
 function scanStart(again = false) {
-  const a = adapters[sel], live = a?.state === "up" && !!scanBase(), net = live ? scanBase() : "";
+  const a = adapters[sel], basis = scanBasis(a), live = a?.state === "up" && !!basis, net = live ? scanBase() : "";
   $("scan-grid").classList.toggle("off", !live);
   $("scan-again").disabled = !live;
-  const p = prefixOf(a?.cfg.subnet || ""), base = live ? ipNum(a.cfg.address) : 0;
+  const p = live ? basis.prefix : -1, base = live ? ipNum(basis.ip) : 0;
+  Object.assign(scan, { src: live ? basis.src : "", off: live && basis.off });
   const netA = p > 0 ? (base >>> (32 - p)) << (32 - p) >>> 0 : -1, bcA = p > 0 ? (netA | (2 ** (32 - p) - 1)) >>> 0 : -1;
   // Blocks: the whole subnet when it fits, else just the adapter's own /24.
   const n = live && p > 0 && p < 24 && 2 ** (24 - p) <= MAXB ? 2 ** (24 - p) : 1;
   const mine = (base >>> 8) << 8 >>> 0, first = n > 1 ? netA : mine, own = (mine - first) / 256;
-  roll($("scan-net"), !live ? L("Not connected", "ยังไม่ได้เชื่อมต่อ") : numIp(p > 0 && p < 24 ? netA : mine));
-  roll($("scan-pfx"), live ? `/${p > 0 && p < 24 ? p : 24}` : "");
-  $("scan-sub").textContent = live && n === 1 && p > 0 && p < 24 ? L(`showing ${net}.x, too wide to scan all`, `แสดง ${net}.x วงใหญ่เกินจะสแกนทั้งหมด`) : "";
-  const key = `${net}|${n}|${first}`;
+  scanChips(a, basis, live);
+  // A note for the footer: why this range shows less than usual.
+  scan.note = !live ? "" : scan.off ? L("Past the gateway: ping only", "อยู่หลัง Gateway: ใช้ ping อย่างเดียว")
+    : n === 1 && p > 0 && p < 24 ? L(`Showing ${net}.x, too wide for all`, `แสดง ${net}.x วงใหญ่เกินจะสแกนทั้งหมด`) : "";
+  const key = `${net}|${n}|${first}|${scan.src}`;
   if (!again && key === scan.key && scan.done) { scanTell(null); return; }
   const run = ++scan.run; Object.assign(scan, { key, net, n, first, hosts: {}, done: 0 });
   scanMenu(null);
   scan.blocks.forEach((g, b) => { g.hidden = scan.divs[b].hidden = b >= n; scan.divs[b].innerHTML = `<span>${numIp(first + b * 256)}<i>/24</i></span>`; });
   scanMap(n);
+  $("scan-grid").classList.toggle("one", n === 1);
   // The view rides along with the sweep (top to bottom), unless you scroll yourself; then it ends on your own block.
   scan.follow = n > 1; scan.own = own;
   scanGo(n > 1 ? 0 : own, "instant");
@@ -2644,7 +2696,7 @@ function scanStart(again = false) {
   };
   const worker = async () => {
     while (todo.length && run === scan.run) {
-      const i = todo.shift(), res = await scanAsk(numIp(first + i), a);
+      const i = todo.shift(), res = await scanAsk(numIp(first + i), a, scan.src);
       if (run !== scan.run) return;
       q.push([i, res]); got++;
     }
@@ -2680,7 +2732,7 @@ for (const ev of ["wheel", "touchstart", "keydown"]) $("scan-grid").addEventList
 // This PC holds the address: its main one or any extra one.
 const ownsIp = (a, ip) => ip === a.cfg.address || (a.extraIps || []).includes(ip);
 // scanStart has its own `net` (the /24), so the call to Rust lives out here.
-const scanAsk = (ip, a) => net("scan_host", { address: ip, source: a.cfg.address, index: a.index ?? 0 }).catch(() => null);
+const scanAsk = (ip, a, src) => net("scan_host", { address: ip, source: src || a.cfg.address, index: a.index ?? 0 }).catch(() => null);
 // What a cell's tooltip says.
 function scanSays(ip, x, a) {
   const h = +ip.split(".")[3];
@@ -2688,7 +2740,8 @@ function scanSays(ip, x, a) {
   const priv = x?.mac && parseInt(x.mac.slice(0, 2), 16) & 2;
   const maker = x && (x.vendor || (priv ? L("Private MAC (phone or laptop)", "Private MAC (มือถือ/โน้ตบุ๊ก)") : L("Unknown maker", "ไม่ทราบยี่ห้อ")));
   const role = ownsIp(a, ip) ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : "";
-  const who = role ? [role, x?.vendor].filter(Boolean).join(" · ") : x ? maker
+  const who = role ? [role, x?.vendor].filter(Boolean).join(" · ") : x && scan.off && !x.mac ? L("Answers ping", "ตอบ ping")
+    : !x && scan.off ? L("No answer to ping, may still be in use", "ไม่ตอบ ping อาจมีเครื่องใช้อยู่") : x ? maker
     : (h === 0 || h === 255) ? L(`Free, valid on a /${prefixOf(a.cfg.subnet)}`, `ว่าง ใช้ได้ในวง /${prefixOf(a.cfg.subnet)}`) : L("Free, click to use", "ว่าง กดเพื่อใช้");
   return [[ip, x?.ms ? `${x.ms} ms` : ""].filter(Boolean).join(" · "), who, x?.mac].filter(Boolean).join("\n");
 }
@@ -2697,8 +2750,8 @@ function scanTell() {
   const f = $("scan-foot");
   const count = k => scan.cells.filter(c => c.classList.contains(k)).length, used = count("used"), free = count("free");
   const key = (k, cls, label, n) => `<span data-k="${k}" role="button" tabindex="0"><i class="key" style="background:${cls}"></i>${label}${n !== undefined ? ` <b>${n}</b>` : ""}</span>`;
-  f.innerHTML = !scan.net ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway")
-    + key("used", "color-mix(in oklch, var(--accent) 70%, transparent)", L("In use", "ใช้อยู่"), used) + key("free", "color-mix(in oklch, var(--faint) 40%, transparent)", L("Free", "ว่าง"), free);
+  f.innerHTML = !scan.net ? "" : (scan.note ? `<span class="snote">${scan.note}</span>` : "") + (scan.off ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway"))
+    + key("used", "color-mix(in oklch, var(--accent) 70%, transparent)", L("In use", "ใช้อยู่"), used) + key("free", "color-mix(in oklch, var(--faint) 40%, transparent)", scan.off ? L("No answer", "ไม่ตอบ") : L("Free", "ว่าง"), free);
   const gw = adapters[sel]?.cfg.gateway, busy = scan.done < scan.total;
   f.classList.toggle("busy", busy);
   if (busy) { scan.hold = null; scanOnly(null); }
@@ -2731,7 +2784,7 @@ function scanState() {
 }
 // A free address: put it on this adapter, as its address (IP & DNS) or as one more (Advanced).
 function scanPick(h, cell) {
-  if (!cell.classList.contains("free") || !draft) return;
+  if (!cell.classList.contains("free") || !draft || scan.off) return;   // past the gateway, silence isn't free
   const ip = cell.dataset.ip, m = $("scan-menu");
   m.innerHTML = "";
   const item = (icon, text, go) => { const b = document.createElement("button"); b.setAttribute("role", "menuitem"); b.innerHTML = `<i class="ph ${icon}"></i><span></span>`; b.children[1].textContent = text; b.onclick = () => { scanMenu(null); go(); }; m.append(b); };
@@ -2745,6 +2798,56 @@ function scanPick(h, cell) {
   item("ph-plus", L("Add as another IP", "เพิ่มเป็นอีก IP"), () => { draft.extra.push({ address: ip, subnet: mask }); sync(); showPage("adv"); });
   scanMenu(h, cell);
 }
+// The box shows the range on screen unless you are typing in it.
+function scanChips(a, basis, live) {
+  [...scanOwn.inputs, $("scan-own-pfx"), $("scan-pick")].forEach(x => x.disabled = !live);
+  if ($("scan-own").contains(document.activeElement)) return;
+  scanOwn.set(live ? numIp(netOf(basis.ip, basis.prefix)) : "", live, true);
+  $("scan-own-pfx").value = live ? basis.prefix : "";
+}
+// A range of your own: a whole address (and /bits, 24 when left empty), scanned once you stop typing.
+// Wider than a /22, the grid shows that address's own /24.
+const scanOwn = ipField($("scan-own").querySelector(".host"), "scan", true, false, () => scanTyped());
+scanOwn.inputs.forEach(x => x.setAttribute("aria-label", "Range octet"));
+scanOwn.box.addEventListener("exit-right", () => $("scan-own-pfx").focus());
+let scanWait;
+function scanTyped() {
+  clearTimeout(scanWait);
+  scanWait = setTimeout(() => {
+    const ip = scanOwn.inputs.map(x => x.value).join("."), bits = +($("scan-own-pfx").value || 24);
+    if (!validIp(ip) || bits < 8 || bits > 30) return;
+    const cur = scanBasis(adapters[sel]);
+    if (cur && cur.prefix === bits && netOf(cur.ip, bits) === netOf(ip, bits)) return;   // the range already on screen
+    Object.assign(scan, { pick: { ip, prefix: bits }, pickFor: adapters[sel]?.id });
+    scanStart(true);
+  }, 450);
+}
+// Leaving the box with a half-typed range puts the one on screen back.
+$("scan-own").addEventListener("focusout", e => { if (!$("scan-own").contains(e.relatedTarget)) setTimeout(() => !$("scan-own").contains(document.activeElement) && scanChips(adapters[sel], scanBasis(adapters[sel]), !$("scan-pick").disabled)); });
+// The list: this adapter's addresses, each standing for its range.
+function setScanPicks(open) {
+  const m = $("scan-picks"), a = adapters[sel];
+  m.classList.toggle("open", open); $("scan-pick").setAttribute("aria-expanded", open);
+  m.style.minWidth = `${$("scan-own").offsetWidth}px`;   // as wide as the box it drops from
+  if (!open) return;
+  const cur = scanBasis(a);
+  m.innerHTML = "";
+  scanRanges(a).forEach((r, i) => {
+    const b = document.createElement("button"); b.setAttribute("role", "menuitem");
+    const on = cur && cur.prefix === r.prefix && netOf(cur.ip, r.prefix) === netOf(r.ip, r.prefix);
+    b.className = on ? "on" : "";
+    b.innerHTML = `<i class="ph ${i ? "ph-plus-circle" : "ph-house-line"}"></i><span></span><em></em>`;
+    b.children[1].textContent = `${r.ip}/${r.prefix}`;
+    b.children[2].textContent = i ? "Advanced" : L("main", "หลัก");
+    b.onclick = e => { e.stopPropagation(); clearTimeout(scanWait); setScanPicks(false); scan.pick = i ? r : null; scan.pickFor = a.id; scanStart(true); $("scan-pick").focus(); };
+    m.append(b);
+  });
+  (m.querySelector("button.on") || m.querySelector("button"))?.focus();
+}
+menuKeys($("scan-picks"), $("scan-pick"), () => setScanPicks(false));
+$("scan-pick").onclick = e => { e.stopPropagation(); setScanPicks(!$("scan-picks").classList.contains("open")); };
+document.addEventListener("click", () => setScanPicks(false));
+$("scan-own-pfx").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, ""); scanTyped(); });
 function scanMenu(h, cell) {
   const m = $("scan-menu");
   scan.cells.forEach(c => c.classList.remove("pick"));
@@ -2975,6 +3078,7 @@ const scenarios = {
     pgadv: ["Advanced", () => showPage("adv")],
     pgping: ["Ping", () => showPage("probe")],
     pgscan: ["Scan", () => showPage("scan")],
+    pgscan2: ["Scan, with a second IP", () => { Object.assign(adapters[sel], { extraIps: ["192.168.1.50"], extraSubnets: ["255.255.255.0"] }); showPage("scan"); }],
     pginfo: ["Info", () => showPage("info")],
   },
   "Settings": {
