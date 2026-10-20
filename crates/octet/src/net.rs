@@ -82,8 +82,13 @@ pub fn public_ip() -> Result<Public, String> {
 
 /// GET https://{host}{path}: the body when the answer is 200, else None. Windows' own HTTP
 /// stack, so the system proxy and certificate store apply; gives up after 6 s per step.
-#[cfg(windows)]
 pub fn https_get(host: &str, path: &str) -> Option<Vec<u8>> {
+    https_get_with(host, path, |_| {})
+}
+
+/// Like `https_get`, telling `progress` how much has come (0 to 1) when the size is known.
+#[cfg(windows)]
+pub fn https_get_with(host: &str, path: &str, mut progress: impl FnMut(f32)) -> Option<Vec<u8>> {
     use windows_sys::Win32::Networking::WinHttp::*;
     let w = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
     let (agent, host, verb, path) = (w(concat!("Octet/", env!("CARGO_PKG_VERSION"))), w(host), w("GET"), w(path));
@@ -102,12 +107,15 @@ pub fn https_get(host: &str, path: &str) -> Option<Vec<u8>> {
             let (mut status, mut len) = (0u32, 4u32);
             WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, std::ptr::null(), (&mut status as *mut u32).cast(), &mut len, std::ptr::null_mut());
             if status == 200 {
-                let (mut out, mut buf) = (Vec::new(), [0u8; 8192]);
+                let (mut size, mut len) = (0u32, 4u32);
+                WinHttpQueryHeaders(req, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER, std::ptr::null(), (&mut size as *mut u32).cast(), &mut len, std::ptr::null_mut());
+                let (mut out, mut buf) = (Vec::new(), [0u8; 65536]);
                 loop {
                     let mut n = 0u32;
                     if WinHttpReadData(req, buf.as_mut_ptr().cast(), buf.len() as u32, &mut n) == 0 { out.clear(); break; }
                     if n == 0 { body = Some(out); break; }
                     out.extend_from_slice(&buf[..n as usize]);
+                    if size > 0 { progress(out.len() as f32 / size as f32); }
                 }
             }
         }
@@ -118,7 +126,7 @@ pub fn https_get(host: &str, path: &str) -> Option<Vec<u8>> {
     }
 }
 #[cfg(not(windows))]
-pub fn https_get(_: &str, _: &str) -> Option<Vec<u8>> {
+pub fn https_get_with(_: &str, _: &str, _: impl FnMut(f32)) -> Option<Vec<u8>> {
     None
 }
 

@@ -3,6 +3,7 @@
 mod adapters;
 mod change;
 mod net;
+mod update;
 
 use change::Request;
 use std::net::Ipv4Addr;
@@ -91,6 +92,27 @@ async fn scan_host(address: String, source: Option<String>, index: u32) -> Resul
     let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
     let from = source.and_then(|s| s.parse().ok());
     blocking(move || Ok(net::scan_host(ip, from, index))).await
+}
+
+/// Settings, Updates: the newer version on GitHub, or None.
+#[tauri::command]
+async fn update_check() -> Result<Option<String>, String> {
+    blocking(update::check).await
+}
+
+/// Downloads and installs `version` (signature checked), sending "update-progress" (0 to 1) as it comes.
+#[tauri::command]
+async fn update_install(app: tauri::AppHandle, version: String) -> Result<(), String> {
+    blocking(move || update::install(&version, |p| { let _ = app.emit("update-progress", p); })).await
+}
+
+/// Starts the new exe and closes this one.
+#[tauri::command]
+fn update_restart(app: tauri::AppHandle) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    std::process::Command::new(exe).arg("--updated").spawn().map_err(|e| e.to_string())?;
+    app.exit(0);
+    Ok(())
 }
 
 /// The gateway's name, if it gives one.
@@ -196,7 +218,12 @@ fn main() {
             std::process::exit(change::run_elevated(request, out));
         }
     }
+    update::tidy();
     let restarted = args.iter().any(|a| a == "--restarted");
+    // After an update: wait for the old copy to close, then start as usual (elevated again if set to).
+    if args.iter().any(|a| a == "--updated") {
+        std::thread::sleep(std::time::Duration::from_millis(700));
+    }
     if restarted {
         // Let the copy that started us close first, or single-instance would hand off to it.
         std::thread::sleep(std::time::Duration::from_millis(700));
@@ -238,7 +265,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

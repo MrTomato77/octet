@@ -28,7 +28,13 @@ jobs:
           Copy-Item target/release/octet.exe Octet.exe
           $hash = (Get-FileHash Octet.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  Octet.exe" | Out-File -Encoding ascii Octet.exe.sha256
+          # Ed25519 signature of the exe, checked by Octet's updater before it installs anything.
+          $env:OCTET_SIGNING_KEY | Out-File -Encoding ascii key.pem
+          openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.exe -out Octet.exe.sig
+          Remove-Item key.pem
+          if ((Get-Item Octet.exe.sig).Length -ne 64) { throw "Signing failed" }
           gh release create $env:GITHUB_REF_NAME --draft --title "Octet $($env:GITHUB_REF_NAME.TrimStart('v'))" `
-            --notes "SHA-256 of Octet.exe: ``$hash``" Octet.exe Octet.exe.sha256 THIRD-PARTY-NOTICES.md
+            --notes "SHA-256 of Octet.exe: ``$hash``" Octet.exe Octet.exe.sha256 Octet.exe.sig THIRD-PARTY-NOTICES.md
         env:
           GH_TOKEN: ${{ github.token }}
+          OCTET_SIGNING_KEY: ${{ secrets.OCTET_SIGNING_KEY }}
