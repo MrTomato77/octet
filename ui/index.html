@@ -1071,7 +1071,7 @@ const demo = {
   vendors: { "3C5282": "Hewlett Packard", "D8B370": "Ubiquiti", "000C42": "Routerboard.com" },   // a slice of data/oui.txt
 };
 const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
-  if (cmd === "who_has") return res(demo.taken[a.address]?.[0] ?? demo.macs[a.address] ?? null);
+  if (cmd === "who_has") return res(demo.taken[a.address]?.[0] ?? demo.macs[a.address] ?? (demo.proxyArp ? demo.macs[adapters[sel].cfg.gateway] ?? "02-00-00-00-AA-01" : null));
   if (cmd === "vendor") return res(demo.vendors[a.mac.replace(/[^0-9A-F]/gi, "").slice(0, 6).toUpperCase()] ?? null);
   if (cmd === "hostname") return res(demo.names[a.address] ?? demo.taken[a.address]?.[1] ?? null);
   if (cmd === "public_ip") return demo.outcome === "fail" ? rej("offline") : res({ ip: "203.0.113.48", isp: "True Internet", city: "Bangkok" });   // one ipinfo-style answer: address and who it belongs to
@@ -1096,7 +1096,7 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
     return res(kind.includes(a.port) ? { open: 1 + (h + a.port) % 6 } : null);
   }
   if (cmd === "tcping") return res(a.port === 9 ? null : a.port === 23 ? { closed: 2 } : { open: /^(10|192\.168)\./.test(a.address) ? 2 + Math.floor(Math.random() ** 3 * 6) : 16 + Math.floor(Math.random() ** 2 * 9) });
-  if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" ? null : { ms: /^(10|192\.168)\./.test(a.address) ? 1 + Math.floor(Math.random() ** 3 * 5) : 14 + Math.floor(Math.random() ** 2 * 8), ttl: /^(10|192\.168)\./.test(a.address) ? 64 : 117 });
+  if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" || demo.proxyArp && a.address !== adapters[sel].cfg.gateway ? null : { ms: /^(10|192\.168)\./.test(a.address) ? 1 + Math.floor(Math.random() ** 3 * 5) : 14 + Math.floor(Math.random() ** 2 * 8), ttl: /^(10|192\.168)\./.test(a.address) ? 64 : 117 });
   if (cmd === "change") {
     if (demo.outcome === "cancel") return rej("Cancelled");
     if (demo.outcome === "fail") return rej("The object already exists.");
@@ -1770,15 +1770,23 @@ $("apply").onclick = async () => {
   if (!sent.ipAuto && sent.address !== a.cfg.address) {
     // Someone else may already have this address: ask the network before Windows.
     lock(true); say(L("Checking address…", "กำลังเช็ก IP ซ้ำ…"));
-    const owner = await net("who_has", { address: sent.address }).catch(() => null);
+    let owner = await net("who_has", { address: sent.address }).catch(() => null), behind = false;
+    // Proxy ARP: the router answers for every address with its own MAC. Then only a ping or an open port means someone is there.
+    const gwNow = a.cfg.gateway;
+    if (owner && validIp(gwNow || "") && sent.address !== gwNow && owner === await net("who_has", { address: gwNow }).catch(() => null)) {
+      const there = await net("ping", { address: sent.address }).catch(() => null)
+        || await Promise.any(PROXY_PORTS.map(port => net("tcping", { address: sent.address, port, timeout: 400 }).then(t => t?.open ? 1 : Promise.reject()))).catch(() => null);
+      if (!there) owner = null; else behind = true;   // someone is there, but the MAC is the router's, not theirs
+    }
     // Its name helps tell a printer from a server; give up after 1.5 s.
     const [name, made] = owner ? await Promise.all([
-      Promise.race([net("hostname", { address: sent.address }).catch(() => null), new Promise(res => setTimeout(res, 1500, null))]), maker(owner)]) : [];
+      Promise.race([net("hostname", { address: sent.address }).catch(() => null), new Promise(res => setTimeout(res, 1500, null))]), behind ? null : maker(owner)]) : [];
     lock(false);
     if (owner && !await ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Apply anyway", "บันทึกต่อ"), "warning",
         L("Another device answered for this address. If both use it, both lose connection.", "มีอุปกรณ์อื่นตอบกลับที่ IP นี้ ถ้าใช้ซ้ำกัน ทั้งสองเครื่องจะต่อเน็ตไม่ได้"),
-        [["IP", sent.address], ...(name ? [[L("Name", "ชื่อ"), name]] : []), ...(made ? [[L("Made by", "ผู้ผลิต"), made]] : []), ["MAC", owner]])) {
-      flag("address", L(`Not applied · ${sent.address} is in use by ${name || made || owner}`, `ยังไม่ได้บันทึก · ${sent.address} มี ${name || made || owner} ใช้อยู่`)); return;
+        [["IP", sent.address], ...(name ? [[L("Name", "ชื่อ"), name]] : []), ...(made ? [[L("Made by", "ผู้ผลิต"), made]] : []), ...(behind ? [] : [["MAC", owner]])])) {
+      const who = name || made || (behind ? L("another device", "อุปกรณ์อื่น") : owner);
+      flag("address", L(`Not applied · ${sent.address} is in use by ${who}`, `ยังไม่ได้บันทึก · ${sent.address} มี ${who} ใช้อยู่`)); return;
     }
   }
   lock(true); btn.classList.add("spin"); iconNow("apply", "circle-notch");
