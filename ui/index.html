@@ -2824,8 +2824,9 @@ function scanStart(again = false) {
   const key = `${net}|${n}|${first}|${scan.src}`;
   if (!again && key === scan.key && scan.done) { scanTell(null); return; }
   // What this network showed before (its range and gateway): when each address last answered, and whether the router stands in.
-  const memKey = `${net}|${n}|${a.cfg.gateway}`, mem = seenLoad(memKey);
-  const run = ++scan.run; Object.assign(scan, { key, net, n, first, hosts: {}, done: 0, proxy: !!mem.proxy });
+  // Filled in once the gateway's MAC is known (the key includes it: 192.168.1.x at home and at work are different networks).
+  let memKey = "", mem = { ips: {} };
+  const run = ++scan.run; Object.assign(scan, { key, net, n, first, hosts: {}, done: 0, proxy: false, stand: [] });
   scanMenu(null);
   scan.blocks.forEach((g, b) => { g.hidden = scan.divs[b].hidden = b >= n; scan.divs[b].innerHTML = `<span>${numIp(first + b * 256)}<i>/24</i></span>`; });
   scanMap(n);
@@ -2852,7 +2853,16 @@ function scanStart(again = false) {
       const ip = numIp(first + i), c = scan.cells[i]; c.dataset.ip = ip;
       scan.hosts[i] = got;
       // Behind proxy ARP silence means the same as the router's stand-in answer (it rate-limits): both are likely free.
-      if (got?.proxy && !scan.proxy) { scan.proxy = true; scan.cells.forEach(x => x.classList.contains("free") && (x.classList.replace("free", "maybe"), x.dataset.tip = scanSays(x.dataset.ip, { proxy: true }, a))); }
+      // One or two addresses with the gateway's MAC are the router's own (an alias): in use. From the third on, it stands in for everyone.
+      if (got?.proxy && !scan.proxy) {
+        scan.stand.push(i);
+        if (scan.stand.length < 3) got = { mac: got.mac, alias: true };
+        else {
+          scan.proxy = true;
+          scan.stand.forEach(j => { const x = scan.cells[j]; x.classList.replace("used", "maybe"); x.dataset.tip = scanSays(x.dataset.ip, { proxy: true }, a); });
+          scan.cells.forEach(x => x.classList.contains("free") && (x.classList.replace("free", "maybe"), x.dataset.tip = scanSays(x.dataset.ip, { proxy: true }, a)));
+        }
+      }
       // Quiet now but in use within the hour: a phone asleep, not a free address.
       const since = (!got || got.proxy) && Date.now() - (mem.ips[ip] ?? 0) < SEEN_MS ? Date.now() - mem.ips[ip] : 0;
       const kind = ownsIp(a, ip) ? "me" : ip === a.cfg.gateway ? "gw" : since ? "used seen" : got?.proxy || (!got && scan.proxy) ? "maybe" : got ? "used" : "free";
@@ -2883,6 +2893,7 @@ function scanStart(again = false) {
   // Proxy ARP (MikroTik Hotspot and the like): the router answers ARP for every address, so its MAC shows on empty ones.
   // Such an address counts as in use only if it answers ping or a common port itself; otherwise it is likely free.
   const gwIp = a.cfg.gateway, gwMac = !scan.off && validIp(gwIp || "") ? scanAsk(gwIp, a, scan.src).then(x => x?.mac ?? null) : Promise.resolve(null);
+  const ready = gwMac.then(m => { memKey = `${net}|${n}|${gwIp}|${m ?? ""}`; mem = seenLoad(memKey); if (run === scan.run) scan.proxy = !!mem.proxy; });
   const confirm = async (ip, x) => {
     if (!x?.mac || x.ms || ip === gwIp || ownsIp(a, ip) || x.mac !== await gwMac) return x;
     const open = await Promise.any(PROXY_PORTS.map(port => scanTcp(ip, port, scan.src || a.cfg.address)
@@ -2891,6 +2902,7 @@ function scanStart(again = false) {
   };
   // Behind proxy ARP the router rate-limits and may block a burst: 16 at a time instead of 48.
   const worker = async (_, w) => {
+    await ready;
     while (todo.length && run === scan.run && !(scan.proxy && w >= 16)) {
       const i = todo.shift(), ip = numIp(first + i), res = await confirm(ip, await scanAsk(ip, a, scan.src));
       if (run !== scan.run) return;
@@ -2947,6 +2959,7 @@ function scanSays(ip, x, a) {
   const priv = x?.mac && parseInt(x.mac.slice(0, 2), 16) & 2;
   const maker = x && (x.vendor || (priv ? L("Private MAC (phone or laptop)", "Private MAC (มือถือ/โน้ตบุ๊ก)") : L("Unknown maker", "ไม่ทราบยี่ห้อ")));
   const role = ownsIp(a, ip) ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : "";
+  if (x?.alias) return [ip, L("In use: the router's own address (same MAC as the gateway)", "ใช้อยู่: เป็นอีก IP ของ Router (MAC เดียวกับ Gateway)"), x.mac].join("\n");
   if (x?.since) { const m = Math.max(1, Math.round(x.since / 60000)); return [ip, L(`In use ${m} min ago, quiet now`, `ใช้อยู่เมื่อ ${m} นาทีก่อน ตอนนี้เงียบ`)].join("\n"); }
   if (x?.proxy) return [ip, L("Likely free: only the router answered for it", "น่าจะว่าง: มีแค่ Router ตอบแทน")].join("\n");
   if (x?.port) return [ip, L(`In use: port ${x.port} answers, ping doesn't`, `ใช้อยู่: พอร์ต ${x.port} ตอบ แต่ไม่ตอบ ping`)].join("\n");
