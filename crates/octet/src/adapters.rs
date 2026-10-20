@@ -89,15 +89,16 @@ pub struct Cfg {
     pub dns1: String,
     pub dns2: String,
     pub register: bool,
-    /// Advanced, sent by the UI only (the reader leaves them out; the UI fills them from `extra_ips`).
-    #[serde(default, skip_serializing)]
+    /// Advanced, sent by the UI only (the reader leaves them empty; the UI fills them from `extra_ips`).
+    /// Kept when not empty: the request travels to the elevated copy as JSON.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extra: Vec<Addr>,
-    #[serde(default, skip_serializing)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gws: Vec<Gw>,
     /// Metric of the first gateway and of the interface; empty = leave as Windows has it.
-    #[serde(default, skip_serializing)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub gw_metric: String,
-    #[serde(default, skip_serializing)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub metric: String,
 }
 

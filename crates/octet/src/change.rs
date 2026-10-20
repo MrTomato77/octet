@@ -337,6 +337,9 @@ mod tests {
         let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c.clone(), ip: false, dns: false, extra: true,
             was_extra: vec!["192.168.1.60".into(), "172.16.0.9".into()], was_gws: vec![] };
         let got: Vec<String> = commands(&r).unwrap().iter().map(|c| c.join(" ")).collect();
+        // The elevated copy gets the request as JSON and must build the same commands.
+        let sent: Request = serde_json::from_slice(&serde_json::to_vec(&r).unwrap()).unwrap();
+        assert_eq!(commands(&sent).unwrap(), commands(&r).unwrap(), "the Advanced lists survive the trip to the elevated copy");
         assert_eq!(got, [
             "netsh interface ipv4 delete address name=12 address=172.16.0.9",
             "netsh interface ipv4 set interface interface=12 dhcpstaticipcoexistence=enabled",

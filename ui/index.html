@@ -369,12 +369,17 @@ button, input, select { font: inherit; color: inherit; }
 .irow .v em:empty { margin: 0; }
 .irow .v { display: flex; align-items: baseline; min-width: 0; }
 .irow .v > span { display: inline-block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.irow .v em { flex: none; }
+/* The note gives way first (a long ISP name), so the value itself is cut only when there is no note left. */
+.irow .v em { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .irow .v .pfx { color: var(--muted); margin-left: 0; }
 .irow > i { justify-self: end; font-size: 15px; color: var(--faint); opacity: 0; transition: opacity 140ms, color 140ms; }
 .irow:hover > i, .irow:focus-visible > i { opacity: 1; }
 .irow.done > i { opacity: 1; color: var(--ok); }
 .irow.ask .v { color: var(--accent); }
+/* Public IP: who it belongs to goes under the address, small, so a long ISP name never cuts the IP. */
+.irow.pub { padding-block: 4px; }
+.irow.pub .v { flex-direction: column; align-items: flex-start; }
+.irow.pub .v em { margin-left: 0; font-size: 12px; line-height: 1.3; max-width: 100%; }
 .ifoot { flex: 1; display: flex; align-items: center; gap: var(--s3); min-height: var(--row-h); }
 .ifoot[hidden] { display: none; }
 #info-copy { border-color: transparent; background: transparent; color: var(--muted); padding: 0 var(--s3); }
@@ -2828,7 +2833,7 @@ function renderInfo() {
     el.innerHTML = `<div class="ihead"><i class="ph ph-${g.icon}"></i><span></span>${g.tag ? `<span class="itag">${g.tag}</span>` : ""}</div>`;
     el.querySelector(".ihead span").textContent = g.head;
     for (const [k, v, note, pfx, kind] of g.rows) {
-      const b = document.createElement("button"); b.className = "irow" + (kind === "pub" && !validIp(v) ? " ask" : "");
+      const b = document.createElement("button"); b.className = "irow" + (kind === "pub" ? " pub" : "") + (kind === "pub" && !validIp(v) ? " ask" : "");
       b.innerHTML = `<span class="k"></span><span class="v"><span></span>${pfx ? `<em class="pfx">${pfx}</em>` : ""}<em></em></span><i class="ph ph-${kind === "pub" && !validIp(v) ? "arrow-right" : "copy"}"></i>`;
       b.querySelector(".k").textContent = k; b.querySelector(".v > span").textContent = v;
       if (note) b.querySelector(".v em:not(.pfx)").textContent = note;
