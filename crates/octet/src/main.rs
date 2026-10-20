@@ -64,6 +64,17 @@ async fn ping(address: String, source: Option<String>) -> Result<Option<u32>, St
     blocking(move || Ok(net::ping(ip, from, 1500))).await
 }
 
+/// A TCP connect to `port`: {"open": ms}, {"closed": ms} (refused: the device is there), or null (nothing answered).
+#[tauri::command]
+async fn tcping(address: String, port: u16, source: Option<String>) -> Result<Option<net::Tcp>, String> {
+    let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
+    if port == 0 {
+        return Err("Port must be 1 to 65535".into());
+    }
+    let from = source.and_then(|s| s.parse().ok());
+    blocking(move || Ok(net::tcping(ip, port, from, 1500))).await
+}
+
 /// Scan: who holds this address, seen from the adapter (`index`, its own `source` address).
 #[tauri::command]
 async fn scan_host(address: String, source: Option<String>, index: u32) -> Result<Option<net::Host>, String> {
@@ -217,7 +228,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, scan_host, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, tcping, scan_host, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

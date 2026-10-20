@@ -269,12 +269,23 @@ button, input, select { font: inherit; color: inherit; }
 .pchip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background 240ms; }
 .pchip .dot.up { background: var(--ok); }
 .pchip .dot.down { background: var(--bad); }
-.pchip.own { flex: none; width: 184px; min-width: 0; margin-left: auto; padding: 0 2px; cursor: default; }   /* fixed and right-aligned: a chip's name never moves it */
+.pchip.own { flex: none; width: 184px; transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1); min-width: 0; margin-left: auto; padding: 0 2px; cursor: default; }   /* fixed and right-aligned: a chip's name never moves it */
 .pchip.own .host { flex: 1; min-width: 0; display: flex; }
 .pchip.own .ip.short { width: auto; flex: 1; min-width: 0; height: calc(var(--row-h) - 4px); padding: 0 8px; background: transparent; position: relative; z-index: 1; }   /* no changed mark here, so less side room */
 .pchip.own.off { opacity: 0.4; }
-.pchip.own .ip:focus-within { border-style: solid; }
-.pchip.own .ip.ro { border-color: var(--border-strong); }
+.pchip.own .pbox { flex: 1; min-width: 0; display: flex; align-items: center; height: calc(var(--row-h) - 4px); border: 1px dashed var(--border-strong);
+  border-radius: var(--r-input); transition: border-color var(--t-fast) var(--ease-out); }
+.pchip.own .pbox:focus-within { border-style: solid; border-color: color-mix(in oklch, var(--accent) 55%, var(--border-strong)); }
+.pchip.own:not(.empty) .pbox { border-style: solid; }
+.pchip.own .pbox .ip.short { height: 100%; border: 0; box-shadow: none; padding: 0 4px 0 8px; }
+/* The port folds away until it is wanted: in the box a faint ":" offers it; typing ":" (or going right past the last octet) opens it. */
+.pchip.own.port { width: 214px; }
+.pchip.own .pcolon { width: 0; overflow: hidden; color: var(--faint); text-align: center; cursor: text; opacity: 0; position: relative; z-index: 1;
+  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms; }
+.pchip.own .pbox:focus-within .pcolon, .pchip.own.port .pcolon { width: 10px; opacity: 1; }
+.pchip.own .pport { width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: inherit;
+  font-variant-numeric: tabular-nums; position: relative; z-index: 1; transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1), padding 220ms; }
+.pchip.own.port .pport { width: 42px; padding: 0 6px 0 2px; }
 .pgraph { flex: 1; position: relative; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: crosshair; }
 .pgraph svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .pgraph .grid { stroke: color-mix(in oklch, var(--border) 45%, transparent); stroke-width: 1; }
@@ -1018,6 +1029,7 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
     if (gw || hit || demo.taken[a.address]) return res({ mac: demo.macs[a.address] ?? demo.taken[a.address]?.[0] ?? "02-00-00-00-AA-" + h.toString(16).padStart(2, "0").toUpperCase(), vendor: gw ? "Ubiquiti" : makers[h % makers.length], ms: 1 + h % 9 });
     return res(null);
   }
+  if (cmd === "tcping") return res(a.port === 9 ? null : a.port === 23 ? { closed: 2 } : { open: /^(10|192\.168)\./.test(a.address) ? 2 + Math.floor(Math.random() ** 3 * 6) : 16 + Math.floor(Math.random() ** 2 * 9) });
   if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" ? null : { ms: /^(10|192\.168)\./.test(a.address) ? 1 + Math.floor(Math.random() ** 3 * 5) : 14 + Math.floor(Math.random() ** 2 * 8), ttl: /^(10|192\.168)\./.test(a.address) ? 64 : 117 });
   if (cmd === "change") {
     if (demo.outcome === "cancel") return rej("Cancelled");
@@ -2402,8 +2414,8 @@ const clock = () => (probe.asleep ? probe.sleptAt : performance.now()) - probe.s
 function probeRow(own) {
   const el = document.createElement(own ? "div" : "button");
   el.className = "pchip" + (own ? " own" : ""); el.setAttribute("role", "tab");
-  el.innerHTML = own ? `<span class="host"></span>` : `<span class="dot"></span><span class="plogo" hidden></span><span class="name"></span>`;
-  const row = { el, target: "", label: "", got: [], pts: [] };
+  el.innerHTML = own ? `<span class="pbox"><span class="host"></span><span class="pcolon">:</span><input class="pport" inputmode="numeric" maxlength="5" autocomplete="off" aria-label="TCP port" title="A TCP port to connect to, for a device that doesn't answer ping. Empty: ping."></span>` : `<span class="dot"></span><span class="plogo" hidden></span><span class="name"></span>`;
+  const row = { el, target: "", port: 0, label: "", got: [], pts: [] };
   if (own) {
     // Only a whole address is pinged; a half-typed one keeps the line empty.
     const f = ipField(el.querySelector(".host"), "probe", true, false, v => {
@@ -2414,6 +2426,24 @@ function probeRow(own) {
     });
     f.inputs.forEach(x => x.setAttribute("aria-label", "Target octet"));
     row.f = f;
+    // A port turns the pings into TCP connects (open or refused, the device answered); a new port starts a new line.
+    const pt = el.querySelector(".pport");
+    // Open while it has a port or you are in it; an empty one folds back when you leave.
+    const fold = () => { el.classList.toggle("port", !!pt.value || document.activeElement === pt); };
+    const openPort = () => { el.classList.add("port"); pt.focus(); };
+    f.box.addEventListener("exit-right", openPort);
+    f.inputs.forEach(x => x.addEventListener("keydown", e => { if (e.key === ":") { e.preventDefault(); openPort(); } }));
+    el.querySelector(".pcolon").addEventListener("mousedown", e => { e.preventDefault(); openPort(); });
+    pt.addEventListener("focus", fold);
+    pt.addEventListener("blur", fold);
+    el.addEventListener("transitionend", e => { if (e.target === el && e.propertyName === "width") placeThumb(false); });
+    pt.addEventListener("keydown", e => { if (e.key === "Backspace" && pt.selectionStart === 0 && pt.selectionEnd === 0) { e.preventDefault(); f.inputs[3].focus(); } });
+    pt.addEventListener("input", () => {
+      pt.value = pt.value.replace(/\D/g, ""); if (+pt.value > 65535) pt.value = "65535";
+      const port = +pt.value || 0;
+      if (port === row.port) return;
+      row.port = port; probe.ownPort = port; row.got = []; row.pts = []; paintProbe();
+    });
     // The box shows whatever is picked. Going into it makes that address your own target,
     // carrying its last minute along so the graph doesn't start over.
     // Clicking anywhere on it counts, not just in an octet (the dot and the edges gave an empty target before).
@@ -2455,7 +2485,7 @@ function probeBuild() {
   probe.key = key;
   want.forEach(([t, l], i) => fillChip(probe.rows[i], t, l));
   const own = probe.rows[2];
-  if (moved) probe.own = "";
+  if (moved) { probe.own = ""; own.port = 0; own.el.querySelector(".pport").value = ""; own.el.classList.remove("port"); }
   Object.assign(own, { target: probe.live ? probe.own : "", got: [], pts: [] });
   own.f.set(own.target, probe.live); own.el.classList.toggle("empty", !own.target);
   own.el.classList.toggle("off", !probe.live);
@@ -2470,9 +2500,12 @@ async function probeTick() {
   const t0 = Date.now();
   if (adapters[sel]) probeBuild();
   await Promise.all(probe.rows.filter(r => r.target).map(async r => {
-    const t = r.target, v = await net("ping", { address: t, source: adapters[sel]?.cfg.address || null }).catch(() => null);   // out through this adapter
+    const t = r.target, port = r.port || 0, source = adapters[sel]?.cfg.address || null;   // out through this adapter
+    const v = await (port ? net("tcping", { address: t, port, source }) : net("ping", { address: t, source })).catch(() => null);
+    if ((r.port || 0) !== port) return;
+    r.closed = v?.closed !== undefined;   // refused: the device answered, nothing listens on that port
     if (r.target !== t || !probe.rows.includes(r)) return;
-    const ms = v === null ? null : v.ms ?? v;
+    const ms = v === null ? null : v.open ?? v.closed ?? v.ms ?? v;
     r.got.push(ms); if (r.got.length > SLOTS) r.got.shift();
     // The graph keeps its own copy with arrival times: it moves by the clock, not by the pings.
     r.pts.push({ t: clock(), v: ms, from: r.pts.findLast(q => q.v !== null)?.v ?? ms });
@@ -2485,7 +2518,7 @@ function placeThumb(move = true) {
   const on = probe.rows[probe.pick]?.el, th = $("probe-thumb"); if (!on) return;
   if (!move || calm.matches) { th.style.transition = "none"; requestAnimationFrame(() => th.style.transition = ""); }
   // On your own target the thumb becomes the fill of its IP box, so the box itself reads as picked.
-  const box = on.querySelector(".ip"), x = on.offsetLeft + (box ? on.clientLeft + box.offsetLeft : 0);
+  const box = on.querySelector(".pbox"), x = on.offsetLeft + (box ? on.clientLeft + box.offsetLeft : 0);
   th.style.width = (box ? box.offsetWidth : on.offsetWidth) + "px"; th.style.transform = `translateX(${x}px)`;
   th.classList.toggle("in-box", !!box);
   th.style.opacity = probe.live ? 1 : 0;   // nothing to pick on an adapter that isn't connected
@@ -2506,7 +2539,8 @@ function paintProbe() {
   // Jitter: how far each reply is from the one before, on average.
   roll($("ps-jit"), ms(ok.length > 1 ? Math.round(ok.slice(1).reduce((a, v, i) => a + Math.abs(v - ok[i]), 0) / (ok.length - 1)) : null));
   const loss = r.got.length ? Math.round(100 * (r.got.length - ok.length) / r.got.length) : null;
-  roll($("ps-loss"), loss === null ? "-" : `${loss}%`); $("ps-loss").classList.toggle("bad", loss > 0);
+  // A refused port still times the device; the loss slot says the port itself is closed.
+  roll($("ps-loss"), r.closed ? L("port closed", "port ปิด") : loss === null ? "-" : `${loss}%`); $("ps-loss").classList.toggle("bad", !!r.closed || loss > 0);
 }
 // A changed value leaves upward and the new one rises in; the same text stays put.
 function roll(el, text) {

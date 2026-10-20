@@ -251,6 +251,77 @@ pub fn ping(_: Ipv4Addr, _: Option<Ipv4Addr>, _: u32) -> Option<u32> {
     None
 }
 
+/// What a TCP "ping" found.
+#[derive(serde::Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Tcp {
+    /// The port accepted, after this many ms (the connect's round trip).
+    Open(u32),
+    /// The device refused the port after this many ms: it is there, but nothing listens.
+    Closed(u32),
+}
+
+/// "Ping" a TCP port, for devices that drop ICMP. None when nothing answers.
+/// Like `ping`, `from` sends it out through that adapter; nothing is sent once connected.
+#[cfg(windows)]
+pub fn tcping(ip: Ipv4Addr, port: u16, from: Option<Ipv4Addr>, timeout_ms: u32) -> Option<Tcp> {
+    use windows_sys::Win32::Networking::WinSock::{
+        AF_INET, FD_SET, FIONBIO, INVALID_SOCKET, IPPROTO_TCP, SOCK_STREAM, SOCKADDR, SOCKADDR_IN, TIMEVAL, WSADATA,
+        SOL_SOCKET, SO_ERROR, WSAECONNREFUSED, WSAStartup, bind, closesocket, connect, getsockopt, ioctlsocket, select, socket, WSAIoctl,
+    };
+    let addr = |ip: Ipv4Addr, port: u16| {
+        let mut sa: SOCKADDR_IN = unsafe { std::mem::zeroed() };
+        sa.sin_family = AF_INET;
+        sa.sin_port = port.to_be();
+        sa.sin_addr.S_un.S_addr = ip_u32(ip);
+        sa
+    };
+    unsafe {
+        let mut wsa: WSADATA = std::mem::zeroed();
+        WSAStartup(0x0202, &mut wsa);
+        let s = socket(AF_INET as i32, SOCK_STREAM, IPPROTO_TCP);
+        if s == INVALID_SOCKET {
+            return None;
+        }
+        let len = size_of::<SOCKADDR_IN>() as i32;
+        // A loopback target (a local proxy) only answers from loopback, as with ping.
+        if let (Some(src), false) = (from, ip.is_loopback()) {
+            let sa = addr(src, 0);
+            bind(s, (&sa as *const SOCKADDR_IN).cast::<SOCKADDR>(), len);
+        }
+        let mut on = 1u32;
+        ioctlsocket(s, FIONBIO, &mut on);
+        // No SYN retransmissions (SIO_TCP_INITIAL_RTO): otherwise Windows retries a refused connect for 2 s
+        // before it says so. Now a refusal comes back at once, and silence ends at the timeout.
+        let rto: [u8; 4] = { let ms = timeout_ms.min(65535) as u16; let b = ms.to_ne_bytes(); [b[0], b[1], 0xFE, 0] };   // Rtt, MaxSynRetransmissions = none
+        let mut got = 0u32;
+        WSAIoctl(s, 0x9800_0011, rto.as_ptr().cast(), 4, std::ptr::null_mut(), 0, &mut got, std::ptr::null_mut(), None);
+        let sa = addr(ip, port);
+        let t0 = std::time::Instant::now();
+        connect(s, (&sa as *const SOCKADDR_IN).cast::<SOCKADDR>(), len);   // WSAEWOULDBLOCK: the answer comes to select
+        // Windows reports an accepted connect as writable, a refused one as an exception.
+        let mut w: FD_SET = std::mem::zeroed();
+        let mut e: FD_SET = std::mem::zeroed();
+        (w.fd_count, w.fd_array[0], e.fd_count, e.fd_array[0]) = (1, s, 1, s);
+        let tv = TIMEVAL { tv_sec: (timeout_ms / 1000) as i32, tv_usec: (timeout_ms % 1000 * 1000) as i32 };
+        let n = select(0, std::ptr::null_mut(), &mut w, &mut e, &tv);
+        let ms = t0.elapsed().as_millis() as u32;
+        // A failed connect is either refused (someone is there) or timed out (nobody).
+        let (mut err, mut n_err) = (0i32, 4i32);
+        getsockopt(s, SOL_SOCKET, SO_ERROR, (&mut err as *mut i32).cast(), &mut n_err);
+        closesocket(s);
+        match (n > 0, w.fd_count > 0) {
+            (true, true) => Some(Tcp::Open(ms)),
+            (true, false) if err == WSAECONNREFUSED => Some(Tcp::Closed(ms)),
+            _ => None,
+        }
+    }
+}
+#[cfg(not(windows))]
+pub fn tcping(_: Ipv4Addr, _: u16, _: Option<Ipv4Addr>, _: u32) -> Option<Tcp> {
+    None
+}
+
 /// What the neighbour (ARP) cache holds for `ip` on interface `index`, as "AA-BB-..".
 /// Sends nothing: it reads what Windows already learned (say, while a ping went out).
 #[cfg(windows)]
@@ -323,6 +394,19 @@ mod tests {
     fn loopback_answers_ping() {
         assert!(super::ping(std::net::Ipv4Addr::LOCALHOST, None, 1000).is_some());
         assert!(super::ping(std::net::Ipv4Addr::LOCALHOST, Some(std::net::Ipv4Addr::LOCALHOST), 1000).is_some());
+    }
+
+    #[test]
+    fn tcping_counts_open_and_refused_ports() {
+        use super::tcping;
+        use std::net::Ipv4Addr;
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let open = l.local_addr().unwrap().port();
+        let lo = Ipv4Addr::LOCALHOST;
+        assert!(matches!(tcping(lo, open, None, 1500), Some(super::Tcp::Open(_))), "an open port answers");
+        drop(l);
+        assert!(matches!(tcping(lo, open, None, 1500), Some(super::Tcp::Closed(_))), "a refused port: the device is there");
+        assert!(tcping(Ipv4Addr::new(192, 0, 2, 1), 80, None, 300).is_none(), "TEST-NET-1 has nobody");
     }
 
     #[test]
