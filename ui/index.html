@@ -192,7 +192,7 @@ button, input, select { font: inherit; color: inherit; }
    No box around them, so they read as places to go, not as a mode to pick. One weight for all,
    so a selected word never gets wider and pushes its neighbours. */
 .ptabs { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; margin-top: var(--s3); }
-.ptab { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px; padding: 0 var(--s2);
+.ptab { position: relative; z-index: 1; display: inline-flex; white-space: nowrap; align-items: center; justify-content: center; gap: 6px; height: 28px; padding: 0 var(--s2);
   border: 0; border-radius: var(--r-input); background: none; color: var(--muted); font: 500 13px/1 var(--font); cursor: pointer;
   transition: color var(--t-fast) var(--ease-out), background-color var(--t-fast) var(--ease-out); }
 .ptab:hover:not([aria-selected="true"]) { background: var(--hover); color: var(--ink); }
@@ -361,7 +361,7 @@ button, input, select { font: inherit; color: inherit; }
 /* Free is the dim colour itself: the rest fades much further. */
 .sgrid[data-only=free] .scell:not(.free) { opacity: 0.05; }
 /* Likely free: the router answered for it (proxy ARP), nothing else did */
-.scell.maybe { background: color-mix(in oklch, var(--faint) 22%, transparent); outline: 1px dashed color-mix(in oklch, var(--accent) 55%, transparent); outline-offset: -1px; cursor: pointer; }
+.scell.maybe { background: color-mix(in oklch, var(--faint) 22%, transparent); outline: 1px dashed color-mix(in oklch, var(--faint) 35%, transparent); outline-offset: -1px; cursor: pointer; }
 .sgrid[data-only=maybe] .scell:not(.maybe) { opacity: 0.05; }
 .sfoot > span[data-k] { padding: 2px 6px; border-radius: var(--r-input); cursor: pointer; transition: background 140ms, color 140ms; }
 .sfoot:not(.busy) > span[data-k]:not(.on):hover { color: var(--ink); background: color-mix(in oklch, var(--ink) 6%, transparent); }
@@ -2845,8 +2845,11 @@ function scanStart(again = false) {
   const show = (i, got) => {
       const ip = numIp(first + i), c = scan.cells[i]; c.dataset.ip = ip;
       scan.hosts[i] = got;
-      c.classList.add(ownsIp(a, ip) ? "me" : ip === a.cfg.gateway ? "gw" : got?.proxy ? "maybe" : got ? "used" : "free");
-      if (got?.proxy && !scan.proxy) { scan.proxy = true; scan.note = L("Router answers for all (proxy ARP)", "Router ตอบแทนทุกเลข (proxy ARP)"); }
+      // Behind proxy ARP silence means the same as the router's stand-in answer (it rate-limits): both are likely free.
+      if (got?.proxy && !scan.proxy) { scan.proxy = true; scan.cells.forEach(x => x.classList.contains("free") && (x.classList.replace("free", "maybe"), x.dataset.tip = scanSays(x.dataset.ip, { proxy: true }, a))); }
+      const kind = ownsIp(a, ip) ? "me" : ip === a.cfg.gateway ? "gw" : got?.proxy || (!got && scan.proxy) ? "maybe" : got ? "used" : "free";
+      if (kind === "maybe") got = { proxy: true };
+      c.classList.add(kind);
       c.dataset.tip = scanSays(ip, got, a); c.setAttribute("aria-label", c.dataset.tip);
       scan.done++;
       if (scan.follow && Math.floor(i / 256) > scan.at) scanGo(scan.at = Math.floor(i / 256));
@@ -2936,7 +2939,7 @@ function scanTell() {
   const count = k => scan.cells.filter(c => c.classList.contains(k)).length, used = count("used"), free = count("free"), maybe = count("maybe");
   const key = (k, cls, label, n) => `<span data-k="${k}" role="button" tabindex="0"><i class="key" style="background:${cls}"></i>${label}${n !== undefined ? ` <b>${n}</b>` : ""}</span>`;
   f.innerHTML = !scan.net ? "" : (scan.note ? `<span class="snote">${scan.note}</span>` : "") + (scan.off ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway"))
-    + key("used", "color-mix(in oklch, var(--accent) 70%, transparent)", L("In use", "ใช้อยู่"), used) + key("free", "color-mix(in oklch, var(--faint) 40%, transparent)", scan.off ? L("No answer", "ไม่ตอบ") : L("Free", "ว่าง"), free)
+    + key("used", "color-mix(in oklch, var(--accent) 70%, transparent)", L("In use", "ใช้อยู่"), used) + key("free", "color-mix(in oklch, var(--faint) 40%, transparent)", scan.off ? L("No answer", "ไม่ตอบ") : L("Free", "ว่าง"), free).repeat(maybe && !free ? 0 : 1)
     + (maybe ? key("maybe", "color-mix(in oklch, var(--faint) 40%, transparent)", L("Likely free", "น่าจะว่าง"), maybe) : "");
   const gw = adapters[sel]?.cfg.gateway, busy = scan.done < scan.total;
   f.classList.toggle("busy", busy);
@@ -2945,6 +2948,7 @@ function scanTell() {
   f.querySelectorAll("[data-k]").forEach(k => {
     k.classList.toggle("on", k.dataset.k === scan.hold);
     if (k.dataset.k === "gw" && gw && !scan.has(gw)) k.dataset.tip = L(`${gw}, outside this range`, `${gw} อยู่นอกช่วงที่แสดง`);
+    if (k.dataset.k === "maybe") k.dataset.tip = L("The router answers for every address (proxy ARP); these answered nothing else", "Router ตอบแทนทุกเลข (proxy ARP) เลขเหล่านี้ไม่มีอะไรตอบนอกจากนั้น");
   });
   scanState();
 }
