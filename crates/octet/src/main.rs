@@ -66,13 +66,14 @@ async fn ping(address: String, source: Option<String>) -> Result<Option<u32>, St
 
 /// A TCP connect to `port`: {"open": ms}, {"closed": ms} (refused: the device is there), or null (nothing answered).
 #[tauri::command]
-async fn tcping(address: String, port: u16, source: Option<String>) -> Result<Option<net::Tcp>, String> {
+/// `timeout` in ms, 1500 when not given (Scan's port check asks for less: a LAN device answers in a few ms).
+async fn tcping(address: String, port: u16, source: Option<String>, timeout: Option<u32>) -> Result<Option<net::Tcp>, String> {
     let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
     if port == 0 {
         return Err("Port must be 1 to 65535".into());
     }
     let from = source.and_then(|s| s.parse().ok());
-    blocking(move || Ok(net::tcping(ip, port, from, 1500))).await
+    blocking(move || Ok(net::tcping(ip, port, from, timeout.unwrap_or(1500).clamp(100, 1500)))).await
 }
 
 /// Opens a device's web page (Scan, Check ports) in the default browser. Only an IPv4 address and a port

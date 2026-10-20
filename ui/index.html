@@ -452,7 +452,11 @@ button, input, select { font: inherit; color: inherit; }
 .sports .sp span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sports .sp em { font-style: normal; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
 .sports .sp button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; grid-template-columns: none; }
+.shost { position: relative; padding-right: 32px; }
+.sspin { position: absolute; top: 8px; right: var(--s2); font-size: 16px; color: var(--muted); animation: spin 0.9s linear infinite; }
 .sports .say { padding: 6px var(--s2); font-size: 12px; color: var(--faint); }
+.sports .none { display: flex; align-items: center; gap: 6px; }
+.sports .none i { font-size: 14px; }
 
 .sfoot { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--s3); min-height: var(--row-h); font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; }
 .sfoot[hidden] { display: none; }
@@ -1045,7 +1049,7 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
     return res(null);
   }
   if (cmd === "tcping" && scan.portRun && ![9, 23].includes(a.port)) {   // Scan, Check ports
-    const h = +a.address.split(".")[3], kind = [[80, 554, 8000], [80, 443, 22], [445, 139, 3389]][h % 3];
+    const h = +a.address.split(".")[3], kind = [[80, 554, 8000], [80, 443, 22], [445, 139, 3389], []][h % 4];
     return res(kind.includes(a.port) ? { open: 1 + (h + a.port) % 6 } : null);
   }
   if (cmd === "tcping") return res(a.port === 9 ? null : a.port === 23 ? { closed: 2 } : { open: /^(10|192\.168)\./.test(a.address) ? 2 + Math.floor(Math.random() ** 3 * 6) : 16 + Math.floor(Math.random() ** 2 * 9) });
@@ -2933,13 +2937,18 @@ function scanHost(h, cell) {
 async function scanPorts(h, cell, ip) {
   const m = $("scan-menu"), a = adapters[sel], run = (scan.portRun = (scan.portRun || 0) + 1);
   const list = document.createElement("div"); list.className = "sports";
-  const say = document.createElement("div"); say.className = "say"; say.textContent = L(`Checking ${PORTS.length} common ports…`, `กำลังตรวจ ${PORTS.length} port ที่ใช้บ่อย…`);
-  list.append(say); m.append(list); scanMenu(h, cell);
+  const say = document.createElement("div"); say.className = "say";
+  // While it checks, only a spinner in the corner says so; when it is done the box grows down to what was found.
+  const spin = document.createElement("i"); spin.className = "ph ph-circle-notch sspin"; spin.dataset.tip = L(`Checking ${PORTS.length} common ports`, `กำลังตรวจ ${PORTS.length} port ที่ใช้บ่อย`);
+  m.firstChild.append(spin);
   // Checked all at once; the open ones come in together when it is done, the menu opening down to them like an accordion.
-  const got = await Promise.all(PORTS.map(([port]) => net("tcping", { address: ip, port, source: scan.src || a.cfg.address }).catch(() => null)));
+  // How long a port may take: a few of this device's ping times, it answers a connect about as fast.
+  const wait = Math.min(400, Math.max(120, (scan.hosts[h]?.ms || 20) * 4 + 80));
+  const got = await Promise.all(PORTS.map(([port]) => net("tcping", { address: ip, port, source: scan.src || a.cfg.address, timeout: wait }).catch(() => null)));
   if (run !== scan.portRun || scan.menu !== h) return;
   const open = PORTS.map(([port, what], k) => [port, what, got[k]?.open]).filter(x => x[2] !== undefined).sort((x, y) => x[0] - y[0]);
   const from = [m.offsetHeight, m.style.top];
+  spin.remove(); list.append(say); m.append(list);
   open.forEach(([port, what, ms]) => {
     const row = document.createElement("div"); row.className = "sp";
     row.innerHTML = `<b></b><span></span><em></em>`;
@@ -2952,8 +2961,14 @@ async function scanPorts(h, cell, ip) {
     } else row.append(document.createElement("i"));
     list.insertBefore(row, say);
   });
-  say.textContent = open.length ? L(`${open.length} open of ${PORTS.length} checked`, `เปิด ${open.length} จาก ${PORTS.length} port`)
-    : L(`None of ${PORTS.length} common ports open`, `ไม่มี port ที่ใช้บ่อยเปิดอยู่ (ตรวจ ${PORTS.length} port)`);
+  if (open.length) say.textContent = L(`${open.length} open of ${PORTS.length} checked`, `เปิด ${open.length} จาก ${PORTS.length} port`);
+  else {
+    // Nothing open is an answer too: say what it means, not just that the list is empty.
+    say.className = "say none";
+    say.innerHTML = `<i class="ph ph-shield-check"></i><span></span>`;
+    say.lastChild.textContent = L(`None of ${PORTS.length} common ports open`, `ไม่มี port ที่ใช้บ่อยเปิด (ตรวจ ${PORTS.length})`);
+    say.dataset.tip = L("Or a firewall hides them", "หรือมี firewall ซ่อนไว้");
+  }
   scanMenu(h, cell, from);
 }
 const openDevice = (ip, port, tls) => tauri ? invoke("open_device", { address: ip, port, tls }).catch(e => say(String(e), "bad"))
