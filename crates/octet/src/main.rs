@@ -75,6 +75,15 @@ async fn tcping(address: String, port: u16, source: Option<String>) -> Result<Op
     blocking(move || Ok(net::tcping(ip, port, from, 1500))).await
 }
 
+/// Opens a device's web page (Scan, Check ports) in the default browser. Only an IPv4 address and a port
+/// go into the URL, so nothing else can be opened through it.
+#[tauri::command]
+fn open_device(address: String, port: u16, tls: bool) -> Result<(), String> {
+    let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
+    let url = format!("{}://{ip}:{port}/", if tls { "https" } else { "http" });
+    hidden("explorer").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// Scan: who holds this address, seen from the adapter (`index`, its own `source` address).
 #[tauri::command]
 async fn scan_host(address: String, source: Option<String>, index: u32) -> Result<Option<net::Host>, String> {
@@ -228,7 +237,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, tcping, scan_host, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

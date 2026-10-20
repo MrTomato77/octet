@@ -439,6 +439,21 @@ button, input, select { font: inherit; color: inherit; }
 .smenu { min-width: 200px; }
 
 .smenu button { white-space: nowrap; }
+/* A device's ports, checked from its cell: the common ones, all at once; open ones listed, web ones can be opened. */
+.scell.used, .scell.gw { cursor: pointer; }
+.sgrid.run .scell { cursor: default; }
+.shost { display: grid; gap: 1px; padding: 6px var(--s2) 6px; }
+.shost b { font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; }
+.shost span { font-size: 12px; color: var(--faint); }
+.sports { display: grid; min-width: 250px; }
+.sports .sp { display: grid; grid-template-columns: 48px 1fr auto 28px; align-items: center; gap: var(--s2); height: 30px; padding: 0 0 0 var(--s2);
+  font-size: 13px; }
+.sports .sp b { font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sports .sp span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sports .sp em { font-style: normal; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.sports .sp button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; grid-template-columns: none; }
+.sports .say { padding: 6px var(--s2); font-size: 12px; color: var(--faint); }
+
 .sfoot { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--s3); min-height: var(--row-h); font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; }
 .sfoot[hidden] { display: none; }
 .sfoot b { font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -1028,6 +1043,10 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
     if (!near) return res(hit ? { mac: null, vendor: null, ms: 3 + h % 12 } : null);
     if (gw || hit || demo.taken[a.address]) return res({ mac: demo.macs[a.address] ?? demo.taken[a.address]?.[0] ?? "02-00-00-00-AA-" + h.toString(16).padStart(2, "0").toUpperCase(), vendor: gw ? "Ubiquiti" : makers[h % makers.length], ms: 1 + h % 9 });
     return res(null);
+  }
+  if (cmd === "tcping" && scan.portRun && ![9, 23].includes(a.port)) {   // Scan, Check ports
+    const h = +a.address.split(".")[3], kind = [[80, 554, 8000], [80, 443, 22], [445, 139, 3389]][h % 3];
+    return res(kind.includes(a.port) ? { open: 1 + (h + a.port) % 6 } : null);
   }
   if (cmd === "tcping") return res(a.port === 9 ? null : a.port === 23 ? { closed: 2 } : { open: /^(10|192\.168)\./.test(a.address) ? 2 + Math.floor(Math.random() ** 3 * 6) : 16 + Math.floor(Math.random() ** 2 * 9) });
   if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" ? null : { ms: /^(10|192\.168)\./.test(a.address) ? 1 + Math.floor(Math.random() ** 3 * 5) : 14 + Math.floor(Math.random() ** 2 * 8), ttl: /^(10|192\.168)\./.test(a.address) ? 64 : 117 });
@@ -2821,12 +2840,15 @@ function scanState() {
   const run = !!scan.net && scan.done < scan.total, pct = scan.total ? Math.round(100 * scan.done / scan.total) : 0;
   $("scan-state").textContent = !scan.net ? "" : run ? `${L("Scanning", "กำลังสแกน")} ${pct}%` : L("Done", "เสร็จแล้ว");
   $("scan-again").classList.toggle("run", run);
+  $("scan-grid").classList.toggle("run", run);   // cells wait for the scan to finish before they open a menu
   const arc = $("scan-arc");
   arc.style.strokeDashoffset = `${run ? 100 - pct : 0}px`;
   if (run) $("scan-pct").textContent = pct;
 }
 // A free address: put it on this adapter, as its address (IP & DNS) or as one more (Advanced).
 function scanPick(h, cell) {
+  if ($("scan-grid").classList.contains("run")) return;
+  if ((cell.classList.contains("used") || cell.classList.contains("gw")) && cell.dataset.ip) return scanHost(h, cell);
   if (!cell.classList.contains("free") || !draft || scan.off) return;   // past the gateway, silence isn't free
   const ip = cell.dataset.ip, m = $("scan-menu");
   m.innerHTML = "";
@@ -2893,19 +2915,68 @@ menuKeys($("scan-picks"), $("scan-pick"), () => setScanPicks(false));
 $("scan-pick").onclick = e => { e.stopPropagation(); setScanPicks(!$("scan-own").classList.contains("open")); };
 document.addEventListener("click", e => { if (!e.target.closest("#scan-own")) setScanPicks(false); });
 $("scan-own-pfx").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, ""); scanTyped(); });
-function scanMenu(h, cell) {
+// The ports worth a look on a LAN: the ones that say what a device is and how to reach it.
+const PORTS = [[80, "Web"], [443, "Web, secure"], [8080, "Web"], [8443, "Web, secure"], [554, "RTSP, camera stream"], [8000, "Hikvision"],
+  [37777, "Dahua"], [34567, "XMEye DVR"], [22, "SSH"], [23, "Telnet"], [21, "FTP"], [3389, "Remote Desktop"], [5900, "VNC"], [445, "File sharing"],
+  [139, "NetBIOS"], [9100, "Printer"], [631, "Printer, IPP"], [53, "DNS"], [5000, "Synology"], [8291, "MikroTik Winbox"], [1883, "MQTT"], [502, "Modbus"]];
+const WEB = { 80: "http", 8080: "http", 8000: "http", 443: "https", 8443: "https", 5000: "http" };
+function scanHost(h, cell) {
+  // What the cell's tip says (ip · ms, who, MAC) stays on top of the menu.
+  const ip = cell.dataset.ip, m = $("scan-menu"), [top, ...rest] = (cell.dataset.tip || ip).split("\n");
+  m.innerHTML = `<div class="shost"><b></b></div>`;
+  m.querySelector("b").textContent = top;
+  rest.forEach(t => { const x = document.createElement("span"); x.textContent = t; m.firstChild.append(x); });
+  scanMenu(h, cell);
+  scanPorts(h, cell, ip);   // opening it is the ask: the ports are checked right away
+}
+// Every port at once (a TCP connect each, no admin); the open ones show as they answer, lowest first.
+async function scanPorts(h, cell, ip) {
+  const m = $("scan-menu"), a = adapters[sel], run = (scan.portRun = (scan.portRun || 0) + 1);
+  const list = document.createElement("div"); list.className = "sports";
+  const say = document.createElement("div"); say.className = "say"; say.textContent = L(`Checking ${PORTS.length} common ports…`, `กำลังตรวจ ${PORTS.length} port ที่ใช้บ่อย…`);
+  list.append(say); m.append(list); scanMenu(h, cell);
+  // Checked all at once; the open ones come in together when it is done, the menu opening down to them like an accordion.
+  const got = await Promise.all(PORTS.map(([port]) => net("tcping", { address: ip, port, source: scan.src || a.cfg.address }).catch(() => null)));
+  if (run !== scan.portRun || scan.menu !== h) return;
+  const open = PORTS.map(([port, what], k) => [port, what, got[k]?.open]).filter(x => x[2] !== undefined).sort((x, y) => x[0] - y[0]);
+  const from = [m.offsetHeight, m.style.top];
+  open.forEach(([port, what, ms]) => {
+    const row = document.createElement("div"); row.className = "sp";
+    row.innerHTML = `<b></b><span></span><em></em>`;
+    row.children[0].textContent = port; row.children[1].textContent = what; row.children[2].textContent = `${ms} ms`;
+    if (WEB[port]) {
+      const go = document.createElement("button"); go.className = "icon-btn"; go.title = L(`Open ${WEB[port]}://${ip}:${port}`, `เปิด ${WEB[port]}://${ip}:${port}`);
+      go.innerHTML = `<i class="ph ph-arrow-square-out"></i>`;
+      go.onclick = e => { e.stopPropagation(); openDevice(ip, port, WEB[port] === "https"); };
+      row.append(go);
+    } else row.append(document.createElement("i"));
+    list.insertBefore(row, say);
+  });
+  say.textContent = open.length ? L(`${open.length} open of ${PORTS.length} checked`, `เปิด ${open.length} จาก ${PORTS.length} port`)
+    : L(`None of ${PORTS.length} common ports open`, `ไม่มี port ที่ใช้บ่อยเปิดอยู่ (ตรวจ ${PORTS.length} port)`);
+  scanMenu(h, cell, from);
+}
+const openDevice = (ip, port, tls) => tauri ? invoke("open_device", { address: ip, port, tls }).catch(e => say(String(e), "bad"))
+  : window.open(`${tls ? "https" : "http"}://${ip}:${port}/`, "_blank", "noopener");
+function scanMenu(h, cell, from) {
   const m = $("scan-menu");
   scan.cells.forEach(c => c.classList.remove("pick"));
   if (h === null) { m.classList.remove("open"); scan.menu = null; return; }
+  const again = scan.menu === h && m.classList.contains("open");
   cell.classList.add("pick"); scan.menu = h;
   const pg = $("page-scan").getBoundingClientRect(), b = cell.getBoundingClientRect();
+  // Another cell: the menu opens again from it, not just jumps there.
+  if (!again) { m.classList.remove("open"); void m.offsetWidth; }
   m.classList.add("open");
   const left = Math.min(b.left - pg.left, pg.width - m.offsetWidth), below = b.bottom - pg.top + 6;
   m.style.left = `${Math.max(0, left)}px`;
   m.style.top = `${below + m.offsetHeight > pg.height ? b.top - pg.top - m.offsetHeight - 6 : below}px`;
   m.style.transformOrigin = below + m.offsetHeight > pg.height ? "bottom left" : "top left";
+  // The same box grows to what came in (from: its height and top before), an accordion, not a jump.
+  if (again && from && from[0] !== m.offsetHeight) m.animate([{ height: `${from[0]}px`, top: from[1], overflow: "hidden" }, { height: `${m.offsetHeight}px`, top: m.style.top, overflow: "hidden" }],
+    { duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
 }
-document.addEventListener("pointerdown", e => { if (scan.menu !== null && !e.target.closest("#scan-menu, .scell.free")) scanMenu(null); });
+document.addEventListener("pointerdown", e => { if (scan.menu !== null && !e.target.closest("#scan-menu, .scell.free, .scell.used, .scell.gw")) scanMenu(null); });
 document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   if (scan.menu !== null) scanMenu(null); else if (scan.hold) { scan.hold = null; scanOnly(null); scanTell(); }
