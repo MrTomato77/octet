@@ -3347,6 +3347,18 @@ if (!tauri) {
   segIndex("theme"); segIndex("lang");
   document.documentElement.lang = lang; translate();
 }
+// On the website (octet-web, ?embed): the window alone, and the page around it can paste a line or switch language.
+if (!tauri && new URLSearchParams(location.search).has("embed")) {
+  document.documentElement.classList.add("app");
+  document.querySelector(".demo-pick")?.remove();
+  const ready = () => draft && !document.querySelector(".scroll.loading") ? parent.postMessage({ ready: true }, location.origin) : setTimeout(ready, 100);   // once the form is up, ask for the line
+  ready();
+  addEventListener("message", e => {
+    if (e.origin !== location.origin) return;
+    if (typeof e.data?.paste === "string") pasteConfig(e.data.paste);
+    if (["en", "th"].includes(e.data?.lang) && e.data.lang !== lang) pick("lang", e.data.lang);
+  });
+}
 </script>
 <script type="module">
 // morphicons (MIT) morphs Phosphor's own SVGs, so the icon family stays one.
