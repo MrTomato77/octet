@@ -360,6 +360,9 @@ button, input, select { font: inherit; color: inherit; }
 .sgrid[data-only=used] .scell:not(.used) { opacity: 0.2; }
 /* Free is the dim colour itself: the rest fades much further. */
 .sgrid[data-only=free] .scell:not(.free) { opacity: 0.05; }
+/* Likely free: the router answered for it (proxy ARP), nothing else did */
+.scell.maybe { background: color-mix(in oklch, var(--faint) 22%, transparent); outline: 1px dashed color-mix(in oklch, var(--accent) 55%, transparent); outline-offset: -1px; cursor: pointer; }
+.sgrid[data-only=maybe] .scell:not(.maybe) { opacity: 0.05; }
 .sfoot > span[data-k] { padding: 2px 6px; border-radius: var(--r-input); cursor: pointer; transition: background 140ms, color 140ms; }
 .sfoot:not(.busy) > span[data-k]:not(.on):hover { color: var(--ink); background: color-mix(in oklch, var(--ink) 6%, transparent); }
 .sfoot.busy > span[data-k] { cursor: default; color: var(--muted); }   /* nothing to point at until the sweep is done */
@@ -1075,10 +1078,15 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
     const makers = ["TP-Link", "Hikvision", "Apple", "Samsung", "Ubiquiti", "HP", "Xiaomi", "Dahua", "Intel"];
     if (me) return res({ mac: me.mac, vendor: null, ms: 0 });
     const near = adapters.some(x => [x.cfg.address, ...(x.extraIps || [])].some(o => validIp(o || "") && o.split(".").slice(0, 3).join(".") === n3));
+    // Proxy ARP: the router's MAC turns up on every address nobody else holds, without a ping.
+    const gwMac = demo.macs[adapters[sel].cfg.gateway] ?? "02-00-00-00-AA-01";
+    if (demo.proxyArp && gw) return res({ mac: gwMac, vendor: "Ubiquiti", ms: 1 });
+    if (demo.proxyArp && !hit) return res({ mac: gwMac, vendor: "Ubiquiti", ms: null });
     if (!near) return res(hit ? { mac: null, vendor: null, ms: 3 + h % 12 } : null);
     if (gw || hit || demo.taken[a.address]) return res({ mac: demo.macs[a.address] ?? demo.taken[a.address]?.[0] ?? "02-00-00-00-AA-" + h.toString(16).padStart(2, "0").toUpperCase(), vendor: gw ? "Ubiquiti" : makers[h % makers.length], ms: 1 + h % 9 });
     return res(null);
   }
+  if (cmd === "tcping" && demo.proxyArp && !scan.portRun) return res(+a.address.split(".")[3] % 37 === 5 && a.port === 445 ? { open: 2 } : null);   // a PC that drops ping
   if (cmd === "tcping" && scan.portRun && ![9, 23].includes(a.port)) {   // Scan, Check ports
     const h = +a.address.split(".")[3], kind = [[80, 554, 8000], [80, 443, 22], [445, 139, 3389], []][h % 4];
     return res(kind.includes(a.port) ? { open: 1 + (h + a.port) % 6 } : null);
@@ -2811,7 +2819,7 @@ function scanStart(again = false) {
     : n === 1 && p > 0 && p < 24 ? L(`Showing ${net}.x, too wide for all`, `แสดง ${net}.x วงใหญ่เกินจะสแกนทั้งหมด`) : "";
   const key = `${net}|${n}|${first}|${scan.src}`;
   if (!again && key === scan.key && scan.done) { scanTell(null); return; }
-  const run = ++scan.run; Object.assign(scan, { key, net, n, first, hosts: {}, done: 0 });
+  const run = ++scan.run; Object.assign(scan, { key, net, n, first, hosts: {}, done: 0, proxy: false });
   scanMenu(null);
   scan.blocks.forEach((g, b) => { g.hidden = scan.divs[b].hidden = b >= n; scan.divs[b].innerHTML = `<span>${numIp(first + b * 256)}<i>/24</i></span>`; });
   scanMap(n);
@@ -2837,7 +2845,8 @@ function scanStart(again = false) {
   const show = (i, got) => {
       const ip = numIp(first + i), c = scan.cells[i]; c.dataset.ip = ip;
       scan.hosts[i] = got;
-      c.classList.add(ownsIp(a, ip) ? "me" : ip === a.cfg.gateway ? "gw" : got ? "used" : "free");
+      c.classList.add(ownsIp(a, ip) ? "me" : ip === a.cfg.gateway ? "gw" : got?.proxy ? "maybe" : got ? "used" : "free");
+      if (got?.proxy && !scan.proxy) { scan.proxy = true; scan.note = L("Router answers for all (proxy ARP)", "Router ตอบแทนทุกเลข (proxy ARP)"); }
       c.dataset.tip = scanSays(ip, got, a); c.setAttribute("aria-label", c.dataset.tip);
       scan.done++;
       if (scan.follow && Math.floor(i / 256) > scan.at) scanGo(scan.at = Math.floor(i / 256));
@@ -2858,9 +2867,18 @@ function scanStart(again = false) {
     if (!q.length) acc = Math.min(acc, 1);
     if (q.length || !fed) requestAnimationFrame(drain); else done();
   };
+  // Proxy ARP (MikroTik Hotspot and the like): the router answers ARP for every address, so its MAC shows on empty ones.
+  // Such an address counts as in use only if it answers ping or a common port itself; otherwise it is likely free.
+  const gwIp = a.cfg.gateway, gwMac = !scan.off && validIp(gwIp || "") ? scanAsk(gwIp, a, scan.src).then(x => x?.mac ?? null) : Promise.resolve(null);
+  const confirm = async (ip, x) => {
+    if (!x?.mac || x.ms || ip === gwIp || ownsIp(a, ip) || x.mac !== await gwMac) return x;
+    const open = await Promise.any(PROXY_PORTS.map(port => scanTcp(ip, port, scan.src || a.cfg.address)
+      .then(t => t?.open ? port : Promise.reject()))).catch(() => 0);
+    return open ? { mac: null, vendor: null, ms: null, port: open } : { proxy: true };
+  };
   const worker = async () => {
     while (todo.length && run === scan.run) {
-      const i = todo.shift(), res = await scanAsk(numIp(first + i), a, scan.src);
+      const i = todo.shift(), ip = numIp(first + i), res = await confirm(ip, await scanAsk(ip, a, scan.src));
       if (run !== scan.run) return;
       q.push([i, res]); got++;
     }
@@ -2897,6 +2915,7 @@ for (const ev of ["wheel", "touchstart", "keydown"]) $("scan-grid").addEventList
 const ownsIp = (a, ip) => ip === a.cfg.address || (a.extraIps || []).includes(ip);
 // scanStart has its own `net` (the /24), so the call to Rust lives out here.
 const scanAsk = (ip, a, src) => net("scan_host", { address: ip, source: src || a.cfg.address, index: a.index ?? 0 }).catch(() => null);
+const scanTcp = (ip, port, source) => net("tcping", { address: ip, port, source, timeout: 400 }).catch(() => null);
 // What a cell's tooltip says.
 function scanSays(ip, x, a) {
   const h = +ip.split(".")[3];
@@ -2904,6 +2923,8 @@ function scanSays(ip, x, a) {
   const priv = x?.mac && parseInt(x.mac.slice(0, 2), 16) & 2;
   const maker = x && (x.vendor || (priv ? L("Private MAC (phone or laptop)", "Private MAC (มือถือ/โน้ตบุ๊ก)") : L("Unknown maker", "ไม่ทราบยี่ห้อ")));
   const role = ownsIp(a, ip) ? L("This PC", "เครื่องนี้") : ip === a.cfg.gateway ? "Gateway" : "";
+  if (x?.proxy) return [ip, L("Likely free: only the router answered for it", "น่าจะว่าง: มีแค่ Router ตอบแทน")].join("\n");
+  if (x?.port) return [ip, L(`In use: port ${x.port} answers, ping doesn't`, `ใช้อยู่: พอร์ต ${x.port} ตอบ แต่ไม่ตอบ ping`)].join("\n");
   const who = role ? [role, x?.vendor].filter(Boolean).join(" · ") : x && scan.off && !x.mac ? L("Answers ping", "ตอบ ping")
     : !x && scan.off ? L("No answer to ping, may still be in use", "ไม่ตอบ ping อาจมีเครื่องใช้อยู่") : x ? maker
     : (h === 0 || h === 255) ? L(`Free, valid on a /${prefixOf(a.cfg.subnet)}`, `ว่าง ใช้ได้ในวง /${prefixOf(a.cfg.subnet)}`) : L("Free, click to use", "ว่าง กดเพื่อใช้");
@@ -2912,10 +2933,11 @@ function scanSays(ip, x, a) {
 // Footer: the key and the tally.
 function scanTell() {
   const f = $("scan-foot");
-  const count = k => scan.cells.filter(c => c.classList.contains(k)).length, used = count("used"), free = count("free");
+  const count = k => scan.cells.filter(c => c.classList.contains(k)).length, used = count("used"), free = count("free"), maybe = count("maybe");
   const key = (k, cls, label, n) => `<span data-k="${k}" role="button" tabindex="0"><i class="key" style="background:${cls}"></i>${label}${n !== undefined ? ` <b>${n}</b>` : ""}</span>`;
   f.innerHTML = !scan.net ? "" : (scan.note ? `<span class="snote">${scan.note}</span>` : "") + (scan.off ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway"))
-    + key("used", "color-mix(in oklch, var(--accent) 70%, transparent)", L("In use", "ใช้อยู่"), used) + key("free", "color-mix(in oklch, var(--faint) 40%, transparent)", scan.off ? L("No answer", "ไม่ตอบ") : L("Free", "ว่าง"), free);
+    + key("used", "color-mix(in oklch, var(--accent) 70%, transparent)", L("In use", "ใช้อยู่"), used) + key("free", "color-mix(in oklch, var(--faint) 40%, transparent)", scan.off ? L("No answer", "ไม่ตอบ") : L("Free", "ว่าง"), free)
+    + (maybe ? key("maybe", "color-mix(in oklch, var(--faint) 40%, transparent)", L("Likely free", "น่าจะว่าง"), maybe) : "");
   const gw = adapters[sel]?.cfg.gateway, busy = scan.done < scan.total;
   f.classList.toggle("busy", busy);
   if (busy) { scan.hold = null; scanOnly(null); }
@@ -2951,7 +2973,7 @@ function scanState() {
 function scanPick(h, cell) {
   if ($("scan-grid").classList.contains("run")) return;
   if ((cell.classList.contains("used") || cell.classList.contains("gw")) && cell.dataset.ip) return scanHost(h, cell);
-  if (!cell.classList.contains("free") || !draft || scan.off) return;   // past the gateway, silence isn't free
+  if (!cell.matches(".free, .maybe") || !draft || scan.off) return;   // past the gateway, silence isn't free
   const ip = cell.dataset.ip, m = $("scan-menu");
   m.innerHTML = "";
   const item = (icon, text, go) => { const b = document.createElement("button"); b.setAttribute("role", "menuitem"); b.innerHTML = `<i class="ph ${icon}"></i><span></span>`; b.children[1].textContent = text; b.onclick = () => { scanMenu(null); go(); }; m.append(b); };
@@ -3018,6 +3040,8 @@ $("scan-pick").onclick = e => { e.stopPropagation(); setScanPicks(!$("scan-own")
 document.addEventListener("click", e => { if (!e.target.closest("#scan-own")) setScanPicks(false); });
 $("scan-own-pfx").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, ""); scanTyped(); });
 // The ports worth a look on a LAN: the ones that say what a device is and how to reach it.
+// Behind proxy ARP: ports that say a device is really there. Not 80/443, which a hotspot answers for everyone.
+const PROXY_PORTS = [22, 135, 139, 445, 554, 3389, 62078];
 const PORTS = [[80, "Web"], [443, "Web, secure"], [8080, "Web"], [8443, "Web, secure"], [554, "RTSP, camera stream"], [8000, "Hikvision"],
   [37777, "Dahua"], [34567, "XMEye DVR"], [22, "SSH"], [23, "Telnet"], [21, "FTP"], [3389, "Remote Desktop"], [5900, "VNC"], [445, "File sharing"],
   [139, "NetBIOS"], [9100, "Printer"], [631, "Printer, IPP"], [53, "DNS"], [5000, "Synology"], [8291, "MikroTik Winbox"], [1883, "MQTT"], [502, "Modbus"]];
@@ -3089,7 +3113,7 @@ function scanMenu(h, cell, from) {
   if (again && from && from[0] !== m.offsetHeight) m.animate([{ height: `${from[0]}px`, top: from[1], overflow: "hidden" }, { height: `${m.offsetHeight}px`, top: m.style.top, overflow: "hidden" }],
     { duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
 }
-document.addEventListener("pointerdown", e => { if (scan.menu !== null && !e.target.closest("#scan-menu, .scell.free, .scell.used, .scell.gw")) scanMenu(null); });
+document.addEventListener("pointerdown", e => { if (scan.menu !== null && !e.target.closest("#scan-menu, .scell.free, .scell.maybe, .scell.used, .scell.gw")) scanMenu(null); });
 document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   if (scan.menu !== null) scanMenu(null); else if (scan.hold) { scan.hold = null; scanOnly(null); scanTell(); }
@@ -3307,6 +3331,7 @@ const scenarios = {
     pgadv: ["Advanced", () => showPage("adv")],
     pgping: ["Ping", () => showPage("probe")],
     pgscan: ["Scan", () => showPage("scan")],
+    pgproxy: ["Scan, router answers for every address (proxy ARP)", () => { demo.proxyArp = true; showPage("scan"); }],
     pgscan2: ["Scan, with a second IP", () => { Object.assign(adapters[sel], { extraIps: ["192.168.1.50"], extraSubnets: ["255.255.255.0"] }); showPage("scan"); }],
     pginfo: ["Info", () => showPage("info")],
   },
