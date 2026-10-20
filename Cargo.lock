@@ -2350,7 +2350,7 @@ dependencies = [
 
 [[package]]
 name = "octet"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "ed25519-compact",
  "serde",
