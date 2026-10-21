@@ -248,6 +248,7 @@ button, input, select { font: inherit; color: inherit; }
 .arow.ph .ip:focus-within, .arow.ph .prefix:focus { border-style: solid; }
 .arow .ip.shared input { color: var(--faint); }
 .page[hidden] { display: none; }
+.mac [data-win] { display: none !important; }
 .page.leaving { pointer-events: none; }
 .page.soon { display: grid; place-content: center; justify-items: center; gap: var(--s2); min-height: 280px; color: var(--muted); font-size: 13px; }
 .page.soon[hidden] { display: none; }
@@ -855,13 +856,13 @@ html.app, html.app body { overflow: hidden; }
             </p>
           </div>
           <div class="menu" id="tools" role="menu" style="right:0; top:36px">
-            <button role="menuitem" data-act="release"><i class="ph ph-arrow-line-up"></i><span data-t="release">Release DHCP</span></button>
+            <button role="menuitem" data-act="release" data-win><i class="ph ph-arrow-line-up"></i><span data-t="release">Release DHCP</span></button>
             <button role="menuitem" data-act="renew"><i class="ph ph-arrow-line-down"></i><span data-t="renew">Renew DHCP</span></button>
-            <button role="menuitem" data-act="cycle"><i class="ph ph-arrows-clockwise"></i><span data-t="cycle">Release and renew</span></button>
+            <button role="menuitem" data-act="cycle" data-win><i class="ph ph-arrows-clockwise"></i><span data-t="cycle">Release and renew</span></button>
             <hr>
             <button role="menuitem" data-act="toggle"><i class="ph ph-power"></i><span id="toggle-label">Disable adapter</span></button>
             <button role="menuitem" data-act="hide"><i class="ph ph-eye-slash"></i><span data-t="hide">Hide from list</span></button>
-            <button role="menuitemcheckbox" data-act="register" id="m-register" title="Publish this PC's name and address to the DNS server (needed on Active Directory networks)"><i class="ph ph-square"></i><span data-t="register">Register in DNS</span></button>
+            <button role="menuitemcheckbox" data-act="register" id="m-register" data-win title="Publish this PC's name and address to the DNS server (needed on Active Directory networks)"><i class="ph ph-square"></i><span data-t="register">Register in DNS</span></button>
             <hr>
             <button role="menuitem" data-act="ncpa"><i class="ph ph-arrow-square-out"></i><span data-t="ncpa">Network Connections</span></button>
           </div>
@@ -971,8 +972,8 @@ html.app, html.app body { overflow: hidden; }
                   <label class="choice"><input type="radio" name="lang" value="en" checked><span>English</span></label>
                   <label class="choice"><input type="radio" name="lang" value="th"><span>ไทย</span></label>
                 </div>
-                <span class="lbl" data-t="admin">Run as admin</span>
-                <div class="seg opt" role="radiogroup" aria-label="Run as administrator" style="--n: 2">
+                <span class="lbl" data-t="admin" data-win>Run as admin</span>
+                <div class="seg opt" role="radiogroup" aria-label="Run as administrator" data-win style="--n: 2">
                   <span class="thumb"></span>
                   <label class="choice" data-tip="UAC prompt for each change"><input type="radio" name="admin" value="ask" checked><span data-t="adminAsk">When needed</span></label>
                   <label class="choice" data-tip="One UAC prompt when Octet starts"><input type="radio" name="admin" value="always"><span data-t="adminAlways">Always</span></label>
@@ -1060,6 +1061,24 @@ const L = (en, th) => lang === "th" ? th : en;
 // Inside Octet, Tauri is here and the sample list above is replaced by this machine's adapters.
 const tauri = window.__TAURI__, invoke = tauri?.core.invoke;
 if (tauri) document.documentElement.classList.add("app");
+// macOS: ⌘ instead of Ctrl, and none of the Windows-only parts: the Advanced lists (macOS keeps one
+// address per service), Release (it has none), Register in DNS, and Run as admin (it asks with each change).
+// In a browser, ?mac shows the macOS layout.
+const mac = tauri ? /Mac/.test(navigator.platform) : new URLSearchParams(location.search).has("mac");
+const OS = mac ? "macOS" : "Windows", MOD = mac ? "⌘" : "Ctrl+";
+const isMod = e => mac ? e.metaKey : e.ctrlKey;
+if (mac) {
+  document.documentElement.classList.add("mac");
+  document.querySelector(".ptab[data-page=adv]").remove();
+  document.querySelectorAll(".ptab").forEach((b, i) => b.title = `⌘${i + 1}`);
+  for (const el of document.querySelectorAll("[data-win]")) { el.hidden = true; el.disabled = true; }
+  for (const k of document.querySelectorAll(".keys kbd")) {
+    if (k.textContent === "Ctrl") k.textContent = "⌘";
+    else if (k.textContent === "1-5") k.textContent = "1-4";
+    else if (k.textContent === "F5") { k.textContent = "⌘"; k.nextElementSibling.replaceWith(Object.assign(document.createElement("kbd"), { textContent: "R" })); }
+  }
+  for (const el of document.querySelectorAll("[title*='Ctrl+'], [title*='(F5)']")) el.title = el.title.replace("Ctrl+", "⌘").replace("F5", "⌘R");
+}
 // Demo stand-in for the Rust side, so the demo runs the same code paths as the app.
 // The scenario picker below the window changes what it answers.
 const demo = {
@@ -1121,7 +1140,7 @@ let sel = 0, draft = null, lang = pref("octet-lang") || (navigator.language.star
 
 const T = {
   en: { adapters: "Adapters", settings: "Settings", refresh: "Refresh", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
-    hide: "Hide from list", ncpa: "Network Connections",
+    hide: "Hide from list", ncpa: mac ? "Network Settings" : "Network Connections",
     dhcp: "DHCP", manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
     dns1: "Preferred", dns2: "Alternate", register: "Register in DNS", revert: "Revert", apply: "Apply",
     theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark", updates: "Updates", admin: "Run as admin", adminAsk: "When needed", adminAlways: "Always",
@@ -1137,7 +1156,7 @@ const T = {
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
   },
   th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", refresh: "รีเฟรช", release: "Release IP", renew: "Renew IP", cycle: "Release แล้ว Renew",
-    hide: "ซ่อน", ncpa: "Network Connections",
+    hide: "ซ่อน", ncpa: mac ? "Network Settings" : "Network Connections",
     dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
     dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "Register ใน DNS", revert: "ย้อนกลับ", apply: "บันทึก",
     theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", updates: "อัปเดต", admin: "สิทธิ์ Admin", adminAsk: "ขอเมื่อต้องใช้", adminAlways: "ทุกครั้ง",
@@ -1179,7 +1198,7 @@ const inNet = (v, net, bits) => (ipNum(v) >>> (32 - bits)) === (ipNum(net) >>> (
 function scope(v) {
   if (!validIp(v)) return null;
   if (inNet(v, "127.0.0.0", 8)) return ["Loop", "Loopback: this machine only"];
-  if (inNet(v, "169.254.0.0", 16)) return ["APIPA", "Link-local: no DHCP answer, Windows picked this itself"];
+  if (inNet(v, "169.254.0.0", 16)) return ["APIPA", `Link-local: no DHCP answer, ${OS} picked this itself`];
   if (inNet(v, "10.0.0.0", 8) || inNet(v, "172.16.0.0", 12) || inNet(v, "192.168.0.0", 16)) return ["Private", "Private range (RFC 1918)"];
   if (inNet(v, "100.64.0.0", 10)) return ["CGNAT", "Shared address space (RFC 6598), used by carriers and Tailscale"];
   return ["Public", "Reachable on the internet"];
@@ -1986,7 +2005,7 @@ function renderSlots() {
   } else {
     ip.dataset.act = "pull"; slotIcon("ip-act", "tray-arrow-down");
     ip.disabled = !cur.address;
-    ip.title = L("Fill with the values Windows has now", "ดึงค่าที่ Windows ใช้อยู่");
+    ip.title = L(`Fill with the values ${OS} has now`, `ดึงค่าที่ ${OS} ใช้อยู่`);
   }
   ip.setAttribute("aria-label", ip.title);
   if (draft.dnsAuto) { dns.dataset.act = "flush"; slotIcon("dns-act", "broom"); dns.title = L("Flush DNS cache", "ล้างแคช DNS"); dns.removeAttribute("aria-haspopup"); }
@@ -2282,7 +2301,7 @@ function setRail(on, instant = false) {
   else if (instant || calm.matches) win.classList.add("compact");
   else compactTimer = setTimeout(() => win.classList.add("compact"), 240);
   $("collapse").setAttribute("aria-expanded", !on);
-  $("collapse").title = on ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
+  $("collapse").title = on ? `Expand sidebar (${MOD}B)` : `Collapse sidebar (${MOD}B)`;
   $("collapse").setAttribute("aria-label", on ? "Expand sidebar" : "Collapse sidebar");
   hideTip();
 }
@@ -2292,15 +2311,15 @@ document.querySelector(".side").addEventListener("transitionend", placeIndicator
 // No browser menu (Back, Refresh, Save as, Print) in the app; text fields keep cut, copy and paste.
 document.addEventListener("contextmenu", e => { if (document.documentElement.classList.contains("app") && !e.target.closest("input, textarea")) e.preventDefault(); });
 document.addEventListener("keydown", e => {
-  if (e.key.toLowerCase() === "b" && e.ctrlKey) { e.preventDefault(); $("collapse").click(); }
-  if (e.key === "F5" || e.ctrlKey && e.key.toLowerCase() === "r") { e.preventDefault(); $("refresh").click(); }
-  // The browser's own keys (print, save page, find, zoom, devtools…) have no place in the app.
-  if (document.documentElement.classList.contains("app") && (e.ctrlKey && /^[psfgjhuo+=\-0]$/i.test(e.key) || e.key === "F3" || e.key === "F7" || e.key === "F12")) e.preventDefault();
-  if (e.ctrlKey && e.key >= "1" && e.key <= "5" && !settingsOpen()) { e.preventDefault(); showPage(ptabs[e.key - 1].dataset.page); }
+  if (e.key.toLowerCase() === "b" && isMod(e)) { e.preventDefault(); $("collapse").click(); }
+  if (e.key === "F5" || isMod(e) && e.key.toLowerCase() === "r") { e.preventDefault(); $("refresh").click(); }
+  // The browser's own keys (print, save page, find, zoom, devtools…) have no place in the app. ⌘H stays macOS' Hide.
+  if (document.documentElement.classList.contains("app") && (isMod(e) && (mac ? /^[psfgjuo+=\-0]$/i : /^[psfgjhuo+=\-0]$/i).test(e.key) || e.key === "F3" || e.key === "F7" || e.key === "F12")) e.preventDefault();
+  if (isMod(e) && e.key >= "1" && e.key <= String(ptabs.length) && !settingsOpen()) { e.preventDefault(); showPage(ptabs[e.key - 1].dataset.page); }
   if (e.key === "Escape" && settingsOpen() && !document.querySelector("dialog[open]")) { closeSettings(); return; }
   if (e.key === "Escape" && tools.classList.contains("open")) { setTools(false); $("more").focus(); }
   else if (e.key === "Escape" && !isRail() && !document.querySelector("dialog[open]")) setRail(true);
-  if (e.key === "Enter" && e.ctrlKey && !$("apply").disabled && !settingsOpen()) $("apply").click();
+  if (e.key === "Enter" && isMod(e) && !$("apply").disabled && !settingsOpen()) $("apply").click();
 });
 
 // ---------- adapter pages ----------
@@ -3031,7 +3050,7 @@ function scanPick(h, cell) {
     if (draft.ipAuto) Object.assign(draft, { ipAuto: false, gateway: c.gateway, dnsAuto: false, dns1: c.dns1, dns2: c.dns2 });
     Object.assign(draft, { address: ip, subnet: mask }); sync(); showPage("ip");
   });
-  item("ph-plus", L("Add as another IP", "เพิ่มเป็นอีก IP"), () => { draft.extra.push({ address: ip, subnet: mask }); sync(); showPage("adv"); });
+  if (!mac) item("ph-plus", L("Add as another IP", "เพิ่มเป็นอีก IP"), () => { draft.extra.push({ address: ip, subnet: mask }); sync(); showPage("adv"); });
   scanMenu(h, cell);
 }
 // The box shows the range on screen unless you are typing in it.
@@ -3193,6 +3212,8 @@ function infoRows() {
       ["MAC", a.mac, ""],
     ] },
     { icon: "wifi-high", head: "Wi-Fi", rows: up && a.wifi ? [
+      // macOS gives the network's name only to apps with Location permission.
+      ...(mac && !a.ssid ? [[L("Network", "เครือข่าย"), L("Hidden by macOS", "macOS ซ่อนไว้"), L("allow Location for Octet in System Settings", "เปิด Location ให้ Octet ใน System Settings")]] : []),
       [L("Signal", "สัญญาณ"), `${a.wifi.signal}%`, a.wifi.signal >= 70 ? L("strong", "แรง") : a.wifi.signal >= 40 ? L("fair", "พอใช้") : L("weak", "อ่อน")],
       [L("Channel", "ช่อง"), a.mhz ? String(channelOf(a.mhz)) : "", a.mhz ? `${a.mhz} MHz` : ""],
       ["BSSID", a.wifi.bssid, L("the access point", "ตัวกระจายสัญญาณ")],

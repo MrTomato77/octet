@@ -73,6 +73,14 @@ Get `Octet.exe` from [Releases](https://github.com/MrTomato77/octet/releases/lat
   (Get-FileHash .\Octet.exe).Hash
   ```
 
+### macOS
+
+Get `Octet-macOS.zip` from the same release, unzip it and move `Octet.app` to Applications. It runs on Apple silicon and Intel, macOS 11 or later.
+
+- **Not notarized yet:** the first time, macOS says it can't check Octet. Open *System Settings → Privacy & Security* and choose *Open Anyway*.
+- **Wi-Fi name:** macOS gives the network's name only to apps with Location permission, so Octet asks once. Say no and everything else still works; only the name stays hidden.
+- **What differs from Windows:** each change asks for your password (there is no *Run as admin*). There is no Advanced tab, because macOS keeps one address per network service. There is no Release, because macOS can only renew a lease. *Register in DNS* is Windows-only.
+
 ## Administrator permission
 
 Octet opens without admin rights. It asks through UAC only when you Apply, enable / disable an adapter, or release / renew, and only that one change runs elevated (see [SECURITY.md](SECURITY.md)). Changing things often? Set *Settings → Run as admin* to *Always* and it asks once at start.
@@ -86,6 +94,8 @@ No telemetry, no server of its own. What it shows comes from Windows itself. On 
 ```powershell
 cargo build --release -p octet   # target/release/octet.exe
 ```
+
+On a Mac, `crates/octet/macos/bundle.sh` builds `target/release/Octet.app` (`--native` for this Mac's architecture only, which is faster).
 
 Releases are built by [GitHub Actions](.github/workflows/release.yml) on each `v*` tag. The interface is one file, `ui/index.html`; open it over http in a browser and it runs on sample data and changes nothing.
 

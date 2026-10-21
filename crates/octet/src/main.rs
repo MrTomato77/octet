@@ -2,6 +2,8 @@
 
 mod adapters;
 mod change;
+#[cfg(target_os = "macos")]
+mod mac;
 mod net;
 mod update;
 
@@ -13,6 +15,7 @@ use tauri::{Emitter, Manager};
 
 /// A child process without a console window flashing up.
 pub fn hidden(program: &str) -> std::process::Command {
+    #[allow(unused_mut)]   // only Windows sets flags
     let mut c = std::process::Command::new(program);
     #[cfg(windows)]
     {
@@ -20,6 +23,12 @@ pub fn hidden(program: &str) -> std::process::Command {
         c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     c
+}
+
+/// Opens a URL in the default browser (or a settings page).
+fn open_url(url: &str) -> Result<(), String> {
+    let program = if cfg!(target_os = "macos") { "open" } else { "explorer" };
+    hidden(program).arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
 /// Blocking work (PowerShell, UAC, netsh, ICMP) off the async runtime.
@@ -82,8 +91,7 @@ async fn tcping(address: String, port: u16, source: Option<String>, timeout: Opt
 #[tauri::command]
 fn open_device(address: String, port: u16, tls: bool) -> Result<(), String> {
     let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
-    let url = format!("{}://{ip}:{port}/", if tls { "https" } else { "http" });
-    hidden("explorer").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+    open_url(&format!("{}://{ip}:{port}/", if tls { "https" } else { "http" }))
 }
 
 /// Scan: who holds this address, seen from the adapter (`index`, its own `source` address).
@@ -139,8 +147,12 @@ fn vendor(mac: String) -> Option<&'static str> {
     net::vendor(&mac)
 }
 
+/// Network Connections on Windows, System Settings' Network pane on macOS.
 #[tauri::command]
 fn open_ncpa() -> Result<(), String> {
+    if cfg!(target_os = "macos") {
+        return open_url("x-apple.systempreferences:com.apple.Network-Settings.extension");
+    }
     hidden("control").arg("ncpa.cpl").spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
@@ -155,7 +167,7 @@ fn open_link(which: String) -> Result<(), String> {
         "simpleip" => "https://github.com/KurtisLiggett/Simple-IP-Config",
         _ => return Err("Unknown link".into()),
     };
-    hidden("explorer").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+    open_url(url)
 }
 
 // ---- "Always run as administrator": a marker file in %APPDATA%\Octet ----
@@ -256,6 +268,9 @@ fn main() {
                     if !w.is_visible().unwrap_or(true) { let _ = w.show(); }
                 }
             });
+            // Wi-Fi names are location data on macOS: ask once, so the header can show the network.
+            #[cfg(target_os = "macos")]
+            mac::ask_location();
             // Windows calls this on its own thread for every interface or address change.
             net::watch(|| {
                 if let Some(app) = APP.get() {

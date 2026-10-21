@@ -1,9 +1,11 @@
-//! Changes to Windows network settings. The UI asks for a `Request`; it is validated,
+//! Changes to network settings. The UI asks for a `Request`; it is validated,
 //! then handed on the command line to a second copy of Octet started with UAC
 //! ("--elevated <hex json> <out file>"), which validates it again and runs
-//! netsh/ipconfig directly (no shell, so adapter names cannot inject commands).
+//! netsh directly (no shell, so adapter names cannot inject commands).
 //! netsh targets the interface index, not the name, so a rename or a name like "2"
 //! cannot hit the wrong adapter.
+//! On macOS the second copy is started as root through the administrator prompt and runs
+//! networksetup, which only takes a service's name (see `networksetup`).
 
 use crate::adapters::Cfg;
 use serde::{Deserialize, Serialize};
@@ -32,6 +34,8 @@ pub enum Request {
     Release { index: u32, name: String },
     Renew { index: u32, name: String },
     Enable { index: u32, name: String, on: bool },
+    /// macOS only: emptying the DNS cache needs root there (Windows does it in-process).
+    FlushDns,
 }
 
 fn ipv4(v: &str, what: &str) -> Result<Ipv4Addr, String> {
@@ -55,6 +59,7 @@ const DNS: &str = "octet:set-dns";
 const LEASE: &str = "octet:lease";
 
 /// An extra address's mask: a dotted mask or a prefix length.
+#[cfg(not(target_os = "macos"))]
 fn mask_of(v: &str) -> Result<Ipv4Addr, String> {
     let prefix = match v.parse::<u8>() {
         Ok(p) if (1..=32).contains(&p) => p,
@@ -68,6 +73,7 @@ fn mask_of(v: &str) -> Result<Ipv4Addr, String> {
 }
 
 /// A metric: empty = automatic (None), else 1-9999.
+#[cfg(not(target_os = "macos"))]
 fn metric(v: &str) -> Result<Option<u16>, String> {
     match v.trim() {
         "" => Ok(None),
@@ -82,14 +88,79 @@ pub fn commands(r: &Request) -> Result<Vec<Vec<String>>, String> {
         | Request::Release { index, name }
         | Request::Renew { index, name }
         | Request::Enable { index, name, .. } => (*index, name),
+        Request::FlushDns if cfg!(target_os = "macos") => return Ok(vec![cmd(&["dscacheutil", "-flushcache"]), cmd(&["killall", "-HUP", "mDNSResponder"])]),
+        Request::FlushDns => return Ok(vec![]),
     };
-    // ipconfig matches names as wildcards, so * and ? would hit every adapter.
-    if name.is_empty() || name.chars().any(|c| c.is_control() || matches!(c, '"' | '*' | '?')) {
+    // * and ? are wildcards to some tools; a leading - would read as an option.
+    if name.is_empty() || name.starts_with('-') || name.chars().any(|c| c.is_control() || matches!(c, '"' | '*' | '?')) {
         return Err("Adapter name is not usable".into());
     }
-    let cmd = |args: &[&str]| args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    platform(r, index, name)
+}
+
+fn cmd(args: &[&str]) -> Vec<String> {
+    args.iter().map(|s| s.to_string()).collect()
+}
+
+/// macOS: networksetup, by the service's name (it takes nothing else). Each service has one
+/// address, so the Advanced lists don't apply; macOS has no lease release either.
+#[cfg(target_os = "macos")]
+fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, String> {
+    let ns = |args: &[&str]| [&["networksetup"], args].concat().iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    Ok(match r {
+        Request::FlushDns => unreachable!(),
+        Request::Release { .. } => return Err("macOS can't release a lease on its own; use Renew".into()),
+        // In-process (SCNetworkInterfaceForceConfigurationRefresh), as System Settings' Renew DHCP Lease.
+        Request::Renew { .. } => vec![cmd(&[LEASE, &index.to_string(), "renew"])],
+        Request::Enable { on, .. } => vec![ns(&["-setnetworkserviceenabled", name, if *on { "on" } else { "off" }])],
+        Request::Apply { cfg, ip, dns, extra, .. } => {
+            if *ip && !cfg.ip_auto && cfg.dns_auto {
+                return Err("A static IP needs manual DNS".into());
+            }
+            if *extra && (!cfg.extra.is_empty() || !cfg.gws.is_empty()) {
+                return Err("macOS keeps one address per service; add a second service in System Settings for another".into());
+            }
+            let mut out = vec![];
+            if *ip {
+                if cfg.ip_auto {
+                    out.push(ns(&["-setdhcp", name]));
+                } else {
+                    let address = ipv4(&cfg.address, "IP address")?.to_string();
+                    let prefix = parse_subnet(&cfg.subnet)?;
+                    if prefix == 0 {
+                        return Err("Subnet mask cannot be 0.0.0.0".into());
+                    }
+                    let mask = prefix_mask(prefix).to_string();
+                    let mut c = ns(&["-setmanual", name, &address, &mask]);
+                    if !cfg.gateway.is_empty() {
+                        c.push(ipv4(&cfg.gateway, "Gateway")?.to_string());
+                    }
+                    out.push(c);
+                }
+            }
+            if *dns {
+                let mut servers = vec![];
+                if !cfg.dns_auto && !cfg.dns1.is_empty() {
+                    servers.push(ipv4(&cfg.dns1, "Preferred DNS")?.to_string());
+                    if !cfg.dns2.is_empty() {
+                        servers.push(ipv4(&cfg.dns2, "Alternate DNS")?.to_string());
+                    }
+                }
+                // "Empty": the servers come from DHCP again.
+                let mut c = ns(&["-setdnsservers", name]);
+                c.extend(if servers.is_empty() { vec!["Empty".to_string()] } else { servers });
+                out.push(c);
+            }
+            out
+        }
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, String> {
     let iface = format!("name={index}");
     Ok(match r {
+        Request::FlushDns => unreachable!(),
         Request::Release { .. } => vec![cmd(&[LEASE, &index.to_string(), "release"])],
         Request::Renew { .. } => vec![cmd(&[LEASE, &index.to_string(), "renew"])],
         // `netsh interface set interface` only takes names, never an index.
@@ -210,9 +281,12 @@ pub fn elevate(r: &Request) -> Result<(), String> {
     if crate::net::elevated() {
         return run(cmds);
     }
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    return crate::mac::sudo(&exe, &hex(&serde_json::to_vec(r).map_err(|e| e.to_string())?));
+    #[allow(unreachable_code)]
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let out = std::env::temp_dir().join(format!("octet-{}-{nanos}.out", std::process::id()));
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     // The request travels on the command line, so nothing can swap it between the
     // UAC prompt and the elevated copy reading it. The .out file only carries error text.
     let params = format!("--elevated {} \"{}\"", hex(&serde_json::to_vec(r).map_err(|e| e.to_string())?), out.display());
@@ -261,14 +335,21 @@ pub fn run_as_admin(exe: &std::path::Path, params: &str, wait: bool) -> Result<O
     }
 }
 
+/// macOS asks for the password with each change instead (see `crate::mac::sudo`): a whole
+/// Octet running as root would put a root process on the user's screen.
 #[cfg(not(windows))]
 pub fn run_as_admin(_: &std::path::Path, _: &str, _: bool) -> Result<Option<u32>, String> {
-    Err("Octet only changes settings on Windows".into())
+    Err("On macOS, Octet asks for your password with each change".into())
 }
 
-/// Elevated side: run the request, write any failure to `out`.
+/// Elevated side: run the request, write any failure to `out`. Out "-" (macOS): print it and
+/// exit 0, so the administrator prompt's caller gets the text as the command's output.
 pub fn run_elevated(request_hex: &str, out: &str) -> i32 {
     let fail = |msg: String| {
+        if out == "-" {
+            print!("{msg}");
+            return 0;
+        }
         let _ = std::fs::write(out, msg);
         1
     };
@@ -296,7 +377,8 @@ fn run(cmds: Vec<Vec<String>>) -> Result<(), String> {
             continue;
         }
         let o = crate::hidden(&c[0]).args(&c[1..]).output().map_err(|e| e.to_string())?;
-        if !o.status.success() {
+        // networksetup can say "** Error: ..." and still exit 0.
+        if !o.status.success() || (c[0] == "networksetup" && String::from_utf8_lossy(&o.stdout).contains("** Error")) {
             let text = format!("{}{}", oem_text(&o.stdout), oem_text(&o.stderr));
             let text = text.trim();
             return Err(if text.is_empty() { format!("{} failed", c.join(" ")) } else { text.to_string() });
@@ -328,6 +410,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_os = "macos"))]
     fn extra_addresses_beside_dhcp_and_static() {
         use crate::adapters::{Addr, Gw};
         let mut c = cfg();
@@ -366,6 +449,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_os = "macos"))]
     fn builds_static_apply_by_index() {
         let c = commands(&apply(cfg(), true, true)).unwrap();
         assert_eq!(
@@ -380,6 +464,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_os = "macos"))]
     fn skips_unchanged_halves_and_rejects_bad_input() {
         let mut c = cfg();
         c.ip_auto = true;
@@ -394,6 +479,34 @@ mod tests {
         assert!(commands(&apply(c, true, false)).is_err());
         assert!(commands(&Request::Renew { index: 1, name: "a\" & calc".into() }).is_err());
         assert!(commands(&Request::Release { index: 1, name: "*".into() }).is_err());
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn builds_networksetup_by_service_name() {
+        let got = |r: &Request| commands(r).map(|c| c.iter().map(|c| c.join(" ")).collect::<Vec<_>>());
+        let wifi = |cfg: Cfg, ip, dns| Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![] };
+        assert_eq!(got(&wifi(cfg(), true, true)).unwrap(), [
+            "networksetup -setmanual Wi-Fi 192.168.1.50 255.255.255.0 192.168.1.1",
+            "networksetup -setdnsservers Wi-Fi 1.1.1.1 8.8.8.8",
+        ]);
+        let mut c = cfg();
+        (c.ip_auto, c.dns_auto, c.gateway) = (true, true, String::new());
+        assert_eq!(got(&wifi(c.clone(), true, true)).unwrap(), ["networksetup -setdhcp Wi-Fi", "networksetup -setdnsservers Wi-Fi Empty"]);
+        c.ip_auto = false;
+        assert!(commands(&wifi(c.clone(), true, false)).is_err(), "static IP with automatic DNS");
+        c.dns_auto = false;
+        assert_eq!(got(&wifi(c, true, false)).unwrap(), ["networksetup -setmanual Wi-Fi 192.168.1.50 255.255.255.0"], "no gateway, no router");
+        assert_eq!(got(&Request::Enable { index: 4, name: "USB LAN".into(), on: false }).unwrap(), ["networksetup -setnetworkserviceenabled USB LAN off"]);
+        // The name is one argument however it is spelled; one that reads as an option is refused.
+        assert_eq!(commands(&Request::Enable { index: 4, name: "a b; rm".into(), on: true }).unwrap()[0][2], "a b; rm");
+        assert!(commands(&Request::Enable { index: 4, name: "-listallnetworkservices".into(), on: true }).is_err());
+        assert!(commands(&Request::Release { index: 4, name: "Wi-Fi".into() }).is_err());
+        assert_eq!(got(&Request::Renew { index: 4, name: "Wi-Fi".into() }).unwrap(), ["octet:lease 4 renew"]);
+        assert_eq!(got(&Request::FlushDns).unwrap(), ["dscacheutil -flushcache", "killall -HUP mDNSResponder"]);
+        let mut x = cfg();
+        x.extra = vec![crate::adapters::Addr { address: "10.0.0.2".into(), subnet: "24".into() }];
+        assert!(commands(&Request::Apply { index: 1, name: "Wi-Fi".into(), cfg: x, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![] }).is_err());
     }
 
     #[test]

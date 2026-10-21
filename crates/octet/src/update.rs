@@ -1,5 +1,6 @@
 //! Updates for a portable exe: the whole new Octet.exe from the latest GitHub release, checked
 //! against our Ed25519 signature (made in CI) before it replaces this one. Nothing runs unsigned.
+//! On macOS the same, for the whole Octet.app (zipped in the release).
 
 use crate::net::https_get;
 
@@ -9,6 +10,11 @@ const KEY: [u8; 32] = [
     0xae, 0xfe, 0x39, 0x0d, 0x77, 0xcd, 0xf5, 0xc5, 0xfc, 0x0b, 0x68, 0xbd, 0x5b, 0xbd, 0x32, 0x98,
 ];
 const REPO: &str = "MrTomato77/octet";
+/// This system's file in each release; its signature is beside it (".sig").
+#[cfg(target_os = "macos")]
+const ASSET: &str = "Octet-macOS.zip";
+#[cfg(not(target_os = "macos"))]
+const ASSET: &str = "Octet.exe";
 
 /// "0.1.10" > "0.1.9": numbers, not text.
 fn newer(theirs: &str, ours: &str) -> bool {
@@ -29,18 +35,24 @@ fn verify(exe: &[u8], sig: &[u8]) -> bool {
     key.verify(exe, &sig).is_ok()
 }
 
-/// Downloads `version`, checks its signature, and puts it in this exe's place (this one becomes
-/// Octet.exe.old, removed on the next start). The new one runs from the next start on.
+/// Downloads `version`, checks its signature, and puts it in this copy's place. The new one runs
+/// from the next start on.
 pub fn install(version: &str, progress: impl FnMut(f32)) -> Result<(), String> {
-    let path = format!("/{REPO}/releases/download/v{version}/Octet.exe");
+    let path = format!("/{REPO}/releases/download/v{version}/{ASSET}");
     let sig = https_get("github.com", &format!("{path}.sig")).ok_or("Could not download the signature")?;
-    let exe = crate::net::https_get_with("github.com", &path, progress).ok_or("Could not download the update")?;
-    if !verify(&exe, &sig) {
+    let file = crate::net::https_get_with("github.com", &path, progress).ok_or("Could not download the update")?;
+    if !verify(&file, &sig) {
         return Err("The download is not signed by Octet's key: not installed".into());
     }
+    place(&file)
+}
+
+/// The new exe takes this one's place; this one becomes Octet.exe.old, removed on the next start.
+#[cfg(not(target_os = "macos"))]
+fn place(exe: &[u8]) -> Result<(), String> {
     let me = std::env::current_exe().map_err(|e| e.to_string())?;
     let (new, old) = (me.with_extension("exe.new"), me.with_extension("exe.old"));
-    std::fs::write(&new, &exe).map_err(|e| format!("Could not save the update: {e}"))?;
+    std::fs::write(&new, exe).map_err(|e| format!("Could not save the update: {e}"))?;
     let _ = std::fs::remove_file(&old);
     // Windows lets a running exe be renamed, not overwritten.
     std::fs::rename(&me, &old).map_err(|e| format!("Could not replace Octet.exe: {e}"))?;
@@ -51,8 +63,50 @@ pub fn install(version: &str, progress: impl FnMut(f32)) -> Result<(), String> {
     Ok(())
 }
 
+/// The Octet.app this runs from (…/Octet.app/Contents/MacOS/octet); None when run some other way.
+#[cfg(target_os = "macos")]
+fn bundle() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let app = exe.parent()?.parent()?.parent()?;
+    (app.extension()? == "app").then(|| app.to_path_buf())
+}
+
+/// The zip holds Octet.app, which takes the place of the bundle this runs from; the old one becomes
+/// Octet.app.old, removed on the next start. Unpacked here, so it carries no quarantine flag.
+#[cfg(target_os = "macos")]
+fn place(zip: &[u8]) -> Result<(), String> {
+    use std::fs;
+    let app = bundle().ok_or("Updates install into Octet.app, and this copy isn't one")?;
+    let tmp = app.with_extension("app.new");
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(&tmp).map_err(|e| format!("Could not save the update: {e}"))?;
+    let archive = tmp.join(ASSET);
+    fs::write(&archive, zip).map_err(|e| format!("Could not save the update: {e}"))?;
+    let unzipped = std::process::Command::new("/usr/bin/ditto").arg("-x").arg("-k").arg(&archive).arg(&tmp).status().is_ok_and(|s| s.success());
+    let new = tmp.join("Octet.app");
+    if !unzipped || !new.join("Contents/MacOS/octet").is_file() {
+        let _ = fs::remove_dir_all(&tmp);
+        return Err("The update is not a complete Octet.app: not installed".into());
+    }
+    let old = app.with_extension("app.old");
+    let _ = fs::remove_dir_all(&old);
+    fs::rename(&app, &old).map_err(|e| format!("Could not replace Octet.app: {e}"))?;
+    if let Err(e) = fs::rename(&new, &app) {
+        let _ = fs::rename(&old, &app);
+        return Err(format!("Could not replace Octet.app: {e}"));
+    }
+    let _ = fs::remove_dir_all(&tmp);
+    Ok(())
+}
+
 /// Left over from the last update.
 pub fn tidy() {
+    #[cfg(target_os = "macos")]
+    if let Some(app) = bundle() {
+        let _ = std::fs::remove_dir_all(app.with_extension("app.old"));
+        let _ = std::fs::remove_dir_all(app.with_extension("app.new"));
+    }
+    #[cfg(not(target_os = "macos"))]
     if let Ok(me) = std::env::current_exe() {
         let _ = std::fs::remove_file(me.with_extension("exe.old"));
     }
