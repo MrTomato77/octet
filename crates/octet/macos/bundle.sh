@@ -37,7 +37,13 @@ stage="$(mktemp -d)/Octet"
 mkdir -p "$stage"
 cp -R "$app" "$stage/"
 ln -s /Applications "$stage/Applications"
-hdiutil create -quiet -volname Octet -srcfolder "$stage" -ov -format UDZO target/release/Octet.dmg
+# hdiutil now and then says "Resource busy" (on CI runners especially): a few tries.
+rm -f target/release/Octet.dmg
+for try in 1 2 3; do
+  hdiutil create -quiet -volname Octet -srcfolder "$stage" -ov -format UDZO target/release/Octet.dmg && break
+  sleep 5
+done
+[ -f target/release/Octet.dmg ]
 rm -rf "$(dirname "$stage")"
 echo "$app"
 echo target/release/Octet.dmg

@@ -56,6 +56,7 @@ jobs:
           hash=$(shasum -a 256 Octet.dmg | cut -d' ' -f1)
           echo "$hash  Octet.dmg" > Octet.dmg.sha256
           # Signed like Octet.exe, for the updater. macOS' own openssl (LibreSSL) can't sign Ed25519.
+          brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
           printf '%s\n' "$OCTET_SIGNING_KEY" > key.pem
           "$(brew --prefix openssl@3)/bin/openssl" pkeyutl -sign -inkey key.pem -rawin -in Octet.dmg -out Octet.dmg.sig
           rm key.pem
