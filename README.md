@@ -75,7 +75,7 @@ Get `Octet.exe` from [Releases](https://github.com/MrTomato77/octet/releases/lat
 
 ### macOS
 
-Get `Octet-macOS.zip` from the same release, unzip it and move `Octet.app` to Applications. It runs on Apple silicon and Intel, macOS 11 or later.
+Get `Octet.dmg` from the same release, open it and drag Octet onto Applications. It runs on Apple silicon and Intel, macOS 11 or later.
 
 - **Not notarized yet:** the first time, macOS says it can't check Octet. Open *System Settings → Privacy & Security* and choose *Open Anyway*.
 - **Wi-Fi name:** macOS gives the network's name only to apps with Location permission, so Octet asks once. Say no and everything else still works; only the name stays hidden.
@@ -95,7 +95,7 @@ No telemetry, no server of its own. What it shows comes from Windows itself. On 
 cargo build --release -p octet   # target/release/octet.exe
 ```
 
-On a Mac, `crates/octet/macos/bundle.sh` builds `target/release/Octet.app` (`--native` for this Mac's architecture only, which is faster).
+On a Mac, `crates/octet/macos/bundle.sh` builds `target/release/Octet.app` and `Octet.dmg` (`--native` for this Mac's architecture only, which is faster).
 
 Releases are built by [GitHub Actions](.github/workflows/release.yml) on each `v*` tag. The interface is one file, `ui/index.html`; open it over http in a browser and it runs on sample data and changes nothing.
 

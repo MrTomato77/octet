@@ -1,5 +1,6 @@
 #!/bin/sh
-# Builds target/release/Octet.app: universal (Apple silicon and Intel), with its icon and Info.plist.
+# Builds target/release/Octet.app: universal (Apple silicon and Intel), with its icon and Info.plist,
+# and Octet.dmg beside it (the app and a shortcut to Applications, to drag it onto).
 #   crates/octet/macos/bundle.sh            universal, as releases are
 #   crates/octet/macos/bundle.sh --native   this Mac's architecture only (faster, for testing)
 # Not notarized: the app gets an ad-hoc signature, which Apple silicon needs to run anything.
@@ -32,4 +33,11 @@ done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/icon.icns"
 rm -rf "$(dirname "$iconset")"
 codesign --force --sign - "$app"
+stage="$(mktemp -d)/Octet"
+mkdir -p "$stage"
+cp -R "$app" "$stage/"
+ln -s /Applications "$stage/Applications"
+hdiutil create -quiet -volname Octet -srcfolder "$stage" -ov -format UDZO target/release/Octet.dmg
+rm -rf "$(dirname "$stage")"
 echo "$app"
+echo target/release/Octet.dmg

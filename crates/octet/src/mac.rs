@@ -566,6 +566,20 @@ pub fn watch(on_change: fn()) {
     });
 }
 
+/// After networksetup sets an address: waits (up to 6 s) until it is on the device. macOS first
+/// makes sure nobody else has it, so for a second or two there is no address and no route, and a
+/// ping right after Apply would say the gateway isn't answering. Gives up quietly: the setting is saved.
+pub fn wait_address(index: u32, address: Ipv4Addr) {
+    let Some(dev) = name_of(index) else { return };
+    let t0 = Instant::now();
+    while t0.elapsed() < Duration::from_secs(6) {
+        if links().get(&dev).is_some_and(|l| l.ipv4.contains(&address)) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(150));
+    }
+}
+
 /// Asks for a fresh DHCP lease, as System Settings' Renew DHCP Lease does. Needs root.
 /// macOS has no "release": the lease is given up only by turning DHCP off.
 pub fn dhcp(index: u32, renew: bool) -> Result<(), String> {

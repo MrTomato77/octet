@@ -1840,7 +1840,15 @@ $("apply").onclick = async () => {
       await new Promise(res => setTimeout(res, 1000));   // let the new address settle
       // Back on DHCP, the leased DNS servers arrive a moment after Apply: test those, not the old ones.
       if (tauri) { await reload().catch(() => {}); renderAdapter(); }
-      const probe = ip => ip ? net("ping", { address: ip }).then(v => v?.ms ?? v, () => null) : Promise.resolve(undefined);
+      // macOS brings the routes up a moment after the address: there, a few tries before "not answering".
+      const probe = async ip => {
+        if (!ip) return undefined;
+        for (let n = mac ? 4 : 1; ; ) {
+          const ms = await net("ping", { address: ip }).then(v => v?.ms ?? v, () => null);
+          if (ms !== null || !--n) return ms;
+          await new Promise(res => setTimeout(res, 500));
+        }
+      };
       const [gw, dns] = await Promise.all([probe(a.cfg.gateway), probe(a.cfg.dns1 === a.cfg.gateway ? "" : a.cfg.dns1)]);
       const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${ms} ms`;
       const fail = gw === null || dns === null;
@@ -2212,7 +2220,10 @@ function updShow() {
   el.dataset.tip = upd.s === "failed" ? upd.err : "";
   el.dataset.s = upd.s; el.style.setProperty("--p", upd.p);
   el.querySelector(".pct").textContent = upd.s === "getting" ? `${Math.round(upd.p * 100)}%` : "";
-  if (was === upd.s) return;
+  // The same state can still have new words: the version arrives after the first paint.
+  const same = was === upd.s && el.dataset.say === say;
+  el.dataset.say = say;
+  if (same) return;
   // The icon pops in, turned a little, as the words roll over.
   const i = el.querySelector(".upd-say i");
   i.className = `ph ${icon}`;

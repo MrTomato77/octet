@@ -57,6 +57,9 @@ pub fn parse_subnet(value: &str) -> Result<u8, String> {
 const DNS: &str = "octet:set-dns";
 /// Same: release or renew the DHCP lease through the API.
 const LEASE: &str = "octet:lease";
+/// macOS: wait until the new address is on the device (see `crate::mac::wait_address`).
+#[cfg(target_os = "macos")]
+const WAIT: &str = "octet:wait-address";
 
 /// An extra address's mask: a dotted mask or a prefix length.
 #[cfg(not(target_os = "macos"))]
@@ -136,6 +139,7 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                         c.push(ipv4(&cfg.gateway, "Gateway")?.to_string());
                     }
                     out.push(c);
+                    out.push(cmd(&[WAIT, &index.to_string(), &address]));
                 }
             }
             if *dns {
@@ -371,6 +375,12 @@ fn run(cmds: Vec<Vec<String>>) -> Result<(), String> {
             crate::net::set_dns(index, &c[2], c[3] == "register")?;
             continue;
         }
+        #[cfg(target_os = "macos")]
+        if c[0] == WAIT {
+            let (index, address) = (c[1].parse().map_err(|_| "Bad interface index".to_string())?, ipv4(&c[2], "IP address")?);
+            crate::mac::wait_address(index, address);
+            continue;
+        }
         if c[0] == LEASE {
             let index = c[1].parse().map_err(|_| "Bad interface index".to_string())?;
             crate::net::dhcp(index, c[2] == "renew")?;
@@ -488,6 +498,7 @@ mod tests {
         let wifi = |cfg: Cfg, ip, dns| Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![] };
         assert_eq!(got(&wifi(cfg(), true, true)).unwrap(), [
             "networksetup -setmanual Wi-Fi 192.168.1.50 255.255.255.0 192.168.1.1",
+            "octet:wait-address 12 192.168.1.50",
             "networksetup -setdnsservers Wi-Fi 1.1.1.1 8.8.8.8",
         ]);
         let mut c = cfg();
@@ -496,7 +507,7 @@ mod tests {
         c.ip_auto = false;
         assert!(commands(&wifi(c.clone(), true, false)).is_err(), "static IP with automatic DNS");
         c.dns_auto = false;
-        assert_eq!(got(&wifi(c, true, false)).unwrap(), ["networksetup -setmanual Wi-Fi 192.168.1.50 255.255.255.0"], "no gateway, no router");
+        assert_eq!(got(&wifi(c, true, false)).unwrap(), ["networksetup -setmanual Wi-Fi 192.168.1.50 255.255.255.0", "octet:wait-address 12 192.168.1.50"], "no gateway, no router");
         assert_eq!(got(&Request::Enable { index: 4, name: "USB LAN".into(), on: false }).unwrap(), ["networksetup -setnetworkserviceenabled USB LAN off"]);
         // The name is one argument however it is spelled; one that reads as an option is refused.
         assert_eq!(commands(&Request::Enable { index: 4, name: "a b; rm".into(), on: true }).unwrap()[0][2], "a b; rm");

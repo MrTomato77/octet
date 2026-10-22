@@ -1,6 +1,6 @@
 //! Updates for a portable exe: the whole new Octet.exe from the latest GitHub release, checked
 //! against our Ed25519 signature (made in CI) before it replaces this one. Nothing runs unsigned.
-//! On macOS the same, for the whole Octet.app (zipped in the release).
+//! On macOS the same, for the whole Octet.app (in the release's Octet.dmg).
 
 use crate::net::https_get;
 
@@ -12,7 +12,7 @@ const KEY: [u8; 32] = [
 const REPO: &str = "MrTomato77/octet";
 /// This system's file in each release; its signature is beside it (".sig").
 #[cfg(target_os = "macos")]
-const ASSET: &str = "Octet-macOS.zip";
+const ASSET: &str = "Octet.dmg";
 #[cfg(not(target_os = "macos"))]
 const ASSET: &str = "Octet.exe";
 
@@ -71,20 +71,34 @@ fn bundle() -> Option<std::path::PathBuf> {
     (app.extension()? == "app").then(|| app.to_path_buf())
 }
 
-/// The zip holds Octet.app, which takes the place of the bundle this runs from; the old one becomes
-/// Octet.app.old, removed on the next start. Unpacked here, so it carries no quarantine flag.
+/// Copies Octet.app out of the disk image `dmg` into the folder `into`. True when it is all there.
 #[cfg(target_os = "macos")]
-fn place(zip: &[u8]) -> Result<(), String> {
+fn unpack(dmg: &std::path::Path, into: &std::path::Path) -> bool {
+    use std::process::Command;
+    let mnt = into.join("mnt");
+    let attached = Command::new("/usr/bin/hdiutil").args(["attach", "-quiet", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint"])
+        .arg(&mnt).arg(dmg).status().is_ok_and(|s| s.success());
+    if !attached {
+        return false;
+    }
+    let copied = Command::new("/usr/bin/ditto").arg(mnt.join("Octet.app")).arg(into.join("Octet.app")).status().is_ok_and(|s| s.success());
+    let _ = Command::new("/usr/bin/hdiutil").args(["detach", "-quiet", "-force"]).arg(&mnt).status();
+    copied && into.join("Octet.app/Contents/MacOS/octet").is_file()
+}
+
+/// The disk image holds Octet.app, which takes the place of the bundle this runs from; the old one
+/// becomes Octet.app.old, removed on the next start. Copied out here, so it carries no quarantine flag.
+#[cfg(target_os = "macos")]
+fn place(dmg: &[u8]) -> Result<(), String> {
     use std::fs;
     let app = bundle().ok_or("Updates install into Octet.app, and this copy isn't one")?;
     let tmp = app.with_extension("app.new");
     let _ = fs::remove_dir_all(&tmp);
     fs::create_dir_all(&tmp).map_err(|e| format!("Could not save the update: {e}"))?;
     let archive = tmp.join(ASSET);
-    fs::write(&archive, zip).map_err(|e| format!("Could not save the update: {e}"))?;
-    let unzipped = std::process::Command::new("/usr/bin/ditto").arg("-x").arg("-k").arg(&archive).arg(&tmp).status().is_ok_and(|s| s.success());
+    fs::write(&archive, dmg).map_err(|e| format!("Could not save the update: {e}"))?;
     let new = tmp.join("Octet.app");
-    if !unzipped || !new.join("Contents/MacOS/octet").is_file() {
+    if !unpack(&archive, &tmp) {
         let _ = fs::remove_dir_all(&tmp);
         return Err("The update is not a complete Octet.app: not installed".into());
     }
@@ -122,6 +136,20 @@ mod tests {
         assert!(newer("0.2.0", "0.1.99"));
         assert!(!newer("v0.1.7", "0.1.7"));
         assert!(!newer("0.1.6", "0.1.7"));
+    }
+
+    /// Copies the app out of a built disk image: `crates/octet/macos/bundle.sh --native`, then
+    /// `cargo test -p octet unpacks_the_dmg -- --ignored`.
+    #[test]
+    #[ignore]
+    #[cfg(target_os = "macos")]
+    fn unpacks_the_dmg() {
+        let dmg = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/release/Octet.dmg");
+        let into = std::env::temp_dir().join(format!("octet-unpack-{}", std::process::id()));
+        std::fs::create_dir_all(&into).unwrap();
+        assert!(unpack(&dmg, &into), "Octet.app comes out of {}", dmg.display());
+        assert!(!into.join("mnt/Octet.app").exists(), "the image is detached afterwards");
+        std::fs::remove_dir_all(&into).unwrap();
     }
 
     #[test]
