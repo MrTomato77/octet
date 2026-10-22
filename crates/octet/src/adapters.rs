@@ -1,4 +1,5 @@
-//! Read-only snapshot of the machine's IPv4 adapters. Nothing here changes Windows settings.
+//! Read-only snapshot of the machine's IPv4 adapters (on macOS, its network services).
+//! Nothing here changes settings.
 
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
@@ -597,6 +598,52 @@ mod native {
             }
         }
         Ok(out)
+    }
+}
+
+/// macOS reader: the network services (see mac.rs), with what the device and the Wi-Fi card add.
+#[cfg(target_os = "macos")]
+mod native {
+    use super::{Raw, Wifi};
+    use crate::mac;
+
+    pub fn read() -> Result<Vec<Raw>, String> {
+        let (names, links) = (mac::display_names(), mac::links());
+        Ok(mac::read()?
+            .into_iter()
+            .map(|s| {
+                let dev = s.description;
+                let link = links.get(&dev);
+                let up = s.status == "Up";
+                let w = if s.wifi_card && up { mac::wlan(&dev) } else { None };
+                Raw {
+                    id: s.id,
+                    index: s.index,
+                    name: s.name,
+                    description: names.get(&dev).map_or(dev.clone(), |n| format!("{n} ({dev})")),
+                    mac: link.map(|l| l.mac.clone()).unwrap_or_default(),
+                    status: s.status,
+                    dhcp: s.dhcp,
+                    dhcp_server: s.dhcp_server,
+                    register: false,   // a Windows (Active Directory) setting; macOS has none
+                    ip: s.ip,
+                    subnet: s.subnet,
+                    gateway: s.gateway,
+                    dns: s.dns,
+                    static_dns: s.static_dns,
+                    ssid: w.as_ref().map(|w| w.ssid.clone()).unwrap_or_default(),
+                    speed: w.as_ref().map(|w| w.rate).or(link.map(|l| l.speed)).filter(|_| up).unwrap_or(0),
+                    phy: w.as_ref().map(|w| w.phy.clone()).unwrap_or_default(),
+                    mhz: w.as_ref().map_or(0, |w| w.mhz),
+                    ppp: false,
+                    suffix: s.suffix,
+                    ipv6: link.map(|l| l.ipv6.clone()).unwrap_or_default(),
+                    lease_got: s.lease_got,
+                    lease_ends: s.lease_ends,
+                    wifi: w.map(|w| Wifi { signal: w.signal, bssid: w.bssid, security: w.security }),
+                }
+            })
+            .collect())
     }
 }
 

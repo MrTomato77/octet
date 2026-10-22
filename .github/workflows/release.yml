@@ -1,5 +1,5 @@
 # Builds Octet.exe on GitHub's Windows runners for every v* tag and attaches it,
-# its SHA-256 and the third-party notices to a draft release.
+# its SHA-256 and the third-party notices to a draft release; then Octet.dmg on macOS.
 name: release
 on:
   push:
@@ -35,6 +35,33 @@ jobs:
           if ((Get-Item Octet.exe.sig).Length -ne 64) { throw "Signing failed" }
           gh release create $env:GITHUB_REF_NAME --draft --title "Octet $($env:GITHUB_REF_NAME.TrimStart('v'))" `
             --notes "SHA-256 of Octet.exe: ``$hash``" Octet.exe Octet.exe.sha256 Octet.exe.sig THIRD-PARTY-NOTICES.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OCTET_SIGNING_KEY: ${{ secrets.OCTET_SIGNING_KEY }}
+  # After the Windows job, so the draft release exists to add the Mac build to.
+  mac:
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --release -p octet
+      # Universal Octet.app (Apple silicon and Intel), ad-hoc signed, in Octet.dmg.
+      - run: crates/octet/macos/bundle.sh
+      - if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          cp target/release/Octet.dmg Octet.dmg
+          hash=$(shasum -a 256 Octet.dmg | cut -d' ' -f1)
+          echo "$hash  Octet.dmg" > Octet.dmg.sha256
+          # Signed like Octet.exe, for the updater. macOS' own openssl (LibreSSL) can't sign Ed25519.
+          brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
+          printf '%s\n' "$OCTET_SIGNING_KEY" > key.pem
+          "$(brew --prefix openssl@3)/bin/openssl" pkeyutl -sign -inkey key.pem -rawin -in Octet.dmg -out Octet.dmg.sig
+          rm key.pem
+          test "$(stat -f %z Octet.dmg.sig)" = 64
+          gh release upload "$GITHUB_REF_NAME" Octet.dmg Octet.dmg.sha256 Octet.dmg.sig
         env:
           GH_TOKEN: ${{ github.token }}
           OCTET_SIGNING_KEY: ${{ secrets.OCTET_SIGNING_KEY }}

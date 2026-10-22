@@ -1,8 +1,13 @@
-//! Small Windows network helpers: elevation check, ARP probe, ping, change notifications.
+//! Small network helpers: elevation check, ARP probe, ping, change notifications.
+//! Windows here; the macOS versions are in mac.rs.
 
 use std::net::Ipv4Addr;
 
+#[cfg(target_os = "macos")]
+pub use crate::mac::{arp, computer_name, dhcp, elevated, hostname, https_get_with, neighbour, ping, tcping, watch};
+
 /// IPv4 in the byte order the IP Helper API wants (network order in a native u32).
+#[cfg(windows)]
 fn ip_u32(ip: Ipv4Addr) -> u32 {
     u32::from_ne_bytes(ip.octets())
 }
@@ -10,10 +15,6 @@ fn ip_u32(ip: Ipv4Addr) -> u32 {
 #[cfg(windows)]
 pub fn elevated() -> bool {
     unsafe { windows_sys::Win32::UI::Shell::IsUserAnAdmin() != 0 }
-}
-#[cfg(not(windows))]
-pub fn elevated() -> bool {
-    false
 }
 
 /// Who answers ARP for `ip` on an attached subnet, as "AA-BB-..". None = nobody (or not reachable by ARP).
@@ -23,10 +24,6 @@ pub fn arp(ip: Ipv4Addr) -> Option<String> {
     let mut len = mac.len() as u32;
     let r = unsafe { windows_sys::Win32::NetworkManagement::IpHelper::SendARP(ip_u32(ip), 0, mac.as_mut_ptr().cast(), &mut len) };
     (r == 0 && len >= 6).then(|| mac[..len as usize].iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
-}
-#[cfg(not(windows))]
-pub fn arp(_: Ipv4Addr) -> Option<String> {
-    None
 }
 
 /// The name a device on the network goes by (reverse DNS, which on Windows
@@ -47,10 +44,6 @@ pub fn hostname(ip: Ipv4Addr) -> Option<String> {
         (r == 0 && len > 0).then(|| String::from_utf16_lossy(&host[..len]))
     }
 }
-#[cfg(not(windows))]
-pub fn hostname(_: Ipv4Addr) -> Option<String> {
-    None
-}
 
 /// This computer's name, as others on the network see it ("MRTOMATO-PC").
 #[cfg(windows)]
@@ -62,10 +55,6 @@ pub fn computer_name() -> String {
         return String::new();
     }
     String::from_utf16_lossy(&buf[..len as usize])
-}
-#[cfg(not(windows))]
-pub fn computer_name() -> String {
-    String::new()
 }
 
 /// The address the internet sees, with who it belongs to. Asked only when the user clicks
@@ -125,10 +114,6 @@ pub fn https_get_with(host: &str, path: &str, mut progress: impl FnMut(f32)) -> 
         body
     }
 }
-#[cfg(not(windows))]
-pub fn https_get_with(_: &str, _: &str, _: impl FnMut(f32)) -> Option<Vec<u8>> {
-    None
-}
 
 /// Gives up the DHCP lease (`renew` false) or asks for one (true), like ipconfig /release and
 /// /renew but in-process. Needs administrator rights; renew waits for the DHCP server.
@@ -150,10 +135,6 @@ pub fn dhcp(index: u32, renew: bool) -> Result<(), String> {
         121 | 1460 => Err("No DHCP server answered".into()),   // semaphore timeout / timeout
         e => Err(format!("Windows could not {} the lease (error {e})", if renew { "renew" } else { "release" })),
     }
-}
-#[cfg(not(windows))]
-pub fn dhcp(_: u32, _: bool) -> Result<(), String> {
-    Err("Octet only changes settings on Windows".into())
 }
 /// ipinfo's answer: {"ip": "...", "city": "...", "org": "AS7470 True Internet ..."}.
 fn parse_public(json: &[u8]) -> Result<Public, String> {
@@ -224,9 +205,10 @@ pub fn flush_dns() -> bool {
     }
     unsafe { DnsFlushResolverCache() != 0 }
 }
-#[cfg(not(windows))]
+/// macOS keeps the cache in mDNSResponder, which only root may tell to drop it: one password prompt.
+#[cfg(target_os = "macos")]
 pub fn flush_dns() -> bool {
-    false
+    crate::change::elevate(&crate::change::Request::FlushDns).is_ok()
 }
 
 /// One ICMP echo; round-trip milliseconds, or None when there is no reply in `timeout_ms`.
@@ -253,10 +235,6 @@ pub fn ping(ip: Ipv4Addr, from: Option<Ipv4Addr>, timeout_ms: u32) -> Option<u32
         let rtt = u32::from_ne_bytes(reply[8..12].try_into().ok()?);
         (n > 0 && status == 0).then_some(rtt)
     }
-}
-#[cfg(not(windows))]
-pub fn ping(_: Ipv4Addr, _: Option<Ipv4Addr>, _: u32) -> Option<u32> {
-    None
 }
 
 /// What a TCP "ping" found.
@@ -325,10 +303,6 @@ pub fn tcping(ip: Ipv4Addr, port: u16, from: Option<Ipv4Addr>, timeout_ms: u32) 
         }
     }
 }
-#[cfg(not(windows))]
-pub fn tcping(_: Ipv4Addr, _: u16, _: Option<Ipv4Addr>, _: u32) -> Option<Tcp> {
-    None
-}
 
 /// What the neighbour (ARP) cache holds for `ip` on interface `index`, as "AA-BB-..".
 /// Sends nothing: it reads what Windows already learned (say, while a ping went out).
@@ -346,10 +320,6 @@ pub fn neighbour(ip: Ipv4Addr, index: u32) -> Option<String> {
     }
     let mac = &row.PhysicalAddress[..6];
     (mac != [0; 6]).then(|| mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
-}
-#[cfg(not(windows))]
-pub fn neighbour(_: Ipv4Addr, _: u32) -> Option<String> {
-    None
 }
 
 /// Who holds an address, for the Scan grid.
@@ -393,8 +363,6 @@ pub fn watch(on_change: fn()) {
         NotifyUnicastIpAddressChange(AF_INET, Some(addr), std::ptr::null(), false, &mut h2);
     }
 }
-#[cfg(not(windows))]
-pub fn watch(_: fn()) {}
 
 #[cfg(test)]
 mod tests {
@@ -436,6 +404,7 @@ mod tests {
 
     /// Only made-up interfaces: these must never change a real adapter.
     #[test]
+    #[cfg(windows)]
     fn refuses_a_missing_adapter() {
         assert_eq!(super::set_dns(999_999, "1.1.1.1", false), Err("That adapter is gone".into()));
         assert!(super::dhcp(999_999, true).is_err());
@@ -449,6 +418,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn flushes_dns_cache() {
         let t = std::time::Instant::now();
         assert!(super::flush_dns());
