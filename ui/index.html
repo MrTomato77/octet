@@ -3113,7 +3113,7 @@ function paintSpeed() {
 // turns to STOP. Stopping plays that backwards. A finished test splits the dial in two: download slides left,
 // upload comes out of it to the right, and the key turns to TEST AGAIN.
 // Each piece runs on its own slice of one timeline, so the parts overlap instead of popping one after another.
-let speedRaf = 0, speedN = 0;
+let speedRaf = 0, speedN = 0, speedV = 0, speedAt = 0;
 const SC = 120, SY = 100, SR = 80, VY = 6, VH = 188, LEG_MS = 8000;
 const mix = (a, b, t) => a + (b - a) * t, clamp01 = x => Math.min(1, Math.max(0, x));
 const inOut = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
@@ -3132,7 +3132,10 @@ function speedDraw() {
   tween(speed.mt, open, open ? 900 : 650, at); tween(speed.zt, sum, 800, at);
   const m = tweenAt(speed.mt, at), z = tweenAt(speed.zt, at);
   const v = s === "run" ? speed.res[speed.leg] ?? 0 : s === "done" ? speed.res.down ?? 0 : 0, to = open ? Math.min(1, Math.log10(1 + v) / 3) : 0;
-  speedN = calm.matches || Math.abs(to - speedN) < 0.002 ? to : speedN + (to - speedN) * 0.1;
+  // The needle hangs on a spring: it swings toward each new reading, runs a touch past and settles back, like a real gauge.
+  const dt = Math.min(48, at - (speedAt || at)) / 1000; speedAt = at;
+  speedV += ((to - speedN) * 90 - speedV * 12) * dt; speedN += speedV * dt;
+  if (calm.matches || (Math.abs(to - speedN) < 0.0005 && Math.abs(speedV) < 0.002)) { speedN = to; speedV = 0; }
   const set = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
   // Opening: face 0-.3, power stem to needle .1-.75, LED ring to track 0-.8 (overshoots a little), hub .3-.8, scale and reading .55-1, stop .7-1.
   const grow = slice(m, 0, 0.8, open ? over : inOut), turn = slice(m, 0.1, 0.75), late = slice(m, 0.55, 1);
