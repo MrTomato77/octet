@@ -3155,6 +3155,12 @@ function speedDraw() {
   set("sp-again", { x: SC - 34, y: cy + 1, opacity: slice(z, 0.6, 1) });
   $("sp-go").style.display = open ? "none" : ""; $("sp-stop").style.display = open ? "" : "none";
   set("sp-under", { r: r + 14 });
+  // Before Start the rows under the dial are empty, so the button sits in the middle of the view instead; it rises into place as it opens.
+  const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / 214);
+  const head = svg.closest(".dlg-body").querySelector(".dlg-head").getBoundingClientRect(), foot = $("speed-note").getBoundingClientRect();
+  const centre = (head.bottom + foot.top) / 2 - (bx.top - (speed.lift ?? 0) + (bx.height - 214 * k) / 2 + SY * k);
+  speed.lift = centre * (1 - slice(m, 0, 0.8));
+  svg.style.transform = `translateY(${speed.lift}px)`;
   const secs = s === "idle" || s === "stopped" || s === "error" ? 0 : ((speed.t1 || at) - speed.t0) / 1000;
   $("speed-lap").textContent = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${(secs % 60).toFixed(2).padStart(5, "0")}`;
   const moving = [speed.mt, speed.zt, speed.qt].some(o => at - o.t0 < o.ms) || Math.abs(to - speedN) > 0;
