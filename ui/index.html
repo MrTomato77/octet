@@ -664,7 +664,8 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 /* Game HUD around it: a floor grid that runs at the line's speed, a lap timer, two side gauges, gears */
 .speed-view { --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
 .sp-road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity 600ms var(--ease-out); }
-.speed-view[data-phase="idle"] .sp-road { opacity: 0; transition-duration: 300ms; }
+/* Before Start the road waits, parked and dimmer, its lines meeting behind the button */
+.speed-view[data-phase="idle"] .sp-road { opacity: 0.55; }
 .speed-view .dlg-body { position: relative; }
 .sp-lap { margin-left: auto; font-family: var(--mono); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .speed-view[data-phase="idle"] .sp-lap { color: var(--faint); }
@@ -3219,7 +3220,8 @@ function speedRoad(now) {
   if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
   const dt = Math.min(64, now - (road.at || now)); road.at = now;
   const mbps = speed.state === "run" ? speed.res[speed.leg] ?? 0 : 0;
-  const want = (speed.leg === "up" && speed.state === "run" ? -1 : 1) * (0.15 + 2.6 * Math.min(1, Math.log10(1 + mbps) / 3));
+  const parked = speed.state !== "run" && speed.state !== "done";   // before Start (or after a stop): standing still
+  const want = parked ? 0 : (speed.leg === "up" && speed.state === "run" ? -1 : 1) * (0.15 + 2.6 * Math.min(1, Math.log10(1 + mbps) / 3));
   road.v += (want - road.v) * Math.min(1, dt / 700);
   if (!calm.matches) road.off = ((road.off + road.v * dt / 1000) % 1 + 1) % 1;
   const c = cv.getContext("2d"), css = getComputedStyle(cv);
