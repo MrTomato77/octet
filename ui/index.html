@@ -623,14 +623,26 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .speed-view .dlg-body { height: 100%; box-sizing: border-box; grid-template-rows: auto 1fr auto auto; }
 .sp-dial { min-height: 0; display: grid; grid-template-rows: 1fr auto; gap: var(--s2); }
 .sp-dial svg { width: 100%; height: 100%; min-height: 0; display: block; }
-.sp-dial .track, .sp-dial .arc { fill: none; stroke-width: 10; stroke-linecap: round; }
+.sp-dial .track, .sp-dial .arc { fill: none; stroke-linecap: round; }
 .sp-dial .track { stroke: var(--border); }
-.sp-dial .arc { stroke: var(--accent); stroke-dasharray: 0 1; transition: stroke 300ms; }
+.sp-dial .ring { fill: none; stroke: var(--accent); stroke-width: 3; }
+.sp-dial .arc { stroke: var(--accent); stroke-width: 10; transition: stroke 300ms; }
 .sp-dial .arc.up { stroke: var(--ok); }
+.sp-dial .disc { fill: var(--accent); transition: fill 300ms; }
 .sp-dial .tick { fill: var(--faint); font-size: 10px; text-anchor: middle; dominant-baseline: middle; }
-.sp-dial .needle { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; transform-box: view-box; transform-origin: 120px 100px; transition: opacity 200ms; }
-.sp-dial .now { fill: var(--ink); font-size: 30px; font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.sp-dial .hub, .sp-dial .ctl { fill: var(--ink); }
+.sp-dial .cic { fill: var(--surface); }
+.sp-dial .lbl { fill: var(--accent-ink); font-size: 14px; font-weight: 600; text-anchor: middle; }
+.sp-dial .now { fill: var(--ink); font-size: 28px; font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
 .sp-dial .unit { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+.sp-dial .hit { fill: transparent; cursor: pointer; outline: none; }
+.sp-dial .hit:focus-visible { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 3; }
+/* A phone hotspot paints the button amber; a disconnected adapter greys it out */
+#speed-dial.warn .disc, #speed-dial.warn .ring { fill: oklch(0.78 0.13 75); stroke: oklch(0.78 0.13 75); }
+#speed-dial.warn .lbl { fill: oklch(0.25 0.03 75); }
+#speed-dial.off .disc { fill: var(--border-strong); }
+#speed-dial.off .ring { stroke: var(--border-strong); }
+#speed-dial.off #sp-go { cursor: default; }
 .sp-steps { display: flex; justify-content: center; gap: var(--s6); }
 .sp-steps .st { display: flex; align-items: center; gap: 6px; color: var(--faint); }
 .sp-steps .st i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); transition: background 300ms; }
@@ -645,10 +657,9 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-stats > div > span:first-child { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
 .sp-stats .u { color: var(--faint); }
 .sp-stats b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.sp-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.sp-foot { display: flex; justify-content: center; min-height: 20px; }
 .sp-note { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-note.bad { color: var(--bad); }
-#speed-go.warn { background: var(--warn, oklch(0.78 0.13 75)); border-color: transparent; color: oklch(0.25 0.03 75); }
 .window:has(#open-settings.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
 #open-settings.on i, #open-settings.on .name { color: var(--sel-ink); }
 /* Settings take effect as you change them, so the dialog only needs a close button */
@@ -986,13 +997,21 @@ html.app, html.app body { overflow: hidden; }
             <button type="button" class="icon-btn" id="speed-close" title="Back (Esc)" aria-label="Back"><i class="ph ph-x"></i></button>
           </div>
           <div class="sp-dial">
-            <svg viewBox="0 0 240 180" aria-hidden="true">
-              <path class="track" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
-              <path class="arc" id="speed-arc" pathLength="1" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
-              <text class="tick" x="51" y="169">0</text><text class="tick" x="55" y="27">10</text><text class="tick" x="190" y="31">100</text><text class="tick" x="189" y="169">1000</text>
-              <line class="needle" id="speed-needle" x1="160" y1="100" x2="192" y2="100"/>
-              <text class="now" id="speed-now" x="120" y="106">-</text>
-              <text class="unit" id="speed-unit" x="120" y="128">Mbps</text>
+            <svg viewBox="0 0 240 214" id="speed-dial">
+              <circle class="track" id="sp-track" cx="120" cy="100"/>
+              <circle class="ring" id="sp-ring" cx="120" cy="100"/>
+              <circle class="arc" id="speed-arc" cx="120" cy="100"/>
+              <circle class="disc" id="sp-disc" cx="120" cy="100"/>
+              <g id="sp-ticks"><text class="tick" x="51" y="169">0</text><text class="tick" x="55" y="27">10</text><text class="tick" x="190" y="31">100</text><text class="tick" x="189" y="169">1000</text></g>
+              <path class="needle" id="speed-needle"/>
+              <circle class="hub" id="sp-hub" cx="120" cy="100"/>
+              <text class="lbl" id="sp-lbl" x="120" y="122">Start</text>
+              <text class="now" id="speed-now" x="120" y="142"></text>
+              <text class="unit" id="speed-unit" x="120" y="160"></text>
+              <circle class="ctl" id="sp-ctl" cx="120" cy="192"/>
+              <path class="cic" id="sp-cic"/>
+              <circle class="hit" id="sp-go" cx="120" cy="100" r="44" role="button" tabindex="0" aria-label="Start"/>
+              <circle class="hit" id="sp-stop" cx="120" cy="192" r="20" role="button" tabindex="0" aria-label="Stop"/>
             </svg>
             <div class="sp-steps">
               <span class="st" id="speed-lat"><i></i><span class="u">ms</span><b id="speed-ms">-</b></span>
@@ -1007,7 +1026,6 @@ html.app, html.app body { overflow: hidden; }
           </div>
           <div class="sp-foot">
             <span class="sp-note" id="speed-note"></span>
-            <button type="button" class="btn primary" id="speed-go"><i class="ph ph-play"></i><span>Start</span></button>
           </div>
         </div>
       </section>
@@ -2927,17 +2945,21 @@ function speedEnd(state) {
   Object.assign(speed, { state, leg: state === "done" ? "" : speed.leg });
   paintSpeed(); speedDraw();
 }
-$("speed-go").onclick = () => speed.state === "run" ? speedEnd("stopped") : speedStart();
+// Start is the button in the middle; once it opens into the dial, the small one under it stops (or, when done, runs it again).
+$("sp-go").onclick = () => speed.live && speed.m < 0.5 && speedStart();
+$("sp-stop").onclick = () => speed.state === "run" ? speedEnd("stopped") : speed.state === "done" && speedStart();
+for (const id of ["sp-go", "sp-stop"]) $(id).onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $(id).onclick(); } };
 function paintSpeed() {
   const a = adapters[sel], s = speed.state;
   // Another adapter on screen: a test for the last one stops, and its results go with it.
   if (a && speed.aid && a.id !== speed.aid) { if (s === "run") speedEnd("stopped"); Object.assign(speed, { state: "idle", res: {}, used: 0, aid: null }); speedDraw(); return paintSpeed(); }
   const live = a?.state === "up" && validIp(a.cfg.address || "");
   $("speed-via").textContent = a ? `${a.name}${a.cfg.address ? " · " + a.cfg.address : ""}` : "";
-  const go = $("speed-go"), warn = s !== "run" && live && metered(a);
-  go.disabled = !live; go.classList.toggle("primary", s !== "run"); go.classList.toggle("warn", warn);
-  go.querySelector("i").className = "ph " + (s === "run" ? "ph-stop" : s === "idle" ? "ph-play" : "ph-arrow-clockwise");
-  go.querySelector("span").textContent = s === "run" ? L("Stop", "หยุด") : s === "idle" ? L("Start", "เริ่ม") : L("Again", "อีกครั้ง");
+  const warn = s !== "run" && live && metered(a);
+  speed.live = live;
+  $("speed-dial").classList.toggle("warn", warn); $("speed-dial").classList.toggle("off", !live);
+  $("sp-lbl").textContent = L("Start", "เริ่ม"); $("sp-go").setAttribute("aria-label", L("Start", "เริ่ม"));
+  $("sp-stop").setAttribute("aria-label", s === "run" ? L("Stop", "หยุด") : L("Again", "อีกครั้ง"));
   const mb = Math.round(speed.used / 1e6);
   $("speed-note").textContent = !live ? L("This adapter isn't connected", "adapter นี้ยังไม่ได้เชื่อมต่อ")
     : s === "run" ? L(`${mb} MB so far`, `ใช้ไป ${mb} MB`)
@@ -2954,24 +2976,50 @@ function paintSpeed() {
     roll(st.querySelector("b"), n(val));
   }
   // The middle of the dial: the reading under way, or the download once it's over.
-  $("speed-now").textContent = s === "run" ? n(now === "ms" ? speed.res.ms : speed.res[now]) : s === "error" ? "-" : n(speed.res.down);
+  $("speed-now").textContent = s === "run" ? n(now === "ms" ? speed.res.ms : speed.res[now]) : n(speed.res.down);
   $("speed-unit").textContent = s === "run" && now === "ms" ? "ms" : `Mbps ${now === "up" ? "↑" : "↓"}`;
   roll($("speed-jit"), n(speed.res.jit));
   roll($("speed-dl"), n(speed.res.downLoad)); roll($("speed-ul"), n(speed.res.upLoad));
 }
-// The dial: log scale, 0 to 1000 Mbps, so Wi-Fi and gigabit both sit somewhere readable. The needle eases toward each new reading.
+// The dial: log scale, 0 to 1000 Mbps, so Wi-Fi and gigabit both sit somewhere readable.
+// Start is a round button that opens into the dial: its edge grows into the track, its play triangle swings round and
+// stretches into the needle, its fill shrinks to the hub, and a small stop button grows out of the gap at the bottom.
+// Stopping folds it all back into the button; a finished test stays open, and the small button's square turns back into play.
 let speedRaf = 0, speedN = 0;
+const SC = 120, SY = 100, SR = 80;
+const PLAY = [[-5, -7], [7, 0], [7, 0], [-5, 7]], STOP = [[-6, -6], [6, -6], [6, 6], [-6, 6]];
+const mix = (a, b, t) => a + (b - a) * t;
 function speedDraw() {
   cancelAnimationFrame(speedRaf);
-  const s = speed.state, v = s === "run" ? speed.res[speed.leg] ?? 0 : s === "error" ? 0 : speed.res.down ?? 0;
-  const to = Math.min(1, Math.log10(1 + v) / 3);
-  speedN = calm.matches ? to : speedN + (to - speedN) * 0.12;
-  const arc = $("speed-arc");
-  arc.style.strokeDasharray = `${speedN} 1`; arc.style.opacity = speedN > 0.002 ? 1 : 0;
-  arc.classList.toggle("up", s === "run" && speed.leg === "up");
-  const nd = $("speed-needle");
-  nd.style.transform = `rotate(${135 + 270 * speedN}deg)`; nd.style.opacity = s === "run" && speed.leg ? 1 : 0;
-  if (speedOpen() && (s === "run" || Math.abs(to - speedN) > 0.001)) speedRaf = requestAnimationFrame(speedDraw);
+  const s = speed.state, open = s === "run" || s === "done" ? 1 : 0, sq = s === "run" ? 1 : 0;
+  const v = s === "run" ? speed.res[speed.leg] ?? 0 : s === "done" ? speed.res.down ?? 0 : 0, to = Math.min(1, Math.log10(1 + v) / 3);
+  const step = (x, t, k) => calm.matches ? t : Math.abs(t - x) < 0.002 ? t : x + (t - x) * k;
+  speed.m = calm.matches ? open : (speed.m ?? 0) + Math.sign(open - (speed.m ?? 0)) * Math.min(Math.abs(open - (speed.m ?? 0)), 1 / 26);
+  speed.sq = step(speed.sq ?? 0, sq, 0.2); speedN = step(speedN, open ? to : 0, 0.12);
+  const e = ease(speed.m), r = mix(40, SR, e), sweep = mix(360, 270, e), c = 2 * Math.PI * r, rot = `rotate(${90 + (360 - sweep) / 2} ${SC} ${SY})`;
+  const dash = f => `${f * sweep / 360 * c} ${c}`, show = Math.max(0, e * 2 - 1);
+  const at = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
+  at("sp-track", { r, transform: rot, "stroke-width": 10 * e, "stroke-dasharray": dash(1), opacity: e });
+  at("sp-ring", { r, transform: rot, "stroke-dasharray": dash(1), opacity: 1 - e });
+  at("speed-arc", { r, transform: rot, "stroke-dasharray": dash(speedN), opacity: e > 0.5 && speedN > 0.003 ? 1 : 0 });
+  $("speed-arc").classList.toggle("up", s === "run" && speed.leg === "up");
+  at("sp-disc", { r: 40 * (1 - e) });
+  at("sp-ticks", { opacity: show });
+  // The play triangle, in its own frame pointing right, becomes the needle pointing at the reading.
+  const th = mix(0, 135 + 270 * speedN, e) * Math.PI / 180, cs = Math.cos(th), sn = Math.sin(th);
+  const pts = [[mix(11, SR - 16, e), 0], [mix(-7, -10, e), mix(-10, -4, e)], [mix(-7, -10, e), mix(10, 4, e)]], lift = mix(-7, 0, e);
+  at("speed-needle", { d: "M" + pts.map(([x, y]) => `${SC + x * cs - y * sn},${SY + lift + x * sn + y * cs}`).join("L") + "Z" });
+  $("speed-needle").style.fill = e < 0.5 ? "var(--accent-ink)" : "var(--ink)";
+  if ($("speed-dial").classList.contains("warn") && e < 0.5) $("speed-needle").style.fill = "oklch(0.25 0.03 75)";
+  at("sp-hub", { r: 6 * e });
+  at("sp-lbl", { opacity: Math.max(0, 1 - e * 2) });
+  at("speed-now", { opacity: show }); at("speed-unit", { opacity: show });
+  const grow = ease(Math.min(1, Math.max(0, (speed.m - 0.65) / 0.35)));
+  at("sp-ctl", { r: 15 * grow });
+  at("sp-cic", { d: "M" + PLAY.map((p, i) => `${SC + (1 - speed.sq) + mix(p[0], STOP[i][0], speed.sq) * 0.8},${192 + mix(p[1], STOP[i][1], speed.sq) * 0.8}`).join("L") + "Z", opacity: grow });
+  $("sp-go").style.display = open ? "none" : ""; $("sp-stop").style.display = open ? "" : "none";
+  const moving = speed.m !== open || speed.sq !== sq || Math.abs((open ? to : 0) - speedN) > 0.002;
+  if (speedOpen() && (s === "run" || moving)) speedRaf = requestAnimationFrame(speedDraw);
 }
 function openSpeed() {
   if (speedOpen()) return closeSpeed();
