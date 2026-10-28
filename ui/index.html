@@ -270,7 +270,7 @@ button, input, select { font: inherit; color: inherit; }
 .pchip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background 240ms; }
 .pchip .dot.up { background: var(--ok); }
 .pchip .dot.down { background: var(--bad); }
-.pchip.own { flex: none; width: 180px; transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1); min-width: 0; margin-left: auto; padding: 0 2px; cursor: default; }   /* fixed and right-aligned: a chip's name never moves it */
+.pchip.own { flex: none; width: 184px; transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1); min-width: 0; margin-left: auto; padding: 0 2px; cursor: default; }   /* fixed and right-aligned: a chip's name never moves it */
 .pchip.own .host { flex: 1; min-width: 0; display: flex; }
 .pchip.own .ip.short { width: auto; flex: 1; min-width: 0; height: calc(var(--row-h) - 4px); padding: 0 8px; background: transparent; position: relative; z-index: 1; }   /* no changed mark here, so less side room */
 .pchip.own.off { opacity: 0.4; }
@@ -280,7 +280,7 @@ button, input, select { font: inherit; color: inherit; }
 .pchip.own:not(.empty) .pbox { border-style: solid; }
 .pchip.own .pbox .ip.short { height: 100%; border: 0; box-shadow: none; padding: 0 4px 0 8px; }
 /* The port folds away until it is wanted: in the box a faint ":" offers it; typing ":" (or going right past the last octet) opens it. */
-.pchip.own.port { width: 210px; }
+.pchip.own.port { width: 214px; }
 .pchip.own .pcolon { width: 0; overflow: hidden; color: var(--faint); text-align: center; cursor: text; opacity: 0; position: relative; z-index: 1;
   transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms; }
 .pchip.own .pbox:focus-within .pcolon, .pchip.own.port .pcolon { width: 10px; opacity: 1; }
@@ -306,17 +306,6 @@ button, input, select { font: inherit; color: inherit; }
 .pfoot > span { display: flex; align-items: baseline; gap: 6px; min-width: 0; color: var(--muted); white-space: nowrap; }
 .pfoot .u { font-style: normal; font-size: 11px; color: var(--faint); margin-left: -3px; }
 .pfoot .ph { font-size: 15px; color: var(--faint); flex: none; }
-/* Speed: the footer swaps its four readings; the panel sits mid-graph until the test starts, then steps to the corner */
-.pfoot.speed > span:not(.sp), .pfoot:not(.speed) > .sp { display: none; }
-.pchip.spd { flex: none; padding: 0 7px; }
-.pchip.spd .ph { font-size: 15px; }
-.spanel { position: absolute; left: 50%; top: 50%; display: flex; flex-direction: column; align-items: center; gap: var(--s2); cursor: default;
-  translate: -50% -50%; transition: left 420ms var(--ease-out), top 420ms var(--ease-out), translate 420ms var(--ease-out); }
-.spanel.corner { left: calc(100% - var(--s2)); top: var(--s2); translate: -100% 0; flex-direction: row-reverse; }
-.spanel .snote { max-width: 300px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--muted); white-space: nowrap; }
-.spanel.bad .snote { color: var(--bad); }
-.spanel.corner .btn { height: 26px; }
-#speed-go.warn { background: var(--gw); border-color: transparent; color: var(--bg); }
 .pfoot[hidden] { display: none; }
 .pfoot b { display: inline-block; font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums; }
 .pfoot b.bad { color: var(--bad); }
@@ -362,7 +351,7 @@ button, input, select { font: inherit; color: inherit; }
 .scell.used { background: color-mix(in oklch, var(--accent) 70%, transparent); }
 /* The gateway gets its own hue: it is the one cell people look for. */
 .scell.gw { background: var(--gw); }
-.sgrid, .sfoot, .spanel { --gw: oklch(0.78 0.13 75); }
+.sgrid, .sfoot { --gw: oklch(0.78 0.13 75); }
 .scell.me { background: var(--ok); }
 .scell.edge { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--border) 60%, transparent); color: var(--faint); font: inherit; font-size: 10px; line-height: 1; }
 .scell:not(.edge):hover, .scell.pick { box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--ink) 70%, transparent); }
@@ -626,7 +615,38 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .settings-view[hidden] { display: none; }
 .settings-view.in { animation: rise var(--t-base) var(--ease-out); }
 .settings-view.out { animation: fade-out var(--t-fast) ease-in forwards; }
-#open-settings.on { background: var(--sel-fill); }
+#open-settings.on, #open-speed.on { background: var(--sel-fill); }
+#refresh[hidden] { display: none; }
+#open-speed.on i, #open-speed.on .name { color: var(--sel-ink); }
+.window:has(#open-speed.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
+/* Speed test: two big numbers, the run as a graph, the small numbers, then the button */
+.speed-view .dlg-body { height: 100%; box-sizing: border-box; grid-template-rows: auto auto 1fr auto auto; }
+.speed-view .via { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: var(--s2); }
+.sp-cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.sp-card { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 6px; padding: var(--s3) var(--s4);
+  border: 1px solid var(--border); border-radius: var(--r-item); background: var(--bg); transition: border-color 300ms, opacity 300ms; }
+.sp-card .lbl { grid-column: 1 / -1; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.sp-card b { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.sp-card .u, .sp-stats .u { color: var(--faint); }
+.sp-card.on { border-color: color-mix(in srgb, var(--accent) 60%, var(--border-strong)); }
+#speed-up.on { border-color: color-mix(in srgb, var(--ok) 60%, var(--border-strong)); }
+.sp-card.off { opacity: 0.5; }
+.sp-graph { min-height: 0; border: 1px solid var(--border); border-radius: var(--r-item); background: var(--bg); overflow: hidden; }
+#speed-svg { width: 100%; height: 100%; display: block; }
+#speed-svg .grid { stroke: var(--border); stroke-dasharray: 2 3; }
+#speed-svg .tick { fill: var(--faint); font-size: 11px; }
+#speed-svg .line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+#speed-svg .area { fill: color-mix(in srgb, var(--accent) 14%, transparent); }
+#speed-svg .line.up { stroke: var(--ok); }
+#speed-svg .area.up { fill: color-mix(in srgb, var(--ok) 14%, transparent); }
+.sp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
+.sp-stats > div { display: grid; grid-template-columns: auto 1fr; column-gap: 4px; align-items: baseline; }
+.sp-stats > div > span:first-child { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.sp-stats b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sp-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.sp-note { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-note.bad { color: var(--bad); }
+#speed-go.warn { background: var(--warn, oklch(0.78 0.13 75)); border-color: transparent; color: oklch(0.25 0.03 75); }
 .window:has(#open-settings.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
 #open-settings.on i, #open-settings.on .name { color: var(--sel-ink); }
 /* Settings take effect as you change them, so the dialog only needs a close button */
@@ -847,7 +867,8 @@ html.app, html.app body { overflow: hidden; }
       </div>
       <ul class="list" id="list"></ul>
       <div class="side-foot">
-        <button class="item" id="refresh" title="Refresh (F5)"><i class="ph ph-arrow-clockwise"></i><span class="name" data-t="refresh">Refresh</span></button>
+        <button class="item" id="open-speed" title="Speed test"><i class="ph ph-gauge"></i><span class="name" data-t="speedTest">Speed test</span></button>
+        <button class="item" id="refresh" title="Refresh (F5)" hidden><i class="ph ph-arrow-clockwise"></i><span class="name" data-t="refresh">Refresh</span></button>
         <hr>
         <button class="item" id="open-settings" title="Settings"><i class="ph ph-gear-six"></i><span class="name" data-t="settings">Settings</span></button>
       </div>
@@ -933,7 +954,7 @@ html.app, html.app body { overflow: hidden; }
         </div>
         <div class="page" id="page-probe" data-page="probe" role="tabpanel" hidden>
           <div class="pchips" id="probe-list" role="tablist" aria-label="Targets"><span class="thumb" id="probe-thumb"></span></div>
-          <div class="pgraph" id="probe-graph" role="img" aria-label="Round trips in ms, last 60 seconds"><svg id="probe-svg" preserveAspectRatio="none"></svg><div class="ptip" id="probe-tip"></div><div class="spanel" id="speed-panel" hidden><button class="btn" id="speed-go"><i class="ph ph-play"></i><span></span></button><span class="snote" id="speed-note" aria-live="polite"></span></div></div>
+          <div class="pgraph" id="probe-graph" role="img" aria-label="Round trips in ms, last 60 seconds"><svg id="probe-svg" preserveAspectRatio="none"></svg><div class="ptip" id="probe-tip"></div></div>
         </div>
         <div class="page" id="page-scan" data-page="scan" role="tabpanel" hidden>
           <div class="shead">
@@ -952,10 +973,33 @@ html.app, html.app body { overflow: hidden; }
         <span class="status" id="status" role="status"></span>
         <span class="sfoot" id="scan-foot" hidden></span>
         <span class="ifoot" id="info-foot" hidden><span class="ifoot-say" id="info-say"></span><button class="btn" id="info-copy"><i class="ph ph-copy"></i><span></span></button></span>
-        <span class="pfoot" id="probe-foot" hidden><span><i class="ph ph-chart-line"></i><span data-t="pAvg">Avg</span><b id="ps-avg">-</b><i class="u">ms</i></span><span><i class="ph ph-arrow-line-up"></i><span data-t="pMax">Max</span><b id="ps-max">-</b><i class="u">ms</i></span><span><i class="ph ph-wave-sine"></i><span data-t="pJit">Jitter</span><b id="ps-jit">-</b><i class="u">ms</i></span><span><i class="ph ph-link-break"></i><span data-t="pLoss">Loss</span><b id="ps-loss">-</b></span><span class="sp"><i class="ph ph-arrow-down"></i><b id="sp-down">-</b><i class="u">Mbps</i></span><span class="sp"><i class="ph ph-arrow-up"></i><b id="sp-up">-</b><i class="u">Mbps</i></span><span class="sp"><i class="ph ph-timer"></i><b id="sp-ms">-</b><i class="u">ms</i></span><span class="sp" title="Latency while the line is full"><i class="ph ph-hourglass-medium"></i><b id="sp-load">-</b><i class="u">ms</i></span></span>
+        <span class="pfoot" id="probe-foot" hidden><span><i class="ph ph-chart-line"></i><span data-t="pAvg">Avg</span><b id="ps-avg">-</b><i class="u">ms</i></span><span><i class="ph ph-arrow-line-up"></i><span data-t="pMax">Max</span><b id="ps-max">-</b><i class="u">ms</i></span><span><i class="ph ph-wave-sine"></i><span data-t="pJit">Jitter</span><b id="ps-jit">-</b><i class="u">ms</i></span><span><i class="ph ph-link-break"></i><span data-t="pLoss">Loss</span><b id="ps-loss">-</b></span></span>
         <button class="btn" id="revert" disabled><i class="ph ph-arrow-counter-clockwise"></i><span data-t="revert">Revert</span></button>
         <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
       </div>
+      <section class="settings-view speed-view" id="speed" aria-labelledby="sp-title" hidden>
+        <div class="dlg-body">
+          <div class="dlg-head">
+            <h3 id="sp-title"><span data-t="speedTest">Speed test</span> <span class="via" id="speed-via"></span></h3>
+            <button type="button" class="icon-btn" id="speed-close" title="Back (Esc)" aria-label="Back"><i class="ph ph-x"></i></button>
+          </div>
+          <div class="sp-cards">
+            <div class="sp-card" id="speed-down"><span class="lbl"><i class="ph ph-arrow-down"></i><span data-t="download">Download</span></span><b>-</b><span class="u">Mbps</span></div>
+            <div class="sp-card" id="speed-up"><span class="lbl"><i class="ph ph-arrow-up"></i><span data-t="upload">Upload</span></span><b>-</b><span class="u">Mbps</span></div>
+          </div>
+          <div class="sp-graph"><svg id="speed-svg" preserveAspectRatio="none"></svg></div>
+          <div class="sp-stats">
+            <div><span data-t="latency">Latency</span><b id="speed-ms">-</b><span class="u">ms</span></div>
+            <div><span data-t="jitter">Jitter</span><b id="speed-jit">-</b><span class="u">ms</span></div>
+            <div><span data-t="loadDown">Loaded down</span><b id="speed-dl">-</b><span class="u">ms</span></div>
+            <div><span data-t="loadUp">Loaded up</span><b id="speed-ul">-</b><span class="u">ms</span></div>
+          </div>
+          <div class="sp-foot">
+            <span class="sp-note" id="speed-note"></span>
+            <button type="button" class="btn primary" id="speed-go"><i class="ph ph-play"></i><span>Start</span></button>
+          </div>
+        </div>
+      </section>
       <section class="settings-view" id="settings" aria-labelledby="s-title" hidden>
           <div class="dlg-body">
             <div class="dlg-head">
@@ -1726,7 +1770,7 @@ function renderList(enter = false) {
       b.querySelector("i").animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 400, easing: "ease-out" });
     }
     seen[a.id] = a.state;
-    b.onclick = () => { closeSettings(); select(i); if (!isRail()) setRail(true); };
+    b.onclick = () => { closeSettings(); Promise.resolve(select(i)).then(() => speedOpen() && paintSpeed()); if (!isRail()) setRail(true); };
     li.append(b); ul.append(li);
   });
   let moved = false;
@@ -2146,7 +2190,7 @@ document.querySelectorAll(".set > *").forEach((el, i) => el.style.setProperty("-
 const settingsOpen = () => !$("settings").hidden;
 function openSettings() {
   if (settingsOpen()) return closeSettings();
-  renderHidden(); hideTip(); setTools(false);
+  closeSpeed(); renderHidden(); hideTip(); setTools(false);
   const v = $("settings");
   v.classList.remove("out"); v.hidden = false; replay(v, "in");
   $("open-settings").classList.add("on"); $("open-settings").setAttribute("aria-current", "page");
@@ -2339,6 +2383,7 @@ document.addEventListener("keydown", e => {
   if (document.documentElement.classList.contains("app") && (isMod(e) && (mac ? /^[psfgjuo+=\-0]$/i : /^[psfgjhuo+=\-0]$/i).test(e.key) || e.key === "F3" || e.key === "F7" || e.key === "F12")) e.preventDefault();
   if (isMod(e) && e.key >= "1" && e.key <= String(ptabs.length) && !settingsOpen()) { e.preventDefault(); showPage(ptabs[e.key - 1].dataset.page); }
   if (e.key === "Escape" && settingsOpen() && !document.querySelector("dialog[open]")) { closeSettings(); return; }
+  if (e.key === "Escape" && speedOpen() && !document.querySelector("dialog[open]")) { closeSpeed(); return; }
   if (e.key === "Escape" && tools.classList.contains("open")) { setTools(false); $("more").focus(); }
   else if (e.key === "Escape" && !isRail() && !document.querySelector("dialog[open]")) setRail(true);
   if (e.key === "Enter" && isMod(e) && !$("apply").disabled && !settingsOpen()) $("apply").click();
@@ -2660,20 +2705,18 @@ function probeBuild() {
   if (key === probe.key) return;
   const fresh = !probe.rows.length;
   if (fresh) {
-    probe.rows = [probeRow(), probeRow(), probeRow(true), speedRow()];
+    probe.rows = [probeRow(), probeRow(), probeRow(true)];
     $("probe-list").replaceChildren($("probe-thumb"), ...probe.rows.map(r => r.el));
   }
   const moved = probe.key && JSON.parse(probe.key)[0] !== a?.id;
   probe.key = key;
   want.forEach(([t, l], i) => fillChip(probe.rows[i], t, l));
   const own = probe.rows[2];
-  if (moved && speed.state === "run") speedEnd("stopped");   // another adapter: this test was for the last one
-  const sp = probe.rows[3]; sp.el.title = L("Speed test", "ทดสอบความเร็ว"); sp.el.setAttribute("aria-label", sp.el.title); sp.el.disabled = !probe.live;
   if (moved) { probe.own = ""; own.port = 0; own.el.querySelector(".pport").value = ""; own.el.classList.remove("port"); }
   Object.assign(own, { target: probe.live ? probe.own : "", got: [], pts: [] });
   own.f.set(own.target, probe.live); own.el.classList.toggle("empty", !own.target);
   own.el.classList.toggle("off", !probe.live);
-  const i = probe.rows.findIndex(r => r.target && !r.speed);
+  const i = probe.rows.findIndex(r => r.target);
   if (!probe.rows[probe.pick]?.target || moved) probe.pick = i < 0 ? 2 : i;
   placeThumb(!fresh);
 }
@@ -2683,7 +2726,7 @@ async function probeTick() {
   if (document.hidden) { probe.asleep = true; probe.sleptAt = performance.now(); return; }
   const t0 = Date.now();
   if (adapters[sel]) probeBuild();
-  await Promise.all(probe.rows.filter(r => r.target && !r.speed).map(async r => {
+  await Promise.all(probe.rows.filter(r => r.target).map(async r => {
     const t = r.target, port = r.port || 0, source = adapters[sel]?.cfg.address || null;   // out through this adapter
     const v = await (port ? net("tcping", { address: t, port, source }) : net("ping", { address: t, source })).catch(() => null);
     if ((r.port || 0) !== port) return;
@@ -2715,9 +2758,7 @@ function paintProbe() {
   });
   placeThumb();
   const r = probe.rows[probe.pick]; if (!r) return;
-  paintSpeed(!!r.speed);
-  if (r.speed) return;
-  const own = probe.rows[2];
+  const own = probe.rows.at(-1);
   if (r !== own && own?.f && !own.el.contains(document.activeElement)) { own.f.set(r.target, probe.live, true); own.el.classList.toggle("empty", !r.target); }
   const ok = r.got.filter(v => v !== null), ms = v => v === null ? "-" : String(v);   // the unit sits after it, small
   roll($("ps-max"), ms(ok.length ? Math.max(...ok) : null));
@@ -2747,17 +2788,16 @@ const SPAN = 60000, DELAY = 1500, RISE = 600;
 let graphRaf = 0, ceil = 20;
 const ease = k => 1 - (1 - k) ** 3;
 function drawGraph() {
+  const now = clock();
   const svg = $("probe-svg"), w = svg.clientWidth || 1, h = svg.clientHeight || 1;
   const pick = probe.rows[probe.pick], pts = pick?.pts ?? [], all = pts.filter(q => q.v !== null).map(q => q.v);
-  const now = pick?.speed && speed.end !== null ? speed.end : clock(), unit = pick?.speed ? "Mbps" : "ms";
   const want = Math.max(10, ...all) * 1.6;
   ceil = calm.matches ? want : ceil + (want - ceil) * 0.06;
-  // Speed: the test's own time, left to right across the whole graph (it stays put afterwards); ping: the last minute, scrolling.
-  const x = pick?.speed ? t => (t - speed.t0) / SPEED_SPAN * w : t => w - (now - DELAY - t) / SPAN * w, y = v => h - 1 - (h - 2) * Math.min(v, ceil) / ceil;
-  const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(v => ceil / v <= 4) ?? 1000;
+  const x = t => w - (now - DELAY - t) / SPAN * w, y = v => h - 1 - (h - 2) * Math.min(v, ceil) / ceil;
+  const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].find(v => ceil / v <= 4) ?? 1000;
   let out = "";
-  for (let v = step; v < ceil; v += step) out += `<line class="grid" x1="0" x2="${w}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="4" y="${y(v) - 3}">${v} ${unit}</text>`;
-  if (!pick?.speed) for (let k = 1; k < 12; k++) out += `<line class="grid" x1="${w * k / 12}" x2="${w * k / 12}" y1="0" y2="${h}"/>`;   // fixed columns, 5 s each
+  for (let v = step; v < ceil; v += step) out += `<line class="grid" x1="0" x2="${w}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="4" y="${y(v) - 3}">${v} ms</text>`;
+  for (let k = 1; k < 12; k++) out += `<line class="grid" x1="${w * k / 12}" x2="${w * k / 12}" y1="0" y2="${h}"/>`;   // fixed columns, 5 s each
   const shown = pts.filter(q => q.v !== null).map(q => {
     const k = calm.matches ? 1 : ease(Math.min(1, (now - q.t) / RISE));
     return { q, x: x(q.t), y: y(q.from + (q.v - q.from) * k) };
@@ -2772,7 +2812,7 @@ function drawGraph() {
     if (run.length === 1) d += `h1`;   // a lone reply between losses still shows as a dot of line
     out += `<path class="area" d="${d}L${run.at(-1).x + (run.length === 1 ? 1 : 0)},${h}L${run[0].x},${h}Z"/><path class="line" d="${d}"/>`;
   }
-  if (!pick?.speed) for (const q of pts) if (q.v === null) out += `<rect class="lost" x="${x(q.t) - 1.5}" y="${h - 5}" width="3" height="5" rx="1"/>`;
+  for (const q of pts) if (q.v === null) out += `<rect class="lost" x="${x(q.t) - 1.5}" y="${h - 5}" width="3" height="5" rx="1"/>`;
   // Hover reading: fades in and out; the line glides after the pointer.
   probe.show += ((probe.hx !== null && shown.length ? 1 : 0) - probe.show) * (calm.matches ? 1 : 0.2);
   if (probe.hx !== null) probe.cx = calm.matches || probe.show < 0.05 ? probe.hx : probe.cx + (probe.hx - probe.cx) * 0.3;
@@ -2781,7 +2821,7 @@ function drawGraph() {
     const near = shown.reduce((a, b) => Math.abs(b.x - probe.cx) < Math.abs(a.x - probe.cx) ? b : a);
     out += `<line class="cursor" x1="${probe.cx}" x2="${probe.cx}" y1="0" y2="${h}" opacity="${0.6 * probe.show}"/><circle class="knob" cx="${near.x}" cy="${near.y}" r="4" opacity="${probe.show}"/>`;
     const ago = Math.max(0, Math.round((now - near.q.t) / 1000));
-    tip.innerHTML = `${near.q.v} ${unit}<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
+    tip.innerHTML = `${near.q.v} ms<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
     tip.style.transform = `translateX(${Math.min(Math.max(probe.cx + 10, 4), w - tip.offsetWidth - 4)}px)`;
   }
   tip.style.opacity = probe.show > 0.01 ? probe.show : 0;
@@ -2796,92 +2836,6 @@ function probeShow(on) {
   if (adapters[sel]) probeBuild();
   paintProbe(); placeThumb(false); alignFoot();
   if (!graphRaf) graphRaf = requestAnimationFrame(drawGraph);
-}
-// ---------- Speed: the last chip on Ping, a test you start yourself ----------
-// Download, then upload, against Cloudflare, out through this adapter only (Rust pins the socket to it).
-// Nothing runs until Start; switching adapter stops it. The graph shows Mbps; the footer swaps to the results.
-const SPEED_SPAN = 18500;   // latency, 8 s down, 8 s up, and a little room
-const speed = { t0: 0, state: "idle", res: {}, used: 0, end: null, stop: null, phase: "", run: 0 };
-// A phone hotspot (a /28 from an iPhone, Android's 192.168.43.x): data is metered, say so before it starts.
-const metered = a => !!a && (prefixOf(a.cfg.subnet) >= 28 || ["172.20.10.1", "192.168.43.1"].includes(a.cfg.gateway));
-function speedRow() {
-  const el = document.createElement("button");
-  el.className = "pchip spd"; el.setAttribute("role", "tab");
-  el.innerHTML = `<i class="ph ph-gauge"></i>`;
-  const row = { el, target: "speed", speed: true, label: "Speed", got: [], pts: [] };
-  el.onclick = () => pickRow(row);
-  return row;
-}
-// One test: events come from Rust (a Channel) or, in the demo, from a stand-in with the same shape:
-// { kind: "latency", ms } · { kind: "down" | "up", mbps, loaded, bytes } · { kind: "done", bytes } · { kind: "error", message }
-function speedRun(a, on) {
-  if (tauri) {
-    const ch = new tauri.core.Channel(); ch.onmessage = on;
-    invoke("speed_test", { index: a.index ?? 0, source: a.cfg.address, events: ch }).catch(e => on({ kind: "error", message: String(e) }));
-    return () => invoke("speed_stop").catch(() => {});
-  }
-  // Demo: ~88 Mbps down, ~93 up, slow start in the first second, a little noise; the loaded latency climbs.
-  const timers = [], at = (ms, f) => timers.push(setTimeout(f, ms));
-  let bytes = 0;
-  for (let i = 0; i < 6; i++) at(150 + i * 120, () => on({ kind: "latency", ms: 19 + Math.round(Math.random() * 5) }));
-  const leg = (kind, t0, top) => { for (let i = 1; i <= 32; i++) at(t0 + i * 250, () => {
-    const mbps = +(top * Math.min(1, i / 5) * (0.94 + Math.random() * 0.08)).toFixed(1);
-    bytes += mbps * 1e6 / 8 / 4;
-    on({ kind, mbps, loaded: Math.round((kind === "down" ? 45 : 140) + Math.random() * 30), bytes });
-  }); };
-  leg("down", 1000, 88); leg("up", 9300, 93);
-  if (demo.speedFail) at(4000, () => on({ kind: "error", message: L("Can't get out through this adapter", "ออกเน็ตทาง adapter นี้ไม่ได้") }));
-  else at(17600, () => on({ kind: "done", bytes }));
-  return () => timers.forEach(clearTimeout);
-}
-function speedStart() {
-  const a = adapters[sel], row = probe.rows.find(r => r.speed); if (!a || !row) return;
-  const run = ++speed.run;
-  Object.assign(speed, { t0: clock(), state: "run", res: {}, used: 0, end: null, phase: "latency" });
-  row.pts = []; row.got = [];
-  const lat = [];
-  speed.stop = speedRun(a, ev => {
-    if (run !== speed.run) return;
-    if (ev.kind === "latency") { lat.push(ev.ms); speed.res.ms = Math.round(lat.slice().sort((x, y) => x - y)[lat.length >> 1]); }
-    if (ev.kind === "down" || ev.kind === "up") {
-      if (speed.phase !== ev.kind) row.pts.push({ t: clock(), v: null });   // a gap between the two legs
-      speed.phase = ev.kind;
-      speed.res[ev.kind] = ev.mbps; speed.res[ev.kind + "Load"] = ev.loaded; speed.used = ev.bytes;
-      row.pts.push({ t: clock(), v: ev.mbps, from: row.pts.findLast(q => q.v !== null)?.v ?? 0, leg: ev.kind });
-    }
-    if (ev.kind === "done") { speed.used = ev.bytes ?? speed.used; speedEnd("done"); }
-    if (ev.kind === "error") { speed.error = ev.message; speedEnd("error"); }
-    if (page === "probe") paintProbe();
-  });
-  paintProbe();
-}
-function speedEnd(state) {
-  speed.stop?.(); speed.stop = null; speed.run++;
-  Object.assign(speed, { state, end: clock() });
-  if (page === "probe") paintProbe();
-}
-$("speed-go").onclick = () => speed.state === "run" ? speedEnd("stopped") : speedStart();
-function paintSpeed(on) {
-  $("probe-foot").classList.toggle("speed", on);
-  const p = $("speed-panel"), a = adapters[sel], s = speed.state;
-  p.hidden = !on;
-  if (!on) return;
-  // Idle: the button sits in the middle of the empty graph. Running or done: it steps aside to the corner.
-  p.classList.toggle("corner", s !== "idle" && s !== "error");   // an error stays in the middle, in words under the button
-  const go = $("speed-go"), warn = s === "idle" && metered(a);
-  go.classList.toggle("primary", s === "idle"); go.classList.toggle("warn", warn);
-  go.disabled = !probe.live;
-  go.querySelector("i").className = "ph " + (s === "run" ? "ph-stop" : s === "idle" ? "ph-play" : "ph-arrow-clockwise");
-  go.querySelector("span").textContent = s === "run" ? L("Stop", "หยุด") : s === "idle" ? L("Start test", "เริ่มทดสอบ") : L("Test again", "ทดสอบอีกครั้ง");
-  const mb = Math.round(speed.used / 1e6);
-  $("speed-note").textContent = s === "idle" ? (warn ? L("Phone hotspot: uses about 250 MB of data", "ต่อผ่านมือถือ: ใช้ข้อมูลราว 250 MB") : L("Cloudflare · about 250 MB · they see your IP", "Cloudflare · ราว 250 MB · Cloudflare เห็น IP ของคุณ"))
-    : s === "run" ? `${speed.phase === "up" ? L("Upload", "อัปโหลด") : speed.phase === "down" ? L("Download", "ดาวน์โหลด") : L("Latency", "ความหน่วง")} · ${mb} MB`
-    : s === "error" ? speed.error
-    : s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`) : L(`${mb} MB used`, `ใช้ไป ${mb} MB`);
-  p.classList.toggle("bad", s === "error");
-  const n = v => v === undefined ? "-" : String(v);
-  roll($("sp-down"), n(speed.res.down)); roll($("sp-up"), n(speed.res.up));
-  roll($("sp-ms"), n(speed.res.ms)); roll($("sp-load"), n(speed.res.upLoad ?? speed.res.downLoad));
 }
 setTimeout(probeTick, 1000);
 // Measure each footer item at its widest ("999 ms", "100%") and keep that width (once the fonts are in,
@@ -2907,6 +2861,146 @@ function centreUnder(foot, over, pageEl) {
 }
 new ResizeObserver(alignFoot).observe($("probe-graph"));
 document.addEventListener("visibilitychange", () => { if (!document.hidden && probe.asleep) { probe.asleep = false; probe.slept += performance.now() - probe.sleptAt; probeTick(); } });
+// ---------- Speed test: its own view, opened from the sidebar ----------
+// Download, then upload, against Cloudflare, out through the adapter on screen only (Rust pins the socket to it).
+// Nothing runs until Start. Another adapter, or closing the view, stops a test that is running.
+const SPEED_SPAN = 18500;   // latency, 8 s down, 8 s up, and a little room
+const speed = { state: "idle", res: {}, used: 0, t0: 0, end: null, stop: null, leg: "", run: 0, aid: null, pts: [], lat: [] };
+// A phone hotspot (an iPhone's /28, Android's 192.168.43.x): data is metered, so it says so before it starts.
+const metered = a => !!a && (prefixOf(a.cfg.subnet) >= 28 || ["172.20.10.1", "192.168.43.1"].includes(a.cfg.gateway));
+const speedOpen = () => !$("speed").hidden;
+const sNow = () => performance.now();
+// One test. Events come from Rust over a Channel or, in the demo, from a stand-in with the same shape:
+// { kind: "latency", ms } · { kind: "down" | "up", mbps, loaded, bytes } · { kind: "done", bytes } · { kind: "error", message }
+function speedRun(a, on) {
+  if (tauri) {
+    const ch = new tauri.core.Channel(); ch.onmessage = on;
+    invoke("speed_test", { index: a.index ?? 0, source: a.cfg.address, events: ch }).catch(e => on({ kind: "error", message: String(e) }));
+    return () => invoke("speed_stop").catch(() => {});
+  }
+  // Demo: ~88 Mbps down, ~93 up, slow start over the first second, a little noise; the loaded latency climbs.
+  const timers = [], at = (ms, f) => timers.push(setTimeout(f, ms));
+  let bytes = 0;
+  for (let i = 0; i < 6; i++) at(150 + i * 120, () => on({ kind: "latency", ms: 19 + Math.round(Math.random() * 5) }));
+  const leg = (kind, t0, top) => { for (let i = 1; i <= 32; i++) at(t0 + i * 250, () => {
+    const mbps = +(top * Math.min(1, i / 5) * (0.94 + Math.random() * 0.08)).toFixed(1);
+    bytes += mbps * 1e6 / 8 / 4;
+    on({ kind, mbps, loaded: Math.round((kind === "down" ? 45 : 140) + Math.random() * 30), bytes });
+  }); };
+  leg("down", 1000, 88); leg("up", 9300, 93);
+  if (demo.speedFail) at(4000, () => on({ kind: "error", message: L("Can't get out through this adapter", "ออกเน็ตทาง adapter นี้ไม่ได้") }));
+  else at(17600, () => on({ kind: "done", bytes }));
+  return () => timers.forEach(clearTimeout);
+}
+function speedStart() {
+  const a = adapters[sel]; if (!a) return;
+  const run = ++speed.run;
+  Object.assign(speed, { state: "run", res: {}, used: 0, t0: sNow(), end: null, leg: "", aid: a.id, pts: [], lat: [] });
+  speed.stop = speedRun(a, ev => {
+    if (run !== speed.run) return;
+    if (ev.kind === "latency") {
+      speed.lat.push(ev.ms);
+      const s = speed.lat.slice().sort((x, y) => x - y), d = speed.lat.slice(1).map((v, i) => Math.abs(v - speed.lat[i]));
+      speed.res.ms = s[s.length >> 1]; speed.res.jit = d.length ? Math.round(d.reduce((x, y) => x + y) / d.length) : undefined;
+    }
+    if (ev.kind === "down" || ev.kind === "up") {
+      if (speed.leg && speed.leg !== ev.kind) speed.pts.push({ t: sNow(), v: null });   // a gap between the two legs
+      speed.leg = ev.kind;
+      speed.res[ev.kind] = ev.mbps; speed.res[ev.kind + "Load"] = ev.loaded; speed.used = ev.bytes;
+      speed.pts.push({ t: sNow(), v: ev.mbps, from: speed.pts.findLast(q => q.v !== null)?.v ?? 0, leg: ev.kind });
+    }
+    if (ev.kind === "done") { speed.used = ev.bytes ?? speed.used; speedEnd("done"); }
+    if (ev.kind === "error") { speed.error = ev.message; speedEnd("error"); }
+    paintSpeed();
+  });
+  paintSpeed(); speedDraw();
+}
+function speedEnd(state) {
+  speed.stop?.(); speed.stop = null; speed.run++;
+  Object.assign(speed, { state, end: sNow(), leg: state === "done" ? "" : speed.leg });
+  paintSpeed();
+}
+$("speed-go").onclick = () => speed.state === "run" ? speedEnd("stopped") : speedStart();
+function paintSpeed() {
+  const a = adapters[sel], s = speed.state;
+  // Another adapter on screen: a test for the last one stops, and its results go with it.
+  if (a && speed.aid && a.id !== speed.aid) { if (s === "run") speedEnd("stopped"); Object.assign(speed, { state: "idle", res: {}, used: 0, pts: [], aid: null }); return paintSpeed(); }
+  const live = a?.state === "up" && validIp(a.cfg.address || "");
+  $("speed-via").textContent = a ? `${a.name}${a.cfg.address ? " · " + a.cfg.address : ""}` : "";
+  const go = $("speed-go"), warn = s !== "run" && live && metered(a);
+  go.disabled = !live; go.classList.toggle("primary", s !== "run"); go.classList.toggle("warn", warn);
+  go.querySelector("i").className = "ph " + (s === "run" ? "ph-stop" : s === "idle" ? "ph-play" : "ph-arrow-clockwise");
+  go.querySelector("span").textContent = s === "run" ? L("Stop", "หยุด") : s === "idle" ? L("Start", "เริ่ม") : L("Again", "อีกครั้ง");
+  const mb = Math.round(speed.used / 1e6);
+  $("speed-note").textContent = !live ? L("This adapter isn't connected", "adapter นี้ยังไม่ได้เชื่อมต่อ")
+    : s === "run" ? L(`${mb} MB so far`, `ใช้ไป ${mb} MB`)
+    : s === "error" ? speed.error
+    : s === "done" || s === "stopped" ? (s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`) : L(`${mb} MB used`, `ใช้ไป ${mb} MB`))
+    : warn ? L("Phone hotspot: uses about 250 MB of data", "ต่อผ่านมือถือ: ใช้ข้อมูลราว 250 MB")
+    : L("Cloudflare · about 250 MB · they see your IP", "Cloudflare · ราว 250 MB · Cloudflare เห็น IP ของคุณ");
+  $("speed-note").classList.toggle("bad", s === "error");
+  // The leg under way is the lit card; its bar fills as the leg runs.
+  for (const k of ["down", "up"]) {
+    const card = $(`speed-${k}`);
+    card.classList.toggle("on", s === "run" && speed.leg === k);
+    card.classList.toggle("off", s === "run" && !!speed.leg && speed.leg !== k && speed.res[k] === undefined);
+    roll(card.querySelector("b"), speed.res[k] === undefined ? "-" : String(speed.res[k]));
+  }
+  const n = v => v === undefined ? "-" : String(v);
+  roll($("speed-ms"), n(speed.res.ms)); roll($("speed-jit"), n(speed.res.jit));
+  roll($("speed-dl"), n(speed.res.downLoad)); roll($("speed-ul"), n(speed.res.upLoad));
+}
+// The graph: Mbps across the test's own time, left to right; each new point rises from the one before.
+let speedRaf = 0;
+function speedDraw() {
+  cancelAnimationFrame(speedRaf);
+  const svg = $("speed-svg"), w = svg.clientWidth || 1, h = svg.clientHeight || 1, at = speed.end ?? sNow();
+  const all = speed.pts.filter(q => q.v !== null).map(q => q.v), top = Math.max(10, ...all) * 1.25;
+  speed.ceil = calm.matches || !speed.ceil ? top : speed.ceil + (top - speed.ceil) * 0.08;
+  const x = t => (t - speed.t0) / SPEED_SPAN * w, y = v => h - 1 - (h - 2) * Math.min(v, speed.ceil) / speed.ceil;
+  const step = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(v => speed.ceil / v <= 3) ?? 5000;
+  let out = "";
+  for (let v = step; v < speed.ceil; v += step) out += `<line class="grid" x1="0" x2="${w}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="4" y="${y(v) - 3}">${v}</text>`;
+  const runs = [[]];
+  for (const q of speed.pts) {
+    if (q.v === null) { runs.push([]); continue; }
+    const k = calm.matches ? 1 : ease(Math.min(1, (at - q.t) / RISE));
+    runs.at(-1).push({ x: x(q.t), y: y(q.from + (q.v - q.from) * k), leg: q.leg });
+  }
+  for (const run of runs) {
+    if (!run.length) continue;
+    let d = `M${run[0].x},${run[0].y}`;
+    for (let i = 1; i < run.length; i++) { const a = run[i - 1], b = run[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
+    out += `<path class="area ${run[0].leg}" d="${d}L${run.at(-1).x},${h}L${run[0].x},${h}Z"/><path class="line ${run[0].leg}" d="${d}"/>`;
+  }
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.innerHTML = out;
+  // Keep drawing while points are still rising.
+  if (speedOpen() && (speed.state === "run" || speed.pts.some(q => q.v !== null && at - q.t < RISE))) speedRaf = requestAnimationFrame(speedDraw);
+}
+function openSpeed() {
+  if (speedOpen()) return closeSpeed();
+  closeSettings(); hideTip(); setTools(false);
+  const v = $("speed");
+  v.classList.remove("out"); v.hidden = false; replay(v, "in");
+  $("open-speed").classList.add("on"); $("open-speed").setAttribute("aria-current", "page");
+  indicator.style.opacity = 0;
+  paintSpeed(); speedDraw();
+}
+function closeSpeed() {
+  const v = $("speed");
+  if (v.hidden) return;
+  if (speed.state === "run") speedEnd("stopped");   // no test runs where nobody can see it
+  $("open-speed").classList.remove("on"); $("open-speed").removeAttribute("aria-current");
+  placeIndicator();
+  let done = false;
+  const end = () => { if (done) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };
+  v.classList.add("out");
+  v.addEventListener("animationend", end, { once: true });
+  setTimeout(end, 200);
+}
+$("open-speed").onclick = openSpeed;
+$("speed-close").onclick = closeSpeed;
+
 // ---------- Scan: who answers on this subnet ----------
 // scan_host answers { mac, vendor, ms } for an address something holds (ARP or ping), or null.
 // The page scrolls one /24 at a time, snapping, with a map in the header that lights the one on screen.
@@ -3508,11 +3602,14 @@ const scenarios = {
     cancel: ["UAC prompt declined", () => { demo.outcome = "cancel"; return edit({ address: "10.0.1.60" }, true); }],
     fail: ["Windows refused the change", () => { demo.outcome = "fail"; return edit({ address: "10.0.1.60" }, true); }],
   },
+  "Speed test": {
+    speed: ["Speed test", async () => { await go(0); openSpeed(); }],
+    speedfail: ["Speed test fails", async () => { demo.speedFail = true; await go(0); openSpeed(); speedStart(); }],
+    speedhot: ["Speed test on a hotspot", async () => { await go(0); Object.assign(adapters[0].cfg, { subnet: "255.255.255.240", gateway: "172.20.10.1", address: "172.20.10.2" }); openSpeed(); }],
+  },
   "Pages": {
     pgadv: ["Advanced", () => showPage("adv")],
     pgping: ["Ping", () => showPage("probe")],
-    pgspeed: ["Ping, speed test", () => { showPage("probe"); setTimeout(() => pickRow(probe.rows[3]), 300); }],
-    pgspeedfail: ["Ping, speed test fails", () => { demo.speedFail = true; showPage("probe"); setTimeout(() => pickRow(probe.rows[3]), 300); }],
     pgscan: ["Scan", () => showPage("scan")],
     pgproxy: ["Scan, router answers for every address (proxy ARP)", () => { demo.proxyArp = true; showPage("scan"); }],
     pgscan2: ["Scan, with a second IP", () => { Object.assign(adapters[sel], { extraIps: ["192.168.1.50"], extraSubnets: ["255.255.255.0"] }); showPage("scan"); }],
