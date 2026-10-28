@@ -622,7 +622,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 /* Speed test: a dial with the number in its middle, the three steps under it, the small numbers, then the button */
 .speed-view .dlg-body { height: 100%; box-sizing: border-box; grid-template-rows: auto 1fr auto auto auto auto; }
 .sp-dial { min-height: 0; display: grid; grid-template-rows: 1fr auto; gap: var(--s2); }
-.sp-dial svg { width: 100%; height: 100%; min-height: 0; display: block; }
+.sp-dial svg { width: 100%; height: 100%; min-height: 0; display: block; overflow: visible; }
 .sp-dial .track, .sp-dial .arc { fill: none; stroke-linecap: round; }
 .sp-dial .track { stroke: var(--border); }
 .sp-dial .bezel { fill: none; stroke: var(--border-strong); stroke-width: 2; }
@@ -647,7 +647,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-dial .cic { fill: var(--accent); }
 .sp-dial .cic.stop { fill: var(--bad); }
 .sp-dial .now { fill: var(--ink); font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
-.sp-dial #sp-now2 { font-size: 24px; }
+.sp-dial #sp-now2 { font-size: 28px; }
 .sp-dial .unit { fill: var(--muted); font-size: 12px; text-anchor: middle; }
 .sp-dial .cap { fill: var(--muted); font-size: 12px; text-anchor: middle; }
 .sp-dial .again { fill: var(--ink); font-size: 13px; font-weight: 600; dominant-baseline: middle; }
@@ -663,14 +663,14 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 /* Before Start there is only the button: the steps and the small numbers come in with the test */
 .speed-view .sp-steps, .speed-view .sp-stats, .speed-view .sp-meta { transition: opacity 320ms var(--ease-out), transform 320ms var(--ease-out); }
 .speed-view[data-phase="run"] .sp-steps { transition-delay: 300ms; }
-.speed-view[data-phase="sum"] .sp-meta { transition-delay: 380ms; }
-.speed-view[data-phase="sum"] .sp-stats { transition-delay: 460ms; }
+.speed-view[data-phase="run"] .sp-meta { transition-delay: 420ms; }
+.speed-view[data-phase="run"] .sp-stats { transition-delay: 500ms; }
 .speed-view[data-phase="idle"] .sp-steps, .speed-view[data-phase="idle"] .sp-stats,
-.speed-view[data-phase="sum"] .sp-steps, .speed-view[data-phase="run"] .sp-stats,
-.speed-view:not([data-phase="sum"]) .sp-meta { opacity: 0; transform: translateY(6px); pointer-events: none; }
+.speed-view[data-phase="sum"] .sp-steps, .speed-view[data-phase="idle"] .sp-meta { opacity: 0; transform: translateY(6px); pointer-events: none; }
 /* Game HUD around it: a floor grid that runs at the line's speed, a lap timer, two side gauges, gears */
 .speed-view { --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
-.sp-road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.sp-road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity 600ms var(--ease-out); }
+.speed-view[data-phase="idle"] .sp-road { opacity: 0; transition-duration: 300ms; }
 .speed-view .dlg-body { position: relative; }
 .sp-lap { margin-left: auto; font-family: var(--mono); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .speed-view[data-phase="idle"] .sp-lap { color: var(--faint); }
@@ -699,7 +699,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-steps .st.got b { color: var(--ink); }
 .speed-view .via { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: var(--s2); }
 .sp-stats, .sp-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
-.sp-meta { grid-template-columns: 1fr 1fr; }
+.sp-meta { grid-template-columns: 1.2fr 1.2fr 0.6fr; }
 .sp-stats > div, .sp-meta > div { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; column-gap: 4px; text-align: center; min-width: 0; }
 .sp-stats > div > span:first-child, .sp-meta > div > span { flex-basis: 100%; color: var(--muted); font-size: 12px; }
 .sp-meta b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
@@ -709,9 +709,14 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-foot > * { grid-area: 1 / 1; transition: opacity 300ms var(--ease-out), transform 300ms var(--ease-out); }
 .speed-view[data-phase="sum"] .sp-note, .speed-view:not([data-phase="sum"]) .sp-again { opacity: 0; transform: translateY(6px); pointer-events: none; visibility: hidden; }
 .speed-view[data-phase="sum"] .sp-again { transition-delay: 520ms; }
-.sp-grade { min-height: 18px; text-align: center; font-size: 12px; color: var(--muted); transition: opacity 300ms var(--ease-out) 500ms; }
+.sp-grade { --lv: var(--ok); min-height: 22px; display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); transition: opacity 300ms var(--ease-out) 500ms; }
 .speed-view:not([data-phase="sum"]) .sp-grade { opacity: 0; transition-delay: 0ms; }
-.sp-grade.good { color: var(--ok); } .sp-grade.meh { color: oklch(0.78 0.13 75); } .sp-grade.bad { color: var(--bad); }
+.sp-grade .lbl i { font-size: 13px; margin-right: 4px; vertical-align: -2px; }
+.sp-grade .lv { display: inline-flex; gap: 3px; }
+.sp-grade .lv i { width: 16px; height: 6px; border-radius: 2px; background: var(--border); }
+.sp-grade.good .lv i, .sp-grade.meh .lv i:nth-child(-n+2), .sp-grade.bad .lv i:first-child { background: var(--lv); }
+.sp-grade b { color: var(--lv); font-weight: 600; }
+.sp-grade.meh { --lv: oklch(0.78 0.13 75); } .sp-grade.bad { --lv: var(--bad); }
 .sp-stats > div > span:first-child i, .sp-meta > div > span i { font-size: 13px; margin-right: 4px; vertical-align: -2px; }
 /* Test again: the engine button, laid on its side: a round key with a dashed LED ring, then the words */
 .sp-again { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 5px; border-radius: 20px; border: 1.5px solid var(--border-strong);
@@ -1084,16 +1089,16 @@ html.app, html.app body { overflow: hidden; }
                 <circle class="hub" id="sp-hub" cx="120" cy="100"/>
               </g>
               <g id="sp-twin" opacity="0">
-                <circle class="under" cx="120" cy="100" r="96"/>
+                <circle class="under" cx="120" cy="100" r="88"/>
                 <path class="track" stroke-width="10" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
                 <path class="arc up" id="sp-arc2" pathLength="1" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
               </g>
               <text class="now" id="speed-now" x="120" y="142"></text>
               <text class="unit" id="speed-unit" x="120" y="160"></text>
-              <text class="now" id="sp-now2" x="183" y="106" opacity="0"></text>
-              <text class="unit" id="sp-unit2" x="183" y="122" opacity="0">Mbps</text>
-              <text class="cap" id="sp-cap1" x="57" y="164" opacity="0">Download</text>
-              <text class="cap" id="sp-cap2" x="183" y="164" opacity="0">Upload</text>
+              <text class="now" id="sp-now2" x="190" y="100" opacity="0"></text>
+              <text class="unit" id="sp-unit2" x="190" y="118" opacity="0">Mbps</text>
+              <text class="cap" id="sp-cap1" x="50" y="182" opacity="0">Download</text>
+              <text class="cap" id="sp-cap2" x="190" y="182" opacity="0">Upload</text>
               <circle class="ctlring" id="sp-ctlring" cx="120" cy="192" r="19"/>
               <rect class="ctl" id="sp-ctl"/>
               <path class="cic" id="sp-cic"/>
@@ -1108,7 +1113,8 @@ html.app, html.app body { overflow: hidden; }
           </div>
           <div class="sp-meta">
             <div><span><i class="ph ph-globe-hemisphere-west"></i><span data-t="isp">ISP</span></span><b id="speed-isp">-</b></div>
-            <div><span><i class="ph ph-cloud"></i><span data-t="server">Server</span></span><b id="speed-srv">-</b></div>
+            <div><span><i class="ph ph-cloud"></i><span data-t="cfServer">Cloudflare</span></span><b id="speed-srv">-</b></div>
+            <div><span><i class="ph ph-database"></i><span data-t="data">Data</span></span><b id="speed-data">-</b></div>
           </div>
           <div class="sp-stats">
             <div><span><i class="ph ph-timer"></i><span data-t="ping">Ping</span></span><b id="speed-ping">-</b><span class="u">ms</span></div>
@@ -1116,7 +1122,7 @@ html.app, html.app body { overflow: hidden; }
             <div><span><i class="ph ph-download-simple"></i><span data-t="loadDown">Loaded down</span></span><b id="speed-dl">-</b><span class="u">ms</span></div>
             <div><span><i class="ph ph-upload-simple"></i><span data-t="loadUp">Loaded up</span></span><b id="speed-ul">-</b><span class="u">ms</span></div>
           </div>
-          <div class="sp-grade" id="speed-grade"></div>
+          <div class="sp-grade" id="speed-grade"><span class="lbl"><i class="ph ph-activity"></i><span data-t="underLoad">Under load</span></span><span class="lv"><i></i><i></i><i></i></span><b id="speed-grade-w"></b><span class="hint" id="speed-grade-h"></span></div>
           <div class="sp-foot">
             <span class="sp-note" id="speed-note"></span>
             <button type="button" class="sp-again" id="speed-again"><span class="key"><i class="ph ph-power"></i></span><span class="t">TEST AGAIN</span></button>
@@ -3066,16 +3072,18 @@ function paintSpeed() {
   const mb = Math.round(speed.used / 1e6), r = speed.res, bloat = Math.max(r.downLoad ?? 0, r.upLoad ?? 0) - (r.ms ?? 0);
   const grade = s !== "done" ? "" : bloat < 30 ? "good" : bloat < 100 ? "meh" : "bad";
   $("speed-note").textContent = !live ? L("This adapter isn't connected", "adapter นี้ยังไม่ได้เชื่อมต่อ")
-    : s === "run" ? L(`${mb} MB so far`, `ใช้ไป ${mb} MB`)
+    : s === "run" ? (speed.leg === "up" ? L("Uploading…", "กำลังอัปโหลด…") : speed.leg === "down" ? L("Downloading…", "กำลังดาวน์โหลด…") : L("Measuring latency…", "กำลังวัดความหน่วง…"))
     : s === "error" ? speed.error
     : s === "done" ? ""
     : s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`)
     : warn ? L("Phone hotspot: uses about 250 MB of data", "ต่อผ่านมือถือ: ใช้ข้อมูลราว 250 MB")
     : L("Cloudflare · about 250 MB · they see your IP", "Cloudflare · ราว 250 MB · Cloudflare เห็น IP ของคุณ");
   $("speed-note").className = "sp-note " + (s === "error" ? "bad" : "");
-  if (grade) $("speed-grade").textContent = ({ good: L("Stays quick with the line full", "เน็ตเต็มก็ยังตอบสนองไว"), meh: L("A little slower with the line full", "เน็ตเต็มแล้วหน่วงขึ้นเล็กน้อย"),
-    bad: L("Lags with the line full: calls and games may stutter", "เน็ตเต็มแล้วหน่วงมาก วิดีโอคอลและเกมอาจสะดุด") })[grade] + ` · ${mb} MB`;
-  $("speed-grade").className = "sp-grade " + grade;
+  if (grade) {
+    $("speed-grade-w").textContent = { good: L("Smooth", "ลื่น"), meh: L("Fair", "พอใช้"), bad: L("Laggy", "หน่วง") }[grade];
+    $("speed-grade-h").textContent = { good: "", meh: L("a little slower", "ช้าลงเล็กน้อย"), bad: L("calls and games may stutter", "วิดีโอคอลและเกมอาจสะดุด") }[grade];
+    $("speed-grade").className = "sp-grade " + grade;
+  }
   // Three steps under the dial: the one under way is lit, the ones with a number are inked.
   const n = v => v === undefined ? "-" : String(v), now = s === "run" ? (speed.leg || "ms") : "";
   for (const [k, id, val] of [["ms", "speed-lat", speed.res.ms], ["down", "speed-down", speed.res.down], ["up", "speed-up", speed.res.up]]) {
@@ -3089,7 +3097,8 @@ function paintSpeed() {
   roll($("speed-ping"), n(speed.res.ms));
   const mt = speed.meta;
   $("speed-isp").textContent = mt ? `${mt.isp}${mt.asn ? " · AS" + mt.asn : ""}` : "-";
-  $("speed-srv").textContent = mt ? `Cloudflare ${mt.colo}${mt.city ? " · " + mt.city : ""}` : "-";
+  $("speed-data").textContent = s === "idle" ? "-" : `${mb} MB`;
+  $("speed-srv").textContent = mt ? `${mt.colo}${mt.city ? " · " + mt.city : ""}` : "-";
   // Side gauges: latency on the left, latency with the line full on the right; the top few segments go amber.
   for (const [id, val, max] of [["speed-g-ping", speed.res.ms, 200], ["speed-g-load", speed.leg ? speed.res[speed.leg + "Load"] : undefined, 300]]) {
     const g = $(id), segs = g.querySelector(".segs");
@@ -3150,14 +3159,14 @@ function speedDraw() {
   set("sp-needle-a", { d, opacity: 1 - ink }); set("speed-needle", { d, opacity: ink * (1 - slice(z, 0, 0.35)) });
   set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
   // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
-  const zs = slice(z, 0, 0.75), sc = mix(1, 0.68, zs), tx = mix(0, -63, zs), ty = 0;
+  const zs = slice(z, 0, 0.75), sc = mix(1, 0.78, zs), tx = mix(0, -70, zs), ty = -6;
   const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
   set("sp-main", { transform: place(tx) });
   const twin = slice(z, 0.15, 0.85);
-  set("sp-twin", { transform: place(mix(0, 63, twin)), opacity: slice(z, 0.1, 0.4) });
+  set("sp-twin", { transform: place(mix(0, 70, twin)), opacity: slice(z, 0.1, 0.4) });
   $("sp-arc2").style.strokeDasharray = `${Math.min(1, Math.log10(1 + (speed.res.up ?? 0)) / 3) * slice(z, 0.4, 1)} 1`;
-  set("speed-now", { x: mix(SC, 57, zs), y: mix(142, 106, zs), "font-size": mix(28, 24, zs), opacity: late });
-  set("speed-unit", { x: mix(SC, 57, zs), y: mix(160, 122, zs), opacity: late });
+  set("speed-now", { x: mix(SC, 50, zs), y: mix(142, 100, zs), "font-size": mix(28, 28, zs), opacity: late });
+  set("speed-unit", { x: mix(SC, 50, zs), y: mix(160, 118, zs), opacity: late });
   if (z > 0) $("speed-unit").textContent = "Mbps";
   const tw = slice(z, 0.45, 1);
   set("sp-now2", { opacity: tw }); set("sp-unit2", { opacity: tw }); set("sp-cap1", { opacity: tw }); set("sp-cap2", { opacity: tw });
