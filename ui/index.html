@@ -3220,8 +3220,9 @@ function speedRoad(now) {
   if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
   const dt = Math.min(64, now - (road.at || now)); road.at = now;
   const mbps = speed.state === "run" ? speed.res[speed.leg] ?? 0 : 0;
-  const parked = speed.state !== "run" && speed.state !== "done";   // before Start (or after a stop): standing still
-  const want = parked ? 0 : (speed.leg === "up" && speed.state === "run" ? -1 : 1) * (0.15 + 2.6 * Math.min(1, Math.log10(1 + mbps) / 3));
+  const parked = speed.state !== "run" && speed.state !== "done";   // before Start (or after a stop): the flat grid
+  const want = parked ? 0.12 :   // the flat grid drifts toward you, slowly, so the page never looks frozen
+    (speed.leg === "up" && speed.state === "run" ? -1 : 1) * (0.15 + 2.6 * Math.min(1, Math.log10(1 + mbps) / 3));
   road.v += (want - road.v) * Math.min(1, dt / 700);
   if (!calm.matches) road.off = ((road.off + road.v * dt / 1000) % 1 + 1) % 1;
   const c = cv.getContext("2d"), css = getComputedStyle(cv);
