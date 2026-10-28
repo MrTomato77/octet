@@ -656,14 +656,39 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .speed-view[data-phase="sum"] .sp-steps { opacity: 0; transform: translateY(6px); pointer-events: none; }
 .sp-note.good { color: var(--ok); }
 .sp-note.meh { color: oklch(0.78 0.13 75); }
+/* Game HUD around it: a floor grid that runs at the line's speed, corner brackets, a lap timer, two side gauges, gears */
+.speed-view { --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.sp-road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.speed-view .dlg-body { position: relative; }
+.sp-lap { margin-left: auto; margin-right: var(--s2); font-family: var(--mono); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.speed-view[data-phase="idle"] .sp-lap { color: var(--faint); }
+.sp-dial { position: relative; }
+.sp-dial .under { fill: var(--surface); }
+.sp-dial .now, .sp-steps b, .sp-stats b, .sp-gauge b { font-family: var(--mono); }
+#sp-finish rect { fill: var(--ink); }
+#sp-finish text { fill: var(--surface); font: 600 12px var(--mono); letter-spacing: 2px; text-anchor: middle; dominant-baseline: middle; }
+.sp-gauge { position: absolute; top: 8%; display: grid; justify-items: center; gap: 4px; transition: opacity 320ms var(--ease-out); }
+#speed-g-ping { left: 0; } #speed-g-load { right: 0; }
+.sp-gauge .gl { font: 600 10px var(--mono); color: var(--muted); letter-spacing: 1px; }
+.sp-gauge .segs { display: flex; flex-direction: column-reverse; gap: 3px; }
+.sp-gauge .segs i { width: 12px; height: 7px; border-radius: 1px; background: var(--border); transition: background 200ms; }
+.sp-gauge .segs i.on { background: var(--ink); }
+.sp-gauge .segs i.on.hot { background: oklch(0.78 0.13 75); }
+.sp-gauge b { font-size: 13px; font-weight: 600; color: var(--ink); }
+.sp-gauge .u { font-size: 10px; color: var(--faint); }
+.speed-view:not([data-phase="run"]) .sp-gauge { opacity: 0; }
+.speed-view[data-phase="run"] .sp-gauge { transition-delay: 450ms; }
+.sp-steps .gear { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; font: 600 12px var(--mono); color: var(--faint); transition: background 250ms, color 250ms; }
+.sp-steps .st.on .gear { background: var(--accent); color: var(--accent-ink); }
+#speed-up.on .gear { background: var(--ok); }
+.sp-steps .st.got .gear { color: var(--ink); }
+.sp-rank { display: none; place-items: center; width: 26px; height: 26px; margin-right: var(--s2); border: 2px solid oklch(0.78 0.13 75); border-radius: 4px; color: oklch(0.78 0.13 75); font: 700 15px var(--mono); }
+.speed-view[data-phase="sum"] .sp-rank { display: inline-grid; animation: rise var(--t-base) var(--ease-out) 600ms both; }
+.sp-foot { align-items: center; }
 .sp-steps { display: flex; justify-content: center; gap: var(--s6); }
 .sp-steps .st { display: flex; align-items: center; gap: 6px; color: var(--faint); }
-.sp-steps .st i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); transition: background 300ms; }
 .sp-steps .st b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); }
-.sp-steps .st.got i { background: var(--ink); }
 .sp-steps .st.got b { color: var(--ink); }
-.sp-steps .st.on i { background: var(--accent); }
-#speed-up.on i { background: var(--ok); }
 .speed-view .via { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: var(--s2); }
 .sp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
 .sp-stats > div { display: grid; grid-template-columns: auto 1fr; column-gap: 4px; align-items: baseline; }
@@ -1004,14 +1029,20 @@ html.app, html.app body { overflow: hidden; }
         <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
       </div>
       <section class="settings-view speed-view" id="speed" aria-labelledby="sp-title" hidden>
+        <canvas class="sp-road" id="speed-road" aria-hidden="true"></canvas>
         <div class="dlg-body">
           <div class="dlg-head">
             <h3 id="sp-title"><span data-t="speedTest">Speed test</span> <span class="via" id="speed-via"></span></h3>
+            <span class="sp-lap" id="speed-lap" aria-label="Elapsed">00:00.00</span>
             <button type="button" class="icon-btn" id="speed-close" title="Back (Esc)" aria-label="Back"><i class="ph ph-x"></i></button>
           </div>
           <div class="sp-dial">
+            <div class="sp-gauge" id="speed-g-ping"><span class="gl">PING</span><span class="segs"></span><b>--</b><span class="u">ms</span></div>
+            <div class="sp-gauge" id="speed-g-load"><span class="gl">LOAD</span><span class="segs"></span><b>--</b><span class="u">ms</span></div>
             <svg viewBox="0 0 240 214" id="speed-dial">
+              <g id="sp-finish" opacity="0"><rect x="72" y="4" width="96" height="20"/><text x="120" y="15">FINISH</text></g>
               <g id="sp-main">
+                <circle class="under" id="sp-under" cx="120" cy="100"/>
                 <circle class="track" id="sp-track" cx="120" cy="100"/>
                 <circle class="ring" id="sp-ring" cx="120" cy="100"/>
                 <circle class="arc" id="speed-arc" cx="120" cy="100"/>
@@ -1022,6 +1053,7 @@ html.app, html.app body { overflow: hidden; }
                 <circle class="hub" id="sp-hub" cx="120" cy="100"/>
               </g>
               <g id="sp-twin" opacity="0">
+                <circle class="under" cx="120" cy="100" r="96"/>
                 <path class="track" stroke-width="10" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
                 <path class="arc up" id="sp-arc2" pathLength="1" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
               </g>
@@ -1039,9 +1071,9 @@ html.app, html.app body { overflow: hidden; }
               <rect class="hit" id="sp-stop" role="button" tabindex="0" aria-label="Stop"/>
             </svg>
             <div class="sp-steps">
-              <span class="st" id="speed-lat"><i></i><span class="u">ms</span><b id="speed-ms">-</b></span>
-              <span class="st" id="speed-down"><i></i><span class="u">↓</span><b>-</b></span>
-              <span class="st" id="speed-up"><i></i><span class="u">↑</span><b>-</b></span>
+              <span class="st" id="speed-lat"><span class="gear">P</span><b id="speed-ms">-</b><span class="u">ms</span></span>
+              <span class="st" id="speed-down"><span class="gear">D</span><b>-</b><span class="u">↓</span></span>
+              <span class="st" id="speed-up"><span class="gear">U</span><b>-</b><span class="u">↑</span></span>
             </div>
           </div>
           <div class="sp-stats">
@@ -1051,6 +1083,7 @@ html.app, html.app body { overflow: hidden; }
             <div><span data-t="loadUp">Loaded up</span><b id="speed-ul">-</b><span class="u">ms</span></div>
           </div>
           <div class="sp-foot">
+            <b class="sp-rank" id="speed-rank"></b>
             <span class="sp-note" id="speed-note"></span>
           </div>
         </div>
@@ -2948,7 +2981,7 @@ function speedRun(a, on) {
 function speedStart() {
   const a = adapters[sel]; if (!a) return;
   const run = ++speed.run;
-  Object.assign(speed, { state: "run", res: {}, used: 0, leg: "", aid: a.id, lat: [] });
+  Object.assign(speed, { state: "run", res: {}, used: 0, leg: "", aid: a.id, lat: [], t0: performance.now(), t1: 0 });
   speed.stop = speedRun(a, ev => {
     if (run !== speed.run) return;
     if (ev.kind === "latency") {
@@ -2968,7 +3001,7 @@ function speedStart() {
 }
 function speedEnd(state) {
   speed.stop?.(); speed.stop = null; speed.run++;
-  Object.assign(speed, { state, leg: state === "done" ? "" : speed.leg });
+  Object.assign(speed, { state, leg: state === "done" ? "" : speed.leg, t1: performance.now() });
   paintSpeed(); speedDraw();
 }
 // Start is the button in the middle; once it opens into the dial, the small one under it stops (or, when done, runs it again).
@@ -3013,6 +3046,17 @@ function paintSpeed() {
   $("speed-now").textContent = s === "run" ? n(now === "ms" ? speed.res.ms : speed.res[now]) : n(speed.res.down);
   $("sp-now2").textContent = n(speed.res.up);
   roll($("speed-ping"), n(speed.res.ms));
+  // Side gauges: latency on the left, latency with the line full on the right; the top few segments go amber.
+  for (const [id, val, max] of [["speed-g-ping", speed.res.ms, 200], ["speed-g-load", speed.leg ? speed.res[speed.leg + "Load"] : undefined, 300]]) {
+    const g = $(id), segs = g.querySelector(".segs");
+    if (!segs.children.length) segs.innerHTML = "<i></i>".repeat(14);
+    const lit = val === undefined ? 0 : Math.round(Math.min(1, val / max) * 14);
+    [...segs.children].forEach((x, i) => { x.classList.toggle("on", i < lit); x.classList.toggle("hot", i >= 11); });
+    g.querySelector("b").textContent = val === undefined ? "--" : val;
+  }
+  // A rank, like a game's: the download speed sets the tier, lag with the line full takes it down.
+  const tier = d => d >= 500 ? 4 : d >= 100 ? 3 : d >= 25 ? 2 : d >= 5 ? 1 : 0;
+  $("speed-rank").textContent = grade ? "DCBAS"[Math.max(0, tier(speed.res.down ?? 0) - (bloat >= 150 ? 2 : bloat >= 50 ? 1 : 0))] : "";
   $("speed-unit").textContent = s === "run" && now === "ms" ? "ms" : `Mbps ${now === "up" ? "↑" : "↓"}`;
   roll($("speed-jit"), n(speed.res.jit));
   roll($("speed-dl"), n(speed.res.downLoad)); roll($("speed-ul"), n(speed.res.upLoad));
@@ -3082,8 +3126,41 @@ function speedDraw() {
   set("sp-cic", { d: "M" + PLAY.map((p, i) => `${ix + mix(p[0], STOP[i][0], q) * 0.8},${cy + mix(p[1], STOP[i][1], q) * 0.8}`).join("L") + "Z", opacity: stopIn });
   set("sp-again", { x: SC - 34, y: cy + 1, opacity: slice(z, 0.6, 1) });
   $("sp-go").style.display = open ? "none" : ""; $("sp-stop").style.display = open ? "" : "none";
+  set("sp-under", { r: r + 14 });
+  const fz = slice(z, 0.2, 0.7, over);
+  set("sp-finish", { opacity: slice(z, 0.2, 0.5), transform: `translate(${SC} 14) scale(${fz} 1) translate(${-SC} -14)` });
+  const secs = s === "idle" || s === "stopped" || s === "error" ? 0 : ((speed.t1 || at) - speed.t0) / 1000;
+  $("speed-lap").textContent = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${(secs % 60).toFixed(2).padStart(5, "0")}`;
   const moving = [speed.mt, speed.zt, speed.qt].some(o => at - o.t0 < o.ms) || Math.abs(to - speedN) > 0;
   if (speedOpen() && (s === "run" || moving)) speedRaf = requestAnimationFrame(speedDraw);
+}
+// The road: a floor grid running toward you at the line's speed (log scale), eased like a car gathering pace.
+// Download runs it toward you, upload away from you; between the two it slows through a standstill.
+const road = { off: 0, v: 0, at: 0 };
+let roadRaf = 0;
+function speedRoad(now) {
+  if (!speedOpen()) return;
+  const cv = $("speed-road"), w = cv.clientWidth, h = cv.clientHeight, dpr = devicePixelRatio || 1;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const dt = Math.min(64, now - (road.at || now)); road.at = now;
+  const mbps = speed.state === "run" ? speed.res[speed.leg] ?? 0 : 0;
+  const want = (speed.leg === "up" && speed.state === "run" ? -1 : 1) * (0.15 + 2.6 * Math.min(1, Math.log10(1 + mbps) / 3));
+  road.v += (want - road.v) * Math.min(1, dt / 700);
+  if (!calm.matches) road.off = ((road.off + road.v * dt / 1000) % 1 + 1) % 1;
+  const c = cv.getContext("2d"), css = getComputedStyle(cv);
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+  c.strokeStyle = css.getPropertyValue("--border-strong").trim() || "#555"; c.lineWidth = 1;
+  const vx = w / 2, vy = h * 0.4;
+  c.globalAlpha = 0.35;
+  for (let i = -9; i <= 9; i++) { c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx + i * w / 6, h); c.stroke(); }
+  for (let j = 0; j < 10; j++) { const f = (j + road.off) / 10, y = vy + (h - vy) * f * f; c.globalAlpha = 0.5 * f; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+  // Corner brackets
+  c.globalAlpha = 0.8; c.strokeStyle = css.getPropertyValue("--muted").trim() || "#888"; c.lineWidth = 2;
+  for (const [x, y, dx, dy] of [[10, 10, 1, 1], [w - 10, 10, -1, 1], [10, h - 10, 1, -1], [w - 10, h - 10, -1, -1]]) {
+    c.beginPath(); c.moveTo(x, y + dy * 18); c.lineTo(x, y); c.lineTo(x + dx * 18, y); c.stroke();
+  }
+  c.globalAlpha = 1;
+  roadRaf = requestAnimationFrame(speedRoad);
 }
 function openSpeed() {
   if (speedOpen()) return closeSpeed();
@@ -3093,6 +3170,7 @@ function openSpeed() {
   $("open-speed").classList.add("on"); $("open-speed").setAttribute("aria-current", "page");
   indicator.style.opacity = 0;
   paintSpeed(); speedDraw();
+  cancelAnimationFrame(roadRaf); road.at = 0; roadRaf = requestAnimationFrame(speedRoad);
 }
 function closeSpeed() {
   const v = $("speed");
