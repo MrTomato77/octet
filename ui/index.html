@@ -3164,6 +3164,7 @@ function speedDraw() {
   const pts = [[mix(26, SR - 16, turn), 0], [mix(10, -10, turn), mix(-1.6, -4, turn)], [mix(10, -10, turn), mix(1.6, 4, turn)]];
   const d = "M" + pts.map(([x, y]) => `${SC + x * cs - y * sn},${SY + lift + x * sn + y * cs}`).join("L") + "Z", ink = slice(m, 0.25, 0.6);
   set("sp-needle-a", { d, opacity: 1 - ink }); set("speed-needle", { d, opacity: ink * (1 - slice(z, 0, 0.35)) });
+  set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
   // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
   // The two result dials use the whole width, not just the 240 units of the view box: each takes half, with room between.
   const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / VH) || 1;
@@ -3171,8 +3172,6 @@ function speedDraw() {
   const zs = slice(z, 0, 0.75), sc = mix(1, S2, zs), tx = mix(0, -X2, zs), ty = 0;
   const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
   set("sp-main", { transform: place(tx) });
-  // The hub stays where it is while the dial slides out from under it, and ends up between the two dials, capping the road's vanishing point.
-  set("sp-hub", { cx: SC - tx / sc, r: 6 * slice(m, 0.3, 0.8) / sc });
   const twin = slice(z, 0.15, 0.85);
   set("sp-twin", { transform: place(mix(0, X2, twin)), opacity: slice(z, 0.1, 0.4) });
   $("sp-arc2").style.strokeDasharray = `${Math.min(1, Math.log10(1 + (speed.res.up ?? 0)) / 3) * slice(z, 0.4, 1)} 1`;
@@ -3226,6 +3225,10 @@ function speedRoad(now) {
   for (let i = -9; i <= 9; i++) { c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx + i * w / 6, h); c.stroke(); }
   for (let j = 0; j < 10; j++) { const f = (j + road.off) / 10, y = vy + (h - vy) * f * f; c.globalAlpha = 0.5 * f; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
   c.globalAlpha = 1;
+  // Horizon fog: the lines thin out into nothing before they meet, so there's no bright knot where they converge.
+  const fog = c.createRadialGradient(vx, vy, 0, vx, vy, (h - vy) * 0.6);
+  fog.addColorStop(0, "#000"); fog.addColorStop(0.35, "rgba(0,0,0,.85)"); fog.addColorStop(1, "rgba(0,0,0,0)");
+  c.globalCompositeOperation = "destination-out"; c.fillStyle = fog; c.fillRect(0, 0, w, h); c.globalCompositeOperation = "source-over";
   // The LED rings: pointing at a button spins its ring up over most of a second; leaving lets it coast to a stop.
   led.w += ((led.hot ? 200 : 0) - led.w) * Math.min(1, dt / (led.hot ? 650 : 900));
   if (!calm.matches) led.a = (led.a + led.w * dt / 1000) % 360;
