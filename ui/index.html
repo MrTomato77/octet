@@ -630,19 +630,32 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-dial .arc.up { stroke: var(--ok); }
 .sp-dial .disc { fill: var(--accent); transition: fill 300ms; }
 .sp-dial .tick { fill: var(--faint); font-size: 10px; text-anchor: middle; dominant-baseline: middle; }
-.sp-dial .hub, .sp-dial .ctl { fill: var(--ink); }
+.sp-dial .needle, .sp-dial .hub, .sp-dial .ctl { fill: var(--ink); }
+.sp-dial .needle.on-disc { fill: var(--accent-ink); }
 .sp-dial .cic { fill: var(--surface); }
 .sp-dial .lbl { fill: var(--accent-ink); font-size: 14px; font-weight: 600; text-anchor: middle; }
-.sp-dial .now { fill: var(--ink); font-size: 28px; font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.sp-dial .now { fill: var(--ink); font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.sp-dial #sp-now2 { font-size: 22px; }
 .sp-dial .unit { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+.sp-dial .cap { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+.sp-dial .again { fill: var(--surface); font-size: 13px; font-weight: 600; dominant-baseline: middle; }
 .sp-dial .hit { fill: transparent; cursor: pointer; outline: none; }
 .sp-dial .hit:focus-visible { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 3; }
 /* A phone hotspot paints the button amber; a disconnected adapter greys it out */
 #speed-dial.warn .disc, #speed-dial.warn .ring { fill: oklch(0.78 0.13 75); stroke: oklch(0.78 0.13 75); }
-#speed-dial.warn .lbl { fill: oklch(0.25 0.03 75); }
+#speed-dial.warn .lbl, #speed-dial.warn .needle.on-disc { fill: oklch(0.25 0.03 75); }
 #speed-dial.off .disc { fill: var(--border-strong); }
 #speed-dial.off .ring { stroke: var(--border-strong); }
 #speed-dial.off #sp-go { cursor: default; }
+/* Before Start there is only the button: the steps and the small numbers come in with the test */
+.speed-view .sp-steps, .speed-view .sp-stats { transition: opacity 320ms var(--ease-out), transform 320ms var(--ease-out); }
+.speed-view[data-phase="run"] .sp-stats { transition-delay: 380ms; }
+.speed-view[data-phase="run"] .sp-steps { transition-delay: 300ms; }
+.speed-view[data-phase="sum"] .sp-stats { transition-delay: 420ms; }
+.speed-view[data-phase="idle"] .sp-steps, .speed-view[data-phase="idle"] .sp-stats,
+.speed-view[data-phase="sum"] .sp-steps { opacity: 0; transform: translateY(6px); pointer-events: none; }
+.sp-note.good { color: var(--ok); }
+.sp-note.meh { color: oklch(0.78 0.13 75); }
 .sp-steps { display: flex; justify-content: center; gap: var(--s6); }
 .sp-steps .st { display: flex; align-items: center; gap: 6px; color: var(--faint); }
 .sp-steps .st i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); transition: background 300ms; }
@@ -652,7 +665,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-steps .st.on i { background: var(--accent); }
 #speed-up.on i { background: var(--ok); }
 .speed-view .via { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: var(--s2); }
-.sp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
+.sp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
 .sp-stats > div { display: grid; grid-template-columns: auto 1fr; column-gap: 4px; align-items: baseline; }
 .sp-stats > div > span:first-child { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
 .sp-stats .u { color: var(--faint); }
@@ -998,20 +1011,32 @@ html.app, html.app body { overflow: hidden; }
           </div>
           <div class="sp-dial">
             <svg viewBox="0 0 240 214" id="speed-dial">
-              <circle class="track" id="sp-track" cx="120" cy="100"/>
-              <circle class="ring" id="sp-ring" cx="120" cy="100"/>
-              <circle class="arc" id="speed-arc" cx="120" cy="100"/>
-              <circle class="disc" id="sp-disc" cx="120" cy="100"/>
-              <g id="sp-ticks"><text class="tick" x="51" y="169">0</text><text class="tick" x="55" y="27">10</text><text class="tick" x="190" y="31">100</text><text class="tick" x="189" y="169">1000</text></g>
-              <path class="needle" id="speed-needle"/>
-              <circle class="hub" id="sp-hub" cx="120" cy="100"/>
+              <g id="sp-main">
+                <circle class="track" id="sp-track" cx="120" cy="100"/>
+                <circle class="ring" id="sp-ring" cx="120" cy="100"/>
+                <circle class="arc" id="speed-arc" cx="120" cy="100"/>
+                <circle class="disc" id="sp-disc" cx="120" cy="100"/>
+                <g id="sp-ticks"><text class="tick" x="51" y="169">0</text><text class="tick" x="55" y="27">10</text><text class="tick" x="190" y="31">100</text><text class="tick" x="189" y="169">1000</text></g>
+                <path class="needle on-disc" id="sp-needle-a"/>
+                <path class="needle" id="speed-needle"/>
+                <circle class="hub" id="sp-hub" cx="120" cy="100"/>
+              </g>
+              <g id="sp-twin" opacity="0">
+                <path class="track" stroke-width="10" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
+                <path class="arc up" id="sp-arc2" pathLength="1" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
+              </g>
               <text class="lbl" id="sp-lbl" x="120" y="122">Start</text>
               <text class="now" id="speed-now" x="120" y="142"></text>
               <text class="unit" id="speed-unit" x="120" y="160"></text>
-              <circle class="ctl" id="sp-ctl" cx="120" cy="192"/>
+              <text class="now" id="sp-now2" x="175" y="86" opacity="0"></text>
+              <text class="unit" id="sp-unit2" x="175" y="102" opacity="0">Mbps</text>
+              <text class="cap" id="sp-cap1" x="65" y="136" opacity="0">Download</text>
+              <text class="cap" id="sp-cap2" x="175" y="136" opacity="0">Upload</text>
+              <rect class="ctl" id="sp-ctl"/>
               <path class="cic" id="sp-cic"/>
+              <text class="again" id="sp-again" y="196" opacity="0">Test again</text>
               <circle class="hit" id="sp-go" cx="120" cy="100" r="44" role="button" tabindex="0" aria-label="Start"/>
-              <circle class="hit" id="sp-stop" cx="120" cy="192" r="20" role="button" tabindex="0" aria-label="Stop"/>
+              <rect class="hit" id="sp-stop" role="button" tabindex="0" aria-label="Stop"/>
             </svg>
             <div class="sp-steps">
               <span class="st" id="speed-lat"><i></i><span class="u">ms</span><b id="speed-ms">-</b></span>
@@ -1020,6 +1045,7 @@ html.app, html.app body { overflow: hidden; }
             </div>
           </div>
           <div class="sp-stats">
+            <div><span data-t="ping">Ping</span><b id="speed-ping">-</b><span class="u">ms</span></div>
             <div><span data-t="jitter">Jitter</span><b id="speed-jit">-</b><span class="u">ms</span></div>
             <div><span data-t="loadDown">Loaded down</span><b id="speed-dl">-</b><span class="u">ms</span></div>
             <div><span data-t="loadUp">Loaded up</span><b id="speed-ul">-</b><span class="u">ms</span></div>
@@ -2946,7 +2972,7 @@ function speedEnd(state) {
   paintSpeed(); speedDraw();
 }
 // Start is the button in the middle; once it opens into the dial, the small one under it stops (or, when done, runs it again).
-$("sp-go").onclick = () => speed.live && speed.m < 0.5 && speedStart();
+$("sp-go").onclick = () => speed.live && speed.state !== "run" && speedStart();
 $("sp-stop").onclick = () => speed.state === "run" ? speedEnd("stopped") : speed.state === "done" && speedStart();
 for (const id of ["sp-go", "sp-stop"]) $(id).onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $(id).onclick(); } };
 function paintSpeed() {
@@ -2959,15 +2985,23 @@ function paintSpeed() {
   speed.live = live;
   $("speed-dial").classList.toggle("warn", warn); $("speed-dial").classList.toggle("off", !live);
   $("sp-lbl").textContent = L("Start", "เริ่ม"); $("sp-go").setAttribute("aria-label", L("Start", "เริ่ม"));
-  $("sp-stop").setAttribute("aria-label", s === "run" ? L("Stop", "หยุด") : L("Again", "อีกครั้ง"));
-  const mb = Math.round(speed.used / 1e6);
+  $("sp-stop").setAttribute("aria-label", s === "run" ? L("Stop", "หยุด") : L("Test again", "ทดสอบอีกครั้ง"));
+  $("sp-again").textContent = L("Test again", "ทดสอบอีกครั้ง");
+  $("sp-cap1").textContent = L("Download", "ดาวน์โหลด"); $("sp-cap2").textContent = L("Upload", "อัปโหลด");
+  // idle: the button and one line. run: the dial, the steps and the small numbers. sum: two dials and the summary.
+  $("speed").dataset.phase = s === "run" ? "run" : s === "done" ? "sum" : "idle";
+  // How much worse the latency gets with the line full (bufferbloat): what games and calls feel.
+  const mb = Math.round(speed.used / 1e6), r = speed.res, bloat = Math.max(r.downLoad ?? 0, r.upLoad ?? 0) - (r.ms ?? 0);
+  const grade = s !== "done" ? "" : bloat < 30 ? "good" : bloat < 100 ? "meh" : "bad";
   $("speed-note").textContent = !live ? L("This adapter isn't connected", "adapter นี้ยังไม่ได้เชื่อมต่อ")
     : s === "run" ? L(`${mb} MB so far`, `ใช้ไป ${mb} MB`)
     : s === "error" ? speed.error
-    : s === "done" || s === "stopped" ? (s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`) : L(`${mb} MB used`, `ใช้ไป ${mb} MB`))
+    : s === "done" ? ({ good: L("Stays quick with the line full", "เน็ตเต็มก็ยังตอบสนองไว"), meh: L("A little slower with the line full", "เน็ตเต็มแล้วหน่วงขึ้นเล็กน้อย"),
+        bad: L("Lags with the line full: calls and games may stutter", "เน็ตเต็มแล้วหน่วงมาก วิดีโอคอลและเกมอาจสะดุด") })[grade] + L(` · ${mb} MB`, ` · ${mb} MB`)
+    : s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`)
     : warn ? L("Phone hotspot: uses about 250 MB of data", "ต่อผ่านมือถือ: ใช้ข้อมูลราว 250 MB")
     : L("Cloudflare · about 250 MB · they see your IP", "Cloudflare · ราว 250 MB · Cloudflare เห็น IP ของคุณ");
-  $("speed-note").classList.toggle("bad", s === "error");
+  $("speed-note").className = "sp-note " + (s === "error" ? "bad" : grade);
   // Three steps under the dial: the one under way is lit, the ones with a number are inked.
   const n = v => v === undefined ? "-" : String(v), now = s === "run" ? (speed.leg || "ms") : "";
   for (const [k, id, val] of [["ms", "speed-lat", speed.res.ms], ["down", "speed-down", speed.res.down], ["up", "speed-up", speed.res.up]]) {
@@ -2977,48 +3011,78 @@ function paintSpeed() {
   }
   // The middle of the dial: the reading under way, or the download once it's over.
   $("speed-now").textContent = s === "run" ? n(now === "ms" ? speed.res.ms : speed.res[now]) : n(speed.res.down);
+  $("sp-now2").textContent = n(speed.res.up);
+  roll($("speed-ping"), n(speed.res.ms));
   $("speed-unit").textContent = s === "run" && now === "ms" ? "ms" : `Mbps ${now === "up" ? "↑" : "↓"}`;
   roll($("speed-jit"), n(speed.res.jit));
   roll($("speed-dl"), n(speed.res.downLoad)); roll($("speed-ul"), n(speed.res.upLoad));
 }
 // The dial: log scale, 0 to 1000 Mbps, so Wi-Fi and gigabit both sit somewhere readable.
-// Start is a round button that opens into the dial: its edge grows into the track, its play triangle swings round and
-// stretches into the needle, its fill shrinks to the hub, and a small stop button grows out of the gap at the bottom.
-// Stopping folds it all back into the button; a finished test stays open, and the small button's square turns back into play.
+// Start is a round button that opens into the dial: its label fades, its play triangle swings round and stretches into
+// the needle, its edge grows into the track while the fill shrinks to the hub, then the scale, the reading and a small
+// stop button come in. Stopping plays that backwards. A finished test splits the dial in two: download slides left,
+// upload comes out of it to the right, and the stop button stretches into a "Test again" pill.
+// Each piece runs on its own slice of one timeline, so the parts overlap instead of popping one after another.
 let speedRaf = 0, speedN = 0;
 const SC = 120, SY = 100, SR = 80;
 const PLAY = [[-5, -7], [7, 0], [7, 0], [-5, 7]], STOP = [[-6, -6], [6, -6], [6, 6], [-6, 6]];
-const mix = (a, b, t) => a + (b - a) * t;
+const mix = (a, b, t) => a + (b - a) * t, clamp01 = x => Math.min(1, Math.max(0, x));
+const inOut = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+const over = t => 1 + 2.4 * (t - 1) ** 3 + 1.4 * (t - 1) ** 2;   // a little past 1, then back
+const slice = (t, a, b, f = inOut) => f(clamp01((t - a) / (b - a)));
+// A tween: a value that walks from where it is to where it's told, over a set time.
+function tween(o, to, ms, at) {
+  if (o.to === to) return;
+  o.from = tweenAt(o, at); o.to = to; o.t0 = at; o.ms = calm.matches ? 1 : ms;
+}
+const tweenAt = (o, at) => o.to === undefined ? 0 : mix(o.from, o.to, clamp01((at - o.t0) / o.ms));
+speed.mt = {}; speed.zt = {}; speed.qt = {};
 function speedDraw() {
   cancelAnimationFrame(speedRaf);
-  const s = speed.state, open = s === "run" || s === "done" ? 1 : 0, sq = s === "run" ? 1 : 0;
-  const v = s === "run" ? speed.res[speed.leg] ?? 0 : s === "done" ? speed.res.down ?? 0 : 0, to = Math.min(1, Math.log10(1 + v) / 3);
-  const step = (x, t, k) => calm.matches ? t : Math.abs(t - x) < 0.002 ? t : x + (t - x) * k;
-  speed.m = calm.matches ? open : (speed.m ?? 0) + Math.sign(open - (speed.m ?? 0)) * Math.min(Math.abs(open - (speed.m ?? 0)), 1 / 26);
-  speed.sq = step(speed.sq ?? 0, sq, 0.2); speedN = step(speedN, open ? to : 0, 0.12);
-  const e = ease(speed.m), r = mix(40, SR, e), sweep = mix(360, 270, e), c = 2 * Math.PI * r, rot = `rotate(${90 + (360 - sweep) / 2} ${SC} ${SY})`;
-  const dash = f => `${f * sweep / 360 * c} ${c}`, show = Math.max(0, e * 2 - 1);
-  const at = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
-  at("sp-track", { r, transform: rot, "stroke-width": 10 * e, "stroke-dasharray": dash(1), opacity: e });
-  at("sp-ring", { r, transform: rot, "stroke-dasharray": dash(1), opacity: 1 - e });
-  at("speed-arc", { r, transform: rot, "stroke-dasharray": dash(speedN), opacity: e > 0.5 && speedN > 0.003 ? 1 : 0 });
+  const at = performance.now(), s = speed.state, open = s === "run" || s === "done" ? 1 : 0, sum = s === "done" ? 1 : 0;
+  tween(speed.mt, open, open ? 900 : 650, at); tween(speed.zt, sum, 800, at); tween(speed.qt, s === "run" ? 1 : 0, 260, at);
+  const m = tweenAt(speed.mt, at), z = tweenAt(speed.zt, at), q = inOut(tweenAt(speed.qt, at));
+  const v = s === "run" ? speed.res[speed.leg] ?? 0 : s === "done" ? speed.res.down ?? 0 : 0, to = open ? Math.min(1, Math.log10(1 + v) / 3) : 0;
+  speedN = calm.matches || Math.abs(to - speedN) < 0.002 ? to : speedN + (to - speedN) * 0.1;
+  const set = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
+  // Opening: label 0-.3, triangle to needle .1-.75, edge to track 0-.8 (overshoots a little), hub .3-.8, scale and reading .55-1, stop .7-1.
+  const grow = slice(m, 0, 0.8, open ? over : inOut), turn = slice(m, 0.1, 0.75), late = slice(m, 0.55, 1), stopIn = slice(m, 0.7, 1, open ? over : inOut);
+  const r = mix(40, SR, grow), sweep = mix(360, 270, slice(m, 0, 0.8)), c = 2 * Math.PI * r, rot = `rotate(${90 + (360 - sweep) / 2} ${SC} ${SY})`;
+  const dash = f => `${Math.max(0, f) * sweep / 360 * c} ${c}`;
+  set("sp-track", { r, transform: rot, "stroke-width": 10 * slice(m, 0.15, 0.8), "stroke-dasharray": dash(1), opacity: slice(m, 0, 0.4) });
+  set("sp-ring", { r, transform: rot, "stroke-dasharray": dash(1), opacity: 1 - slice(m, 0.2, 0.6) });
+  set("speed-arc", { r, transform: rot, "stroke-dasharray": dash(speedN), opacity: late > 0.01 && speedN > 0.003 ? 1 : 0 });
   $("speed-arc").classList.toggle("up", s === "run" && speed.leg === "up");
-  at("sp-disc", { r: 40 * (1 - e) });
-  at("sp-ticks", { opacity: show });
+  set("sp-disc", { r: 40 * (1 - slice(m, 0.05, 0.7)) });
+  set("sp-ticks", { opacity: late * (1 - slice(z, 0, 0.4)) });
   // The play triangle, in its own frame pointing right, becomes the needle pointing at the reading.
-  const th = mix(0, 135 + 270 * speedN, e) * Math.PI / 180, cs = Math.cos(th), sn = Math.sin(th);
-  const pts = [[mix(11, SR - 16, e), 0], [mix(-7, -10, e), mix(-10, -4, e)], [mix(-7, -10, e), mix(10, 4, e)]], lift = mix(-7, 0, e);
-  at("speed-needle", { d: "M" + pts.map(([x, y]) => `${SC + x * cs - y * sn},${SY + lift + x * sn + y * cs}`).join("L") + "Z" });
-  $("speed-needle").style.fill = e < 0.5 ? "var(--accent-ink)" : "var(--ink)";
-  if ($("speed-dial").classList.contains("warn") && e < 0.5) $("speed-needle").style.fill = "oklch(0.25 0.03 75)";
-  at("sp-hub", { r: 6 * e });
-  at("sp-lbl", { opacity: Math.max(0, 1 - e * 2) });
-  at("speed-now", { opacity: show }); at("speed-unit", { opacity: show });
-  const grow = ease(Math.min(1, Math.max(0, (speed.m - 0.65) / 0.35)));
-  at("sp-ctl", { r: 15 * grow });
-  at("sp-cic", { d: "M" + PLAY.map((p, i) => `${SC + (1 - speed.sq) + mix(p[0], STOP[i][0], speed.sq) * 0.8},${192 + mix(p[1], STOP[i][1], speed.sq) * 0.8}`).join("L") + "Z", opacity: grow });
+  const th = (mix(0, 135, turn) + 270 * speedN * late) * Math.PI / 180, cs = Math.cos(th), sn = Math.sin(th), lift = mix(-7, 0, turn);
+  const pts = [[mix(11, SR - 16, turn), 0], [mix(-7, -10, turn), mix(-10, -4, turn)], [mix(-7, -10, turn), mix(10, 4, turn)]];
+  const d = "M" + pts.map(([x, y]) => `${SC + x * cs - y * sn},${SY + lift + x * sn + y * cs}`).join("L") + "Z", ink = slice(m, 0.25, 0.6);
+  set("sp-needle-a", { d, opacity: 1 - ink }); set("speed-needle", { d, opacity: ink * (1 - slice(z, 0, 0.35)) });
+  set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
+  set("sp-lbl", { opacity: 1 - slice(m, 0, 0.3) });
+  // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
+  const zs = slice(z, 0, 0.75), sc = mix(1, 0.55, zs), tx = mix(0, -55, zs), ty = mix(0, -20, zs);
+  const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
+  set("sp-main", { transform: place(tx) });
+  const twin = slice(z, 0.15, 0.85);
+  set("sp-twin", { transform: place(mix(0, 55, twin)), opacity: slice(z, 0.1, 0.4) });
+  $("sp-arc2").style.strokeDasharray = `${Math.min(1, Math.log10(1 + (speed.res.up ?? 0)) / 3) * slice(z, 0.4, 1)} 1`;
+  set("speed-now", { x: mix(SC, 65, zs), y: mix(142, 86, zs), "font-size": mix(28, 22, zs), opacity: late });
+  set("speed-unit", { x: mix(SC, 65, zs), y: mix(160, 102, zs), opacity: late });
+  if (z > 0) $("speed-unit").textContent = "Mbps";
+  const tw = slice(z, 0.45, 1);
+  set("sp-now2", { opacity: tw }); set("sp-unit2", { opacity: tw }); set("sp-cap1", { opacity: tw }); set("sp-cap2", { opacity: tw });
+  // The small button: grows out of the gap; when it's over, stretches into a pill that says what it does.
+  const pz = slice(z, 0.3, 1, over), w = mix(30, 132, pz) * stopIn, h = mix(30, 32, pz) * stopIn, cy = mix(192, 190, pz);
+  set("sp-ctl", { x: SC - w / 2, y: cy - h / 2, width: Math.max(0, w), height: Math.max(0, h), rx: h / 2 });
+  set("sp-stop", { x: SC - Math.max(w, 30) / 2 - 4, y: cy - 19, width: Math.max(w, 30) + 8, height: 38 });
+  const ix = SC + (1 - q) + mix(0, -48, pz);
+  set("sp-cic", { d: "M" + PLAY.map((p, i) => `${ix + mix(p[0], STOP[i][0], q) * 0.8},${cy + mix(p[1], STOP[i][1], q) * 0.8}`).join("L") + "Z", opacity: stopIn });
+  set("sp-again", { x: SC - 34, y: cy + 1, opacity: slice(z, 0.6, 1) });
   $("sp-go").style.display = open ? "none" : ""; $("sp-stop").style.display = open ? "" : "none";
-  const moving = speed.m !== open || speed.sq !== sq || Math.abs((open ? to : 0) - speedN) > 0.002;
+  const moving = [speed.mt, speed.zt, speed.qt].some(o => at - o.t0 < o.ms) || Math.abs(to - speedN) > 0;
   if (speedOpen() && (s === "run" || moving)) speedRaf = requestAnimationFrame(speedDraw);
 }
 function openSpeed() {
