@@ -656,11 +656,11 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .speed-view[data-phase="sum"] .sp-steps { opacity: 0; transform: translateY(6px); pointer-events: none; }
 .sp-note.good { color: var(--ok); }
 .sp-note.meh { color: oklch(0.78 0.13 75); }
-/* Game HUD around it: a floor grid that runs at the line's speed, corner brackets, a lap timer, two side gauges, gears */
+/* Game HUD around it: a floor grid that runs at the line's speed, a lap timer, two side gauges, gears */
 .speed-view { --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
 .sp-road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .speed-view .dlg-body { position: relative; }
-.sp-lap { margin-left: auto; margin-right: var(--s2); font-family: var(--mono); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sp-lap { margin-left: auto; font-family: var(--mono); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .speed-view[data-phase="idle"] .sp-lap { color: var(--faint); }
 .sp-dial { position: relative; }
 .sp-dial .under { fill: var(--surface); }
@@ -1034,7 +1034,6 @@ html.app, html.app body { overflow: hidden; }
           <div class="dlg-head">
             <h3 id="sp-title"><span data-t="speedTest">Speed test</span> <span class="via" id="speed-via"></span></h3>
             <span class="sp-lap" id="speed-lap" aria-label="Elapsed">00:00.00</span>
-            <button type="button" class="icon-btn" id="speed-close" title="Back (Esc)" aria-label="Back"><i class="ph ph-x"></i></button>
           </div>
           <div class="sp-dial">
             <div class="sp-gauge" id="speed-g-ping"><span class="gl">PING</span><span class="segs"></span><b>--</b><span class="u">ms</span></div>
@@ -3154,11 +3153,6 @@ function speedRoad(now) {
   c.globalAlpha = 0.35;
   for (let i = -9; i <= 9; i++) { c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx + i * w / 6, h); c.stroke(); }
   for (let j = 0; j < 10; j++) { const f = (j + road.off) / 10, y = vy + (h - vy) * f * f; c.globalAlpha = 0.5 * f; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
-  // Corner brackets
-  c.globalAlpha = 0.8; c.strokeStyle = css.getPropertyValue("--muted").trim() || "#888"; c.lineWidth = 2;
-  for (const [x, y, dx, dy] of [[10, 10, 1, 1], [w - 10, 10, -1, 1], [10, h - 10, 1, -1], [w - 10, h - 10, -1, -1]]) {
-    c.beginPath(); c.moveTo(x, y + dy * 18); c.lineTo(x, y); c.lineTo(x + dx * 18, y); c.stroke();
-  }
   c.globalAlpha = 1;
   roadRaf = requestAnimationFrame(speedRoad);
 }
@@ -3185,7 +3179,6 @@ function closeSpeed() {
   setTimeout(end, 200);
 }
 $("open-speed").onclick = openSpeed;
-$("speed-close").onclick = closeSpeed;
 
 // ---------- Scan: who answers on this subnet ----------
 // scan_host answers { mac, vendor, ms } for an address something holds (ARP or ping), or null.
