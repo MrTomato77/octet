@@ -3164,7 +3164,6 @@ function speedDraw() {
   const pts = [[mix(26, SR - 16, turn), 0], [mix(10, -10, turn), mix(-1.6, -4, turn)], [mix(10, -10, turn), mix(1.6, 4, turn)]];
   const d = "M" + pts.map(([x, y]) => `${SC + x * cs - y * sn},${SY + lift + x * sn + y * cs}`).join("L") + "Z", ink = slice(m, 0.25, 0.6);
   set("sp-needle-a", { d, opacity: 1 - ink }); set("speed-needle", { d, opacity: ink * (1 - slice(z, 0, 0.35)) });
-  set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
   // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
   // The two result dials use the whole width, not just the 240 units of the view box: each takes half, with room between.
   const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / VH) || 1;
@@ -3172,6 +3171,8 @@ function speedDraw() {
   const zs = slice(z, 0, 0.75), sc = mix(1, S2, zs), tx = mix(0, -X2, zs), ty = 0;
   const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
   set("sp-main", { transform: place(tx) });
+  // The hub stays where it is while the dial slides out from under it, and ends up between the two dials, capping the road's vanishing point.
+  set("sp-hub", { cx: SC - tx / sc, r: 6 * slice(m, 0.3, 0.8) / sc });
   const twin = slice(z, 0.15, 0.85);
   set("sp-twin", { transform: place(mix(0, X2, twin)), opacity: slice(z, 0.1, 0.4) });
   $("sp-arc2").style.strokeDasharray = `${Math.min(1, Math.log10(1 + (speed.res.up ?? 0)) / 3) * slice(z, 0.4, 1)} 1`;
