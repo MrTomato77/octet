@@ -211,6 +211,22 @@ fn ready(window: tauri::WebviewWindow) {
 
 static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 
+/// poc/speedtest: runs the Cloudflare SDK POC when OCTET_POC_SPEED is set (never in a release).
+#[tauri::command]
+fn poc_speed() -> bool {
+    let on = std::env::var_os("OCTET_POC_SPEED").is_some();
+    poc_log(format!("poc_speed asked: {on}"));
+    on
+}
+/// poc/speedtest: one line to %TEMP%\octet-poc.log.
+#[tauri::command]
+fn poc_log(line: String) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(std::env::temp_dir().join("octet-poc.log")) {
+        let _ = writeln!(f, "{line}");
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if let [_, flag, request, out] = args.as_slice() {
@@ -265,7 +281,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin, poc_speed, poc_log
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

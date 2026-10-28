@@ -3419,6 +3419,57 @@ if (!tauri) {
   segIndex("theme"); segIndex("lang");
   document.documentElement.lang = lang; translate();
 }
+// poc/speedtest: the Cloudflare SDK inside the real WebView2, only when OCTET_POC_SPEED is set. Results go to %TEMP%\octet-poc.log.
+if (tauri) invoke("poc_speed").then(async on => {
+  if (!on) return;
+  const log = (...x) => invoke("poc_log", { line: `${new Date().toISOString().slice(11, 23)} ${x.map(v => typeof v === "string" ? v : JSON.stringify(v)).join(" ")}` });
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  log("--- POC start, CSP:", document.querySelector("meta[http-equiv=Content-Security-Policy]")?.content ?? "(from tauri.conf)");
+  addEventListener("securitypolicyviolation", e => log("CSP blocked", e.blockedURI, e.violatedDirective));
+  let SpeedTest;
+  try { ({ default: SpeedTest } = await import("./vendor/cf-speedtest/speedtest.js")); log("SDK loaded"); }
+  catch (e) { log("SDK import failed", String(e)); return; }
+  const mbps = b => b ? +(b / 1e6).toFixed(1) : b;
+  const report = (tag, r, t0) => log(tag, {
+    secs: +((performance.now() - t0) / 1e3).toFixed(1),
+    down: mbps(r.getDownloadBandwidth()), up: mbps(r.getUploadBandwidth()),
+    latency: r.getUnloadedLatency(), jitter: r.getUnloadedJitter(),
+    downLoaded: r.getDownLoadedLatency(), upLoaded: r.getUpLoadedLatency(),
+    timingEntries: performance.getEntriesByType("resource").filter(e => e.name.includes("speed.cloudflare.com")).length,
+    zeroTimings: performance.getEntriesByType("resource").filter(e => e.name.includes("speed.cloudflare.com") && !e.responseStart).length,
+  });
+  const run = (tag, cfg = {}) => new Promise(res => {
+    performance.clearResourceTimings();
+    const t0 = performance.now();
+    const st = new SpeedTest({ autoStart: false, logAimApiUrl: null, ...cfg });
+    st.onError = e => { log(tag, "onError", String(e)); res(st); };
+    st.onFinish = r => { report(tag, r, t0); res(st); };
+    st.play();
+    setTimeout(() => res(st), 90000);   // never hang the POC
+  });
+  // 1. Full test, default plan (packet loss has no TURN server here: see what happens).
+  await run("full");
+  await wait(3000);
+  // 2. Stop and restart: pause after 4 s, check it is quiet, then restart from scratch.
+  {
+    const t0 = performance.now();
+    const st = new SpeedTest({ autoStart: false, logAimApiUrl: null });
+    st.onError = e => log("stop", "onError", String(e));
+    let finished = false;
+    st.onFinish = r => { finished = true; report("restart", r, t0); };
+    st.play(); await wait(4000);
+    st.pause(); const n = performance.getEntriesByType("resource").length;
+    log("stop", { isRunning: st.isRunning, isFinished: st.isFinished });
+    await wait(4000);
+    log("stop", { newRequestsWhilePaused: performance.getEntriesByType("resource").length - n });
+    st.restart();
+    for (let i = 0; i < 90 && !finished; i++) await wait(1000);
+    log("restart", { finished });
+  }
+  // 3. Error handling: an endpoint that doesn't exist.
+  await run("error", { downloadApiUrl: "https://speed.cloudflare.com/__nope", measurements: [{ type: "download", bytes: 1e5, count: 2 }] });
+  log("--- POC end");
+});
 // On the website (octet-web, ?embed): the window alone, and the page around it can paste a line or switch language.
 if (!tauri && new URLSearchParams(location.search).has("embed")) {
   document.documentElement.classList.add("app");

@@ -21,7 +21,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'",
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://speed.cloudflare.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'",
       "dangerousDisableAssetCspModification": [
         "style-src"
       ]
