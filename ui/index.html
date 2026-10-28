@@ -627,11 +627,9 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-dial .track { stroke: var(--border); }
 .sp-dial .bezel { fill: none; stroke: var(--border-strong); stroke-width: 2; }
 .sp-dial .led { fill: none; stroke: var(--accent); stroke-width: 4; stroke-dasharray: 8 5; transform-box: view-box; transform-origin: 120px 100px; animation: led-breathe 2.4s ease-in-out infinite; }
-#speed-dial:has(#sp-go:hover) .led, #speed-dial:has(#sp-go:focus-visible) .led { animation: led-spin 3s linear infinite; }
 #speed-dial:has(#sp-go:active) #sp-disc, #speed-dial:has(#sp-go:active) #sp-face { transform: scale(0.96); }
 #sp-disc, #sp-face { transform-box: view-box; transform-origin: 120px 100px; transition: transform 120ms; }
 @keyframes led-breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
-@keyframes led-spin { from { opacity: 1; transform: rotate(0deg); } to { opacity: 1; transform: rotate(360deg); } }
 .sp-dial .eng { fill: var(--muted); font: 600 9px var(--mono); letter-spacing: 3px; text-anchor: middle; }
 .sp-dial .pw { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
 .sp-dial .start { fill: var(--ink); font: 700 12px var(--mono); letter-spacing: 1px; text-anchor: middle; }
@@ -721,9 +719,8 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-again { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 5px; border-radius: 20px; border: 1.5px solid var(--border-strong);
   background: var(--bg); color: var(--ink); font: 700 12px var(--mono); letter-spacing: 1.5px; cursor: pointer; transition: border-color 200ms, transform 120ms; }
 .sp-again .key { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--accent); font-size: 15px; }
-.sp-again .key::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px dashed var(--accent); animation: led-breathe 2.4s ease-in-out infinite; }
+.sp-again .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px dashed var(--accent); animation: led-breathe 2.4s ease-in-out infinite; }
 .sp-again:hover, .sp-again:focus-visible { border-color: var(--accent); outline: none; }
-.sp-again:hover .key::before, .sp-again:focus-visible .key::before { animation: led-spin 3s linear infinite; }
 .sp-again:active { transform: scale(0.97); }
 .sp-note { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-note.bad { color: var(--bad); }
@@ -1124,7 +1121,7 @@ html.app, html.app body { overflow: hidden; }
           <div class="sp-grade" id="speed-grade"><span class="lbl"><i class="ph ph-activity"></i><span data-t="underLoad">Under load</span></span><span class="lv"><i></i><i></i><i></i></span><b id="speed-grade-w"></b><span class="hint" id="speed-grade-h"></span></div>
           <div class="sp-foot">
             <span class="sp-note" id="speed-note"></span>
-            <button type="button" class="sp-again" id="speed-again"><span class="key"><i class="ph ph-power"></i></span><span class="t">TEST AGAIN</span></button>
+            <button type="button" class="sp-again" id="speed-again"><span class="key"><span class="ring"></span><i class="ph ph-power"></i></span><span class="t">TEST AGAIN</span></button>
           </div>
         </div>
       </section>
@@ -3023,7 +3020,7 @@ function speedRun(a, on) {
 function speedStart() {
   const a = adapters[sel]; if (!a) return;
   const run = ++speed.run;
-  Object.assign(speed, { state: "run", res: {}, used: 0, leg: "", aid: a.id, lat: [], meta: null, t0: performance.now(), t1: 0 });
+  Object.assign(speed, { state: "run", res: {}, used: 0, leg: "", aid: a.id, lat: [], meta: null, t0: performance.now(), t1: 0, d1: undefined });
   speed.stop = speedRun(a, ev => {
     if (run !== speed.run) return;
     if (ev.kind === "meta") speed.meta = ev;
@@ -3089,10 +3086,6 @@ function paintSpeed() {
     const st = $(id);
     st.classList.toggle("on", now === k); st.classList.toggle("got", val !== undefined && now !== k);
   }
-  // The middle of the dial: the reading under way, or the download once it's over.
-  const f1 = v => v === undefined ? "-" : v.toFixed(1);
-  $("speed-now").textContent = s === "run" ? (now === "ms" ? n(speed.res.ms) : f1(speed.res[now])) : f1(speed.res.down);
-  $("sp-now2").textContent = f1(speed.res.up);
   roll($("speed-ping"), n(speed.res.ms));
   const mt = speed.meta;
   $("speed-isp").textContent = mt ? `${mt.isp}${mt.asn ? " · AS" + mt.asn : ""}` : "-";
@@ -3191,12 +3184,21 @@ function speedDraw() {
   svg.style.transform = `translateY(${speed.lift}px)`;
   const secs = s === "idle" || s === "stopped" || s === "error" ? 0 : ((speed.t1 || at) - speed.t0) / 1000;
   $("speed-lap").textContent = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${(secs % 60).toFixed(2).padStart(5, "0")}`;
-  const moving = [speed.mt, speed.zt, speed.qt].some(o => at - o.t0 < o.ms) || Math.abs(to - speedN) > 0;
+  // The numbers run to each new reading (an odometer, not a jump); on the summary the upload counts up as its dial fills.
+  const inMs = s === "run" && !speed.leg, aim = s === "run" ? (inMs ? speed.res.ms : speed.res[speed.leg]) : s === "done" ? speed.res.down : undefined;
+  speed.d1 = aim === undefined ? undefined : speed.d1 === undefined || calm.matches || Math.abs(aim - speed.d1) < 0.05 ? aim : speed.d1 + (aim - speed.d1) * 0.12;
+  $("speed-now").textContent = speed.d1 === undefined ? "-" : inMs ? Math.round(speed.d1) : speed.d1.toFixed(1);
+  $("sp-now2").textContent = s === "done" ? ((speed.res.up ?? 0) * inOut(slice(z, 0.35, 1, x => x))).toFixed(1) : "-";
+  const moving = [speed.mt, speed.zt, speed.qt].some(o => at - o.t0 < o.ms) || Math.abs(to - speedN) > 0 || (aim !== undefined && speed.d1 !== aim);
   if (speedOpen() && (s === "run" || moving)) speedRaf = requestAnimationFrame(speedDraw);
 }
 // The road: a floor grid running toward you at the line's speed (log scale), eased like a car gathering pace.
 // Download runs it toward you, upload away from you; between the two it slows through a standstill.
-const road = { off: 0, v: 0, at: 0 };
+const road = { off: 0, v: 0, at: 0 }, led = { a: 0, w: 0, hot: false };
+for (const id of ["sp-go", "speed-again"]) {
+  const b = $(id), on = () => led.hot = true, off = () => led.hot = false;
+  b.addEventListener("pointerenter", on); b.addEventListener("pointerleave", off); b.addEventListener("focus", on); b.addEventListener("blur", off);
+}
 let roadRaf = 0;
 function speedRoad(now) {
   if (!speedOpen()) return;
@@ -3215,6 +3217,10 @@ function speedRoad(now) {
   for (let i = -9; i <= 9; i++) { c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx + i * w / 6, h); c.stroke(); }
   for (let j = 0; j < 10; j++) { const f = (j + road.off) / 10, y = vy + (h - vy) * f * f; c.globalAlpha = 0.5 * f; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
   c.globalAlpha = 1;
+  // The LED rings: pointing at a button spins its ring up over most of a second; leaving lets it coast to a stop.
+  led.w += ((led.hot ? 200 : 0) - led.w) * Math.min(1, dt / (led.hot ? 650 : 900));
+  if (!calm.matches) led.a = (led.a + led.w * dt / 1000) % 360;
+  $("sp-ledc").style.transform = $("speed-again").querySelector(".ring").style.transform = `rotate(${led.a}deg)`;
   roadRaf = requestAnimationFrame(speedRoad);
 }
 function openSpeed() {
