@@ -715,6 +715,9 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-again.stop:hover, .sp-again.stop:focus-visible { border-color: var(--bad); }
 .sp-note { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-note.bad { color: var(--bad); }
+/* Cloudflare's mark, the one the DNS templates use, in the text's own colour */
+.cf-logo, .sp-note.cf::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 5px; vertical-align: -2px; background: currentColor;
+  -webkit-mask: url(vendor/logos/cloudflare.svg) center / contain no-repeat; mask: url(vendor/logos/cloudflare.svg) center / contain no-repeat; }
 .window:has(#open-settings.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
 #open-settings.on i, #open-settings.on .name { color: var(--sel-ink); }
 /* Settings take effect as you change them, so the dialog only needs a close button */
@@ -1093,7 +1096,7 @@ html.app, html.app body { overflow: hidden; }
           </div>
           <div class="sp-meta">
             <div><span><i class="ph ph-globe-hemisphere-west"></i><span data-t="isp">ISP</span></span><b id="speed-isp">-</b></div>
-            <div><span><i class="ph ph-cloud"></i><span data-t="cfServer">Cloudflare</span></span><b id="speed-srv">-</b></div>
+            <div><span><span class="cf-logo"></span><span data-t="cfServer">Cloudflare</span></span><b id="speed-srv">-</b></div>
             <div><span><i class="ph ph-database"></i><span data-t="data">Data</span></span><b id="speed-data">-</b></div>
           </div>
           <div class="sp-stats">
@@ -3081,7 +3084,7 @@ function paintSpeed() {
     : s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`)
     : warn ? L("Phone hotspot: uses about 250 MB of data", "ต่อผ่านมือถือ: ใช้ข้อมูลราว 250 MB")
     : L("Cloudflare · about 250 MB · they see your IP", "Cloudflare · ราว 250 MB · Cloudflare เห็น IP ของคุณ");
-  $("speed-note").className = "sp-note " + (s === "error" ? "bad" : "");
+  $("speed-note").className = "sp-note " + (s === "error" ? "bad" : "") + ($("speed-note").textContent.startsWith("Cloudflare") ? " cf" : "");
   if (grade) {
     $("speed-grade-w").textContent = { good: L("Smooth", "ลื่น"), meh: L("Fair", "พอใช้"), bad: L("Laggy", "หน่วง") }[grade];
     $("speed-grade-h").textContent = { good: "", meh: L("a little slower", "ช้าลงเล็กน้อย"), bad: L("calls and games may stutter", "วิดีโอคอลและเกมอาจสะดุด") }[grade];
