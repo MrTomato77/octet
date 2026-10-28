@@ -620,7 +620,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 #open-speed.on i, #open-speed.on .name { color: var(--sel-ink); }
 .window:has(#open-speed.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
 /* Speed test: a dial with the number in its middle, the three steps under it, the small numbers, then the button */
-.speed-view .dlg-body { height: 100%; box-sizing: border-box; grid-template-rows: auto 1fr auto auto auto; }
+.speed-view .dlg-body { height: 100%; box-sizing: border-box; grid-template-rows: auto 1fr auto auto auto auto; }
 .sp-dial { min-height: 0; display: grid; grid-template-rows: 1fr auto; gap: var(--s2); }
 .sp-dial svg { width: 100%; height: 100%; min-height: 0; display: block; }
 .sp-dial .track, .sp-dial .arc { fill: none; stroke-linecap: round; }
@@ -647,7 +647,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-dial .cic { fill: var(--accent); }
 .sp-dial .cic.stop { fill: var(--bad); }
 .sp-dial .now { fill: var(--ink); font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
-.sp-dial #sp-now2 { font-size: 22px; }
+.sp-dial #sp-now2 { font-size: 24px; }
 .sp-dial .unit { fill: var(--muted); font-size: 12px; text-anchor: middle; }
 .sp-dial .cap { fill: var(--muted); font-size: 12px; text-anchor: middle; }
 .sp-dial .again { fill: var(--ink); font-size: 13px; font-weight: 600; dominant-baseline: middle; }
@@ -668,8 +668,6 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .speed-view[data-phase="idle"] .sp-steps, .speed-view[data-phase="idle"] .sp-stats,
 .speed-view[data-phase="sum"] .sp-steps, .speed-view[data-phase="run"] .sp-stats,
 .speed-view:not([data-phase="sum"]) .sp-meta { opacity: 0; transform: translateY(6px); pointer-events: none; }
-.sp-note.good { color: var(--ok); }
-.sp-note.meh { color: oklch(0.78 0.13 75); }
 /* Game HUD around it: a floor grid that runs at the line's speed, a lap timer, two side gauges, gears */
 .speed-view { --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
 .sp-road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -707,7 +705,22 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-meta b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .sp-stats .u { color: var(--faint); }
 .sp-stats b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.sp-foot { display: flex; justify-content: center; min-height: 20px; }
+.sp-foot { display: grid; place-items: center; min-height: 44px; }
+.sp-foot > * { grid-area: 1 / 1; transition: opacity 300ms var(--ease-out), transform 300ms var(--ease-out); }
+.speed-view[data-phase="sum"] .sp-note, .speed-view:not([data-phase="sum"]) .sp-again { opacity: 0; transform: translateY(6px); pointer-events: none; visibility: hidden; }
+.speed-view[data-phase="sum"] .sp-again { transition-delay: 520ms; }
+.sp-grade { min-height: 18px; text-align: center; font-size: 12px; color: var(--muted); transition: opacity 300ms var(--ease-out) 500ms; }
+.speed-view:not([data-phase="sum"]) .sp-grade { opacity: 0; transition-delay: 0ms; }
+.sp-grade.good { color: var(--ok); } .sp-grade.meh { color: oklch(0.78 0.13 75); } .sp-grade.bad { color: var(--bad); }
+.sp-stats > div > span:first-child i, .sp-meta > div > span i { font-size: 13px; margin-right: 4px; vertical-align: -2px; }
+/* Test again: the engine button, laid on its side: a round key with a dashed LED ring, then the words */
+.sp-again { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 5px; border-radius: 20px; border: 1.5px solid var(--border-strong);
+  background: var(--bg); color: var(--ink); font: 700 12px var(--mono); letter-spacing: 1.5px; cursor: pointer; transition: border-color 200ms, transform 120ms; }
+.sp-again .key { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--accent); font-size: 15px; }
+.sp-again .key::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px dashed var(--accent); animation: led-breathe 2.4s ease-in-out infinite; }
+.sp-again:hover, .sp-again:focus-visible { border-color: var(--accent); outline: none; }
+.sp-again:hover .key::before, .sp-again:focus-visible .key::before { animation: led-spin 3s linear infinite; }
+.sp-again:active { transform: scale(0.97); }
 .sp-note { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-note.bad { color: var(--bad); }
 .window:has(#open-settings.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
@@ -1077,14 +1090,13 @@ html.app, html.app body { overflow: hidden; }
               </g>
               <text class="now" id="speed-now" x="120" y="142"></text>
               <text class="unit" id="speed-unit" x="120" y="160"></text>
-              <text class="now" id="sp-now2" x="182" y="92" opacity="0"></text>
-              <text class="unit" id="sp-unit2" x="182" y="108" opacity="0">Mbps</text>
-              <text class="cap" id="sp-cap1" x="58" y="142" opacity="0">Download</text>
-              <text class="cap" id="sp-cap2" x="182" y="142" opacity="0">Upload</text>
+              <text class="now" id="sp-now2" x="183" y="106" opacity="0"></text>
+              <text class="unit" id="sp-unit2" x="183" y="122" opacity="0">Mbps</text>
+              <text class="cap" id="sp-cap1" x="57" y="164" opacity="0">Download</text>
+              <text class="cap" id="sp-cap2" x="183" y="164" opacity="0">Upload</text>
               <circle class="ctlring" id="sp-ctlring" cx="120" cy="192" r="19"/>
               <rect class="ctl" id="sp-ctl"/>
               <path class="cic" id="sp-cic"/>
-              <text class="again" id="sp-again" y="196" opacity="0">Test again</text>
               <circle class="hit" id="sp-go" cx="120" cy="100" r="44" role="button" tabindex="0" aria-label="Start"/>
               <rect class="hit" id="sp-stop" role="button" tabindex="0" aria-label="Stop"/>
             </svg>
@@ -1095,17 +1107,19 @@ html.app, html.app body { overflow: hidden; }
             </div>
           </div>
           <div class="sp-meta">
-            <div><span data-t="isp">ISP</span><b id="speed-isp">-</b></div>
-            <div><span data-t="server">Server</span><b id="speed-srv">-</b></div>
+            <div><span><i class="ph ph-globe-hemisphere-west"></i><span data-t="isp">ISP</span></span><b id="speed-isp">-</b></div>
+            <div><span><i class="ph ph-cloud"></i><span data-t="server">Server</span></span><b id="speed-srv">-</b></div>
           </div>
           <div class="sp-stats">
-            <div><span data-t="ping">Ping</span><b id="speed-ping">-</b><span class="u">ms</span></div>
-            <div><span data-t="jitter">Jitter</span><b id="speed-jit">-</b><span class="u">ms</span></div>
-            <div><span data-t="loadDown">Loaded down</span><b id="speed-dl">-</b><span class="u">ms</span></div>
-            <div><span data-t="loadUp">Loaded up</span><b id="speed-ul">-</b><span class="u">ms</span></div>
+            <div><span><i class="ph ph-timer"></i><span data-t="ping">Ping</span></span><b id="speed-ping">-</b><span class="u">ms</span></div>
+            <div><span><i class="ph ph-wave-sine"></i><span data-t="jitter">Jitter</span></span><b id="speed-jit">-</b><span class="u">ms</span></div>
+            <div><span><i class="ph ph-download-simple"></i><span data-t="loadDown">Loaded down</span></span><b id="speed-dl">-</b><span class="u">ms</span></div>
+            <div><span><i class="ph ph-upload-simple"></i><span data-t="loadUp">Loaded up</span></span><b id="speed-ul">-</b><span class="u">ms</span></div>
           </div>
+          <div class="sp-grade" id="speed-grade"></div>
           <div class="sp-foot">
             <span class="sp-note" id="speed-note"></span>
+            <button type="button" class="sp-again" id="speed-again"><span class="key"><i class="ph ph-power"></i></span><span class="t">TEST AGAIN</span></button>
           </div>
         </div>
       </section>
@@ -3030,6 +3044,7 @@ function speedEnd(state) {
 }
 // Start is the button in the middle; once it opens into the dial, the small one under it stops (or, when done, runs it again).
 $("sp-go").onclick = () => speed.live && speed.state !== "run" && speedStart();
+$("speed-again").onclick = () => speed.state === "done" && speedStart();
 $("sp-stop").onclick = () => speed.state === "run" ? speedEnd("stopped") : speed.state === "done" && speedStart();
 for (const id of ["sp-go", "sp-stop"]) $(id).onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $(id).onclick(); } };
 function paintSpeed() {
@@ -3043,7 +3058,7 @@ function paintSpeed() {
   $("speed-dial").classList.toggle("warn", warn); $("speed-dial").classList.toggle("off", !live);
   $("sp-go").setAttribute("aria-label", L("Start", "เริ่ม"));
   $("sp-stop").setAttribute("aria-label", s === "run" ? L("Stop", "หยุด") : L("Test again", "ทดสอบอีกครั้ง"));
-  $("sp-again").textContent = L("Test again", "ทดสอบอีกครั้ง");
+  $("speed-again").querySelector(".t").textContent = L("TEST AGAIN", "ทดสอบอีกครั้ง");
   $("sp-cap1").textContent = L("Download", "ดาวน์โหลด"); $("sp-cap2").textContent = L("Upload", "อัปโหลด");
   // idle: the button and one line. run: the dial, the steps and the small numbers. sum: two dials and the summary.
   $("speed").dataset.phase = s === "run" ? "run" : s === "done" ? "sum" : "idle";
@@ -3053,12 +3068,14 @@ function paintSpeed() {
   $("speed-note").textContent = !live ? L("This adapter isn't connected", "adapter นี้ยังไม่ได้เชื่อมต่อ")
     : s === "run" ? L(`${mb} MB so far`, `ใช้ไป ${mb} MB`)
     : s === "error" ? speed.error
-    : s === "done" ? ({ good: L("Stays quick with the line full", "เน็ตเต็มก็ยังตอบสนองไว"), meh: L("A little slower with the line full", "เน็ตเต็มแล้วหน่วงขึ้นเล็กน้อย"),
-        bad: L("Lags with the line full: calls and games may stutter", "เน็ตเต็มแล้วหน่วงมาก วิดีโอคอลและเกมอาจสะดุด") })[grade] + L(` · ${mb} MB`, ` · ${mb} MB`)
+    : s === "done" ? ""
     : s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`)
     : warn ? L("Phone hotspot: uses about 250 MB of data", "ต่อผ่านมือถือ: ใช้ข้อมูลราว 250 MB")
     : L("Cloudflare · about 250 MB · they see your IP", "Cloudflare · ราว 250 MB · Cloudflare เห็น IP ของคุณ");
-  $("speed-note").className = "sp-note " + (s === "error" ? "bad" : grade);
+  $("speed-note").className = "sp-note " + (s === "error" ? "bad" : "");
+  if (grade) $("speed-grade").textContent = ({ good: L("Stays quick with the line full", "เน็ตเต็มก็ยังตอบสนองไว"), meh: L("A little slower with the line full", "เน็ตเต็มแล้วหน่วงขึ้นเล็กน้อย"),
+    bad: L("Lags with the line full: calls and games may stutter", "เน็ตเต็มแล้วหน่วงมาก วิดีโอคอลและเกมอาจสะดุด") })[grade] + ` · ${mb} MB`;
+  $("speed-grade").className = "sp-grade " + grade;
   // Three steps under the dial: the one under way is lit, the ones with a number are inked.
   const n = v => v === undefined ? "-" : String(v), now = s === "run" ? (speed.leg || "ms") : "";
   for (const [k, id, val] of [["ms", "speed-lat", speed.res.ms], ["down", "speed-down", speed.res.down], ["up", "speed-up", speed.res.up]]) {
@@ -3066,8 +3083,9 @@ function paintSpeed() {
     st.classList.toggle("on", now === k); st.classList.toggle("got", val !== undefined && now !== k);
   }
   // The middle of the dial: the reading under way, or the download once it's over.
-  $("speed-now").textContent = s === "run" ? n(now === "ms" ? speed.res.ms : speed.res[now]) : n(speed.res.down);
-  $("sp-now2").textContent = n(speed.res.up);
+  const f1 = v => v === undefined ? "-" : v.toFixed(1);
+  $("speed-now").textContent = s === "run" ? (now === "ms" ? n(speed.res.ms) : f1(speed.res[now])) : f1(speed.res.down);
+  $("sp-now2").textContent = f1(speed.res.up);
   roll($("speed-ping"), n(speed.res.ms));
   const mt = speed.meta;
   $("speed-isp").textContent = mt ? `${mt.isp}${mt.asn ? " · AS" + mt.asn : ""}` : "-";
@@ -3132,28 +3150,26 @@ function speedDraw() {
   set("sp-needle-a", { d, opacity: 1 - ink }); set("speed-needle", { d, opacity: ink * (1 - slice(z, 0, 0.35)) });
   set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
   // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
-  const zs = slice(z, 0, 0.75), sc = mix(1, 0.6, zs), tx = mix(0, -62, zs), ty = mix(0, -14, zs);
+  const zs = slice(z, 0, 0.75), sc = mix(1, 0.68, zs), tx = mix(0, -63, zs), ty = 0;
   const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
   set("sp-main", { transform: place(tx) });
   const twin = slice(z, 0.15, 0.85);
-  set("sp-twin", { transform: place(mix(0, 62, twin)), opacity: slice(z, 0.1, 0.4) });
+  set("sp-twin", { transform: place(mix(0, 63, twin)), opacity: slice(z, 0.1, 0.4) });
   $("sp-arc2").style.strokeDasharray = `${Math.min(1, Math.log10(1 + (speed.res.up ?? 0)) / 3) * slice(z, 0.4, 1)} 1`;
-  set("speed-now", { x: mix(SC, 58, zs), y: mix(142, 92, zs), "font-size": mix(28, 22, zs), opacity: late });
-  set("speed-unit", { x: mix(SC, 58, zs), y: mix(160, 108, zs), opacity: late });
+  set("speed-now", { x: mix(SC, 57, zs), y: mix(142, 106, zs), "font-size": mix(28, 24, zs), opacity: late });
+  set("speed-unit", { x: mix(SC, 57, zs), y: mix(160, 122, zs), opacity: late });
   if (z > 0) $("speed-unit").textContent = "Mbps";
   const tw = slice(z, 0.45, 1);
   set("sp-now2", { opacity: tw }); set("sp-unit2", { opacity: tw }); set("sp-cap1", { opacity: tw }); set("sp-cap2", { opacity: tw });
-  // The small button: grows out of the gap; when it's over, stretches into a pill that says what it does.
-  const pz = slice(z, 0.3, 1, over), w = mix(30, 132, pz) * stopIn, h = mix(30, 32, pz) * stopIn, cy = mix(192, 190, pz);
+  // The small button: grows out of the gap; when it's over, it shrinks away (Test again waits under the numbers).
+  const gone = 1 - slice(z, 0, 0.35), pz = 0, w = 30 * stopIn * gone, h = 30 * stopIn * gone, cy = 192;
   set("sp-ctl", { x: SC - w / 2, y: cy - h / 2, width: Math.max(0, w), height: Math.max(0, h), rx: h / 2 });
-  set("sp-ctlring", { cy, r: 19 * stopIn, opacity: stopIn * (1 - slice(z, 0, 0.3)) });
-  $("sp-ctl").style.stroke = pz > 0.05 ? "var(--accent)" : "";
+  set("sp-ctlring", { cy, r: 19 * stopIn * gone, opacity: stopIn * gone });
   $("sp-cic").classList.toggle("stop", s === "run");
   set("sp-stop", { x: SC - Math.max(w, 30) / 2 - 4, y: cy - 19, width: Math.max(w, 30) + 8, height: 38 });
   const ix = SC + (1 - q) + mix(0, -48, pz);
-  set("sp-cic", { d: "M" + PLAY.map((p, i) => `${ix + mix(p[0], STOP[i][0], q) * 0.8},${cy + mix(p[1], STOP[i][1], q) * 0.8}`).join("L") + "Z", opacity: stopIn });
-  set("sp-again", { x: SC - 34, y: cy + 1, opacity: slice(z, 0.6, 1) });
-  $("sp-go").style.display = open ? "none" : ""; $("sp-stop").style.display = open ? "" : "none";
+  set("sp-cic", { d: "M" + PLAY.map((p, i) => `${ix + mix(p[0], STOP[i][0], q) * 0.8},${cy + mix(p[1], STOP[i][1], q) * 0.8}`).join("L") + "Z", opacity: stopIn * gone });
+  $("sp-go").style.display = open ? "none" : ""; $("sp-stop").style.display = s === "run" ? "" : "none";
   set("sp-under", { r: r + 14 });
   // Before Start the rows under the dial are empty, so the button sits in the middle of the view instead; it rises into place as it opens.
   const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / 214);
