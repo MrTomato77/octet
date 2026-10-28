@@ -647,7 +647,6 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-dial .cic { fill: var(--accent); }
 .sp-dial .cic.stop { fill: var(--bad); }
 .sp-dial .now { fill: var(--ink); font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
-.sp-dial #sp-now2 { font-size: 28px; }
 .sp-dial .unit { fill: var(--muted); font-size: 12px; text-anchor: middle; }
 .sp-dial .cap { fill: var(--muted); font-size: 12px; text-anchor: middle; }
 .sp-dial .again { fill: var(--ink); font-size: 13px; font-weight: 600; dominant-baseline: middle; }
@@ -3159,17 +3158,22 @@ function speedDraw() {
   set("sp-needle-a", { d, opacity: 1 - ink }); set("speed-needle", { d, opacity: ink * (1 - slice(z, 0, 0.35)) });
   set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
   // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
-  const zs = slice(z, 0, 0.75), sc = mix(1, 0.78, zs), tx = mix(0, -70, zs), ty = -6;
+  // The two result dials use the whole width, not just the 240 units of the view box: each takes half, with room between.
+  const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / 214) || 1;
+  const X2 = Math.max(62, bx.width / k / 4), S2 = Math.min(1.05, (X2 - 14) / SR);
+  const zs = slice(z, 0, 0.75), sc = mix(1, S2, zs), tx = mix(0, -X2, zs), ty = 0;
   const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
   set("sp-main", { transform: place(tx) });
   const twin = slice(z, 0.15, 0.85);
-  set("sp-twin", { transform: place(mix(0, 70, twin)), opacity: slice(z, 0.1, 0.4) });
+  set("sp-twin", { transform: place(mix(0, X2, twin)), opacity: slice(z, 0.1, 0.4) });
   $("sp-arc2").style.strokeDasharray = `${Math.min(1, Math.log10(1 + (speed.res.up ?? 0)) / 3) * slice(z, 0.4, 1)} 1`;
-  set("speed-now", { x: mix(SC, 50, zs), y: mix(142, 100, zs), "font-size": mix(28, 28, zs), opacity: late });
-  set("speed-unit", { x: mix(SC, 50, zs), y: mix(160, 118, zs), opacity: late });
+  const big = 34 * S2, capY = SY + SR * S2 * 0.71 + 30;
+  set("speed-now", { x: mix(SC, SC - X2, zs), y: mix(142, SY + big * 0.3, zs), "font-size": mix(28, big, zs), opacity: late });
+  set("speed-unit", { x: mix(SC, SC - X2, zs), y: mix(160, SY + big * 0.3 + 18 * S2, zs), opacity: late });
   if (z > 0) $("speed-unit").textContent = "Mbps";
   const tw = slice(z, 0.45, 1);
-  set("sp-now2", { opacity: tw }); set("sp-unit2", { opacity: tw }); set("sp-cap1", { opacity: tw }); set("sp-cap2", { opacity: tw });
+  set("sp-now2", { x: SC + X2, y: SY + big * 0.3, "font-size": big, opacity: tw }); set("sp-unit2", { x: SC + X2, y: SY + big * 0.3 + 18 * S2, opacity: tw });
+  set("sp-cap1", { x: SC - X2, y: capY, opacity: tw }); set("sp-cap2", { x: SC + X2, y: capY, opacity: tw });
   // The small button: grows out of the gap; when it's over, it shrinks away (Test again waits under the numbers).
   const gone = 1 - slice(z, 0, 0.35), pz = 0, w = 30 * stopIn * gone, h = 30 * stopIn * gone, cy = 192;
   set("sp-ctl", { x: SC - w / 2, y: cy - h / 2, width: Math.max(0, w), height: Math.max(0, h), rx: h / 2 });
@@ -3181,7 +3185,6 @@ function speedDraw() {
   $("sp-go").style.display = open ? "none" : ""; $("sp-stop").style.display = s === "run" ? "" : "none";
   set("sp-under", { r: r + 14 });
   // Before Start the rows under the dial are empty, so the button sits in the middle of the view instead; it rises into place as it opens.
-  const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / 214);
   const head = svg.closest(".dlg-body").querySelector(".dlg-head").getBoundingClientRect(), foot = $("speed-note").getBoundingClientRect();
   const centre = (head.bottom + foot.top) / 2 - (bx.top - (speed.lift ?? 0) + (bx.height - 214 * k) / 2 + SY * k);
   speed.lift = centre * (1 - slice(m, 0, 0.8));
