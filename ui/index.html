@@ -619,29 +619,31 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 #refresh[hidden] { display: none; }
 #open-speed.on i, #open-speed.on .name { color: var(--sel-ink); }
 .window:has(#open-speed.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
-/* Speed test: two big numbers, the run as a graph, the small numbers, then the button */
-.speed-view .dlg-body { height: 100%; box-sizing: border-box; grid-template-rows: auto auto 1fr auto auto; }
+/* Speed test: a dial with the number in its middle, the three steps under it, the small numbers, then the button */
+.speed-view .dlg-body { height: 100%; box-sizing: border-box; grid-template-rows: auto 1fr auto auto; }
+.sp-dial { min-height: 0; display: grid; grid-template-rows: 1fr auto; gap: var(--s2); }
+.sp-dial svg { width: 100%; height: 100%; min-height: 0; display: block; }
+.sp-dial .track, .sp-dial .arc { fill: none; stroke-width: 10; stroke-linecap: round; }
+.sp-dial .track { stroke: var(--border); }
+.sp-dial .arc { stroke: var(--accent); stroke-dasharray: 0 1; transition: stroke 300ms; }
+.sp-dial .arc.up { stroke: var(--ok); }
+.sp-dial .tick { fill: var(--faint); font-size: 10px; text-anchor: middle; dominant-baseline: middle; }
+.sp-dial .needle { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; transform-box: view-box; transform-origin: 120px 100px; transition: opacity 200ms; }
+.sp-dial .now { fill: var(--ink); font-size: 30px; font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.sp-dial .unit { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+.sp-steps { display: flex; justify-content: center; gap: var(--s6); }
+.sp-steps .st { display: flex; align-items: center; gap: 6px; color: var(--faint); }
+.sp-steps .st i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); transition: background 300ms; }
+.sp-steps .st b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); }
+.sp-steps .st.got i { background: var(--ink); }
+.sp-steps .st.got b { color: var(--ink); }
+.sp-steps .st.on i { background: var(--accent); }
+#speed-up.on i { background: var(--ok); }
 .speed-view .via { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: var(--s2); }
-.sp-cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
-.sp-card { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 6px; padding: var(--s3) var(--s4);
-  border: 1px solid var(--border); border-radius: var(--r-item); background: var(--bg); transition: border-color 300ms, opacity 300ms; }
-.sp-card .lbl { grid-column: 1 / -1; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-.sp-card b { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
-.sp-card .u, .sp-stats .u { color: var(--faint); }
-.sp-card.on { border-color: color-mix(in srgb, var(--accent) 60%, var(--border-strong)); }
-#speed-up.on { border-color: color-mix(in srgb, var(--ok) 60%, var(--border-strong)); }
-.sp-card.off { opacity: 0.5; }
-.sp-graph { min-height: 0; border: 1px solid var(--border); border-radius: var(--r-item); background: var(--bg); overflow: hidden; }
-#speed-svg { width: 100%; height: 100%; display: block; }
-#speed-svg .grid { stroke: var(--border); stroke-dasharray: 2 3; }
-#speed-svg .tick { fill: var(--faint); font-size: 11px; }
-#speed-svg .line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
-#speed-svg .area { fill: color-mix(in srgb, var(--accent) 14%, transparent); }
-#speed-svg .line.up { stroke: var(--ok); }
-#speed-svg .area.up { fill: color-mix(in srgb, var(--ok) 14%, transparent); }
-.sp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
+.sp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
 .sp-stats > div { display: grid; grid-template-columns: auto 1fr; column-gap: 4px; align-items: baseline; }
 .sp-stats > div > span:first-child { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.sp-stats .u { color: var(--faint); }
 .sp-stats b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .sp-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
 .sp-note { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -983,13 +985,22 @@ html.app, html.app body { overflow: hidden; }
             <h3 id="sp-title"><span data-t="speedTest">Speed test</span> <span class="via" id="speed-via"></span></h3>
             <button type="button" class="icon-btn" id="speed-close" title="Back (Esc)" aria-label="Back"><i class="ph ph-x"></i></button>
           </div>
-          <div class="sp-cards">
-            <div class="sp-card" id="speed-down"><span class="lbl"><i class="ph ph-arrow-down"></i><span data-t="download">Download</span></span><b>-</b><span class="u">Mbps</span></div>
-            <div class="sp-card" id="speed-up"><span class="lbl"><i class="ph ph-arrow-up"></i><span data-t="upload">Upload</span></span><b>-</b><span class="u">Mbps</span></div>
+          <div class="sp-dial">
+            <svg viewBox="0 0 240 180" aria-hidden="true">
+              <path class="track" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
+              <path class="arc" id="speed-arc" pathLength="1" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
+              <text class="tick" x="51" y="169">0</text><text class="tick" x="55" y="27">10</text><text class="tick" x="190" y="31">100</text><text class="tick" x="189" y="169">1000</text>
+              <line class="needle" id="speed-needle" x1="160" y1="100" x2="192" y2="100"/>
+              <text class="now" id="speed-now" x="120" y="106">-</text>
+              <text class="unit" id="speed-unit" x="120" y="128">Mbps</text>
+            </svg>
+            <div class="sp-steps">
+              <span class="st" id="speed-lat"><i></i><span class="u">ms</span><b id="speed-ms">-</b></span>
+              <span class="st" id="speed-down"><i></i><span class="u">↓</span><b>-</b></span>
+              <span class="st" id="speed-up"><i></i><span class="u">↑</span><b>-</b></span>
+            </div>
           </div>
-          <div class="sp-graph"><svg id="speed-svg" preserveAspectRatio="none"></svg></div>
           <div class="sp-stats">
-            <div><span data-t="latency">Latency</span><b id="speed-ms">-</b><span class="u">ms</span></div>
             <div><span data-t="jitter">Jitter</span><b id="speed-jit">-</b><span class="u">ms</span></div>
             <div><span data-t="loadDown">Loaded down</span><b id="speed-dl">-</b><span class="u">ms</span></div>
             <div><span data-t="loadUp">Loaded up</span><b id="speed-ul">-</b><span class="u">ms</span></div>
@@ -2864,12 +2875,10 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && pr
 // ---------- Speed test: its own view, opened from the sidebar ----------
 // Download, then upload, against Cloudflare, out through the adapter on screen only (Rust pins the socket to it).
 // Nothing runs until Start. Another adapter, or closing the view, stops a test that is running.
-const SPEED_SPAN = 18500;   // latency, 8 s down, 8 s up, and a little room
-const speed = { state: "idle", res: {}, used: 0, t0: 0, end: null, stop: null, leg: "", run: 0, aid: null, pts: [], lat: [] };
+const speed = { state: "idle", res: {}, used: 0, stop: null, leg: "", run: 0, aid: null, lat: [] };
 // A phone hotspot (an iPhone's /28, Android's 192.168.43.x): data is metered, so it says so before it starts.
 const metered = a => !!a && (prefixOf(a.cfg.subnet) >= 28 || ["172.20.10.1", "192.168.43.1"].includes(a.cfg.gateway));
 const speedOpen = () => !$("speed").hidden;
-const sNow = () => performance.now();
 // One test. Events come from Rust over a Channel or, in the demo, from a stand-in with the same shape:
 // { kind: "latency", ms } · { kind: "down" | "up", mbps, loaded, bytes } · { kind: "done", bytes } · { kind: "error", message }
 function speedRun(a, on) {
@@ -2895,7 +2904,7 @@ function speedRun(a, on) {
 function speedStart() {
   const a = adapters[sel]; if (!a) return;
   const run = ++speed.run;
-  Object.assign(speed, { state: "run", res: {}, used: 0, t0: sNow(), end: null, leg: "", aid: a.id, pts: [], lat: [] });
+  Object.assign(speed, { state: "run", res: {}, used: 0, leg: "", aid: a.id, lat: [] });
   speed.stop = speedRun(a, ev => {
     if (run !== speed.run) return;
     if (ev.kind === "latency") {
@@ -2904,10 +2913,8 @@ function speedStart() {
       speed.res.ms = s[s.length >> 1]; speed.res.jit = d.length ? Math.round(d.reduce((x, y) => x + y) / d.length) : undefined;
     }
     if (ev.kind === "down" || ev.kind === "up") {
-      if (speed.leg && speed.leg !== ev.kind) speed.pts.push({ t: sNow(), v: null });   // a gap between the two legs
       speed.leg = ev.kind;
       speed.res[ev.kind] = ev.mbps; speed.res[ev.kind + "Load"] = ev.loaded; speed.used = ev.bytes;
-      speed.pts.push({ t: sNow(), v: ev.mbps, from: speed.pts.findLast(q => q.v !== null)?.v ?? 0, leg: ev.kind });
     }
     if (ev.kind === "done") { speed.used = ev.bytes ?? speed.used; speedEnd("done"); }
     if (ev.kind === "error") { speed.error = ev.message; speedEnd("error"); }
@@ -2917,14 +2924,14 @@ function speedStart() {
 }
 function speedEnd(state) {
   speed.stop?.(); speed.stop = null; speed.run++;
-  Object.assign(speed, { state, end: sNow(), leg: state === "done" ? "" : speed.leg });
-  paintSpeed();
+  Object.assign(speed, { state, leg: state === "done" ? "" : speed.leg });
+  paintSpeed(); speedDraw();
 }
 $("speed-go").onclick = () => speed.state === "run" ? speedEnd("stopped") : speedStart();
 function paintSpeed() {
   const a = adapters[sel], s = speed.state;
   // Another adapter on screen: a test for the last one stops, and its results go with it.
-  if (a && speed.aid && a.id !== speed.aid) { if (s === "run") speedEnd("stopped"); Object.assign(speed, { state: "idle", res: {}, used: 0, pts: [], aid: null }); return paintSpeed(); }
+  if (a && speed.aid && a.id !== speed.aid) { if (s === "run") speedEnd("stopped"); Object.assign(speed, { state: "idle", res: {}, used: 0, aid: null }); speedDraw(); return paintSpeed(); }
   const live = a?.state === "up" && validIp(a.cfg.address || "");
   $("speed-via").textContent = a ? `${a.name}${a.cfg.address ? " · " + a.cfg.address : ""}` : "";
   const go = $("speed-go"), warn = s !== "run" && live && metered(a);
@@ -2939,43 +2946,32 @@ function paintSpeed() {
     : warn ? L("Phone hotspot: uses about 250 MB of data", "ต่อผ่านมือถือ: ใช้ข้อมูลราว 250 MB")
     : L("Cloudflare · about 250 MB · they see your IP", "Cloudflare · ราว 250 MB · Cloudflare เห็น IP ของคุณ");
   $("speed-note").classList.toggle("bad", s === "error");
-  // The leg under way is the lit card; its bar fills as the leg runs.
-  for (const k of ["down", "up"]) {
-    const card = $(`speed-${k}`);
-    card.classList.toggle("on", s === "run" && speed.leg === k);
-    card.classList.toggle("off", s === "run" && !!speed.leg && speed.leg !== k && speed.res[k] === undefined);
-    roll(card.querySelector("b"), speed.res[k] === undefined ? "-" : String(speed.res[k]));
+  // Three steps under the dial: the one under way is lit, the ones with a number are inked.
+  const n = v => v === undefined ? "-" : String(v), now = s === "run" ? (speed.leg || "ms") : "";
+  for (const [k, id, val] of [["ms", "speed-lat", speed.res.ms], ["down", "speed-down", speed.res.down], ["up", "speed-up", speed.res.up]]) {
+    const st = $(id);
+    st.classList.toggle("on", now === k); st.classList.toggle("got", val !== undefined && now !== k);
+    roll(st.querySelector("b"), n(val));
   }
-  const n = v => v === undefined ? "-" : String(v);
-  roll($("speed-ms"), n(speed.res.ms)); roll($("speed-jit"), n(speed.res.jit));
+  // The middle of the dial: the reading under way, or the download once it's over.
+  $("speed-now").textContent = s === "run" ? n(now === "ms" ? speed.res.ms : speed.res[now]) : s === "error" ? "-" : n(speed.res.down);
+  $("speed-unit").textContent = s === "run" && now === "ms" ? "ms" : `Mbps ${now === "up" ? "↑" : "↓"}`;
+  roll($("speed-jit"), n(speed.res.jit));
   roll($("speed-dl"), n(speed.res.downLoad)); roll($("speed-ul"), n(speed.res.upLoad));
 }
-// The graph: Mbps across the test's own time, left to right; each new point rises from the one before.
-let speedRaf = 0;
+// The dial: log scale, 0 to 1000 Mbps, so Wi-Fi and gigabit both sit somewhere readable. The needle eases toward each new reading.
+let speedRaf = 0, speedN = 0;
 function speedDraw() {
   cancelAnimationFrame(speedRaf);
-  const svg = $("speed-svg"), w = svg.clientWidth || 1, h = svg.clientHeight || 1, at = speed.end ?? sNow();
-  const all = speed.pts.filter(q => q.v !== null).map(q => q.v), top = Math.max(10, ...all) * 1.25;
-  speed.ceil = calm.matches || !speed.ceil ? top : speed.ceil + (top - speed.ceil) * 0.08;
-  const x = t => (t - speed.t0) / SPEED_SPAN * w, y = v => h - 1 - (h - 2) * Math.min(v, speed.ceil) / speed.ceil;
-  const step = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(v => speed.ceil / v <= 3) ?? 5000;
-  let out = "";
-  for (let v = step; v < speed.ceil; v += step) out += `<line class="grid" x1="0" x2="${w}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="4" y="${y(v) - 3}">${v}</text>`;
-  const runs = [[]];
-  for (const q of speed.pts) {
-    if (q.v === null) { runs.push([]); continue; }
-    const k = calm.matches ? 1 : ease(Math.min(1, (at - q.t) / RISE));
-    runs.at(-1).push({ x: x(q.t), y: y(q.from + (q.v - q.from) * k), leg: q.leg });
-  }
-  for (const run of runs) {
-    if (!run.length) continue;
-    let d = `M${run[0].x},${run[0].y}`;
-    for (let i = 1; i < run.length; i++) { const a = run[i - 1], b = run[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
-    out += `<path class="area ${run[0].leg}" d="${d}L${run.at(-1).x},${h}L${run[0].x},${h}Z"/><path class="line ${run[0].leg}" d="${d}"/>`;
-  }
-  svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.innerHTML = out;
-  // Keep drawing while points are still rising.
-  if (speedOpen() && (speed.state === "run" || speed.pts.some(q => q.v !== null && at - q.t < RISE))) speedRaf = requestAnimationFrame(speedDraw);
+  const s = speed.state, v = s === "run" ? speed.res[speed.leg] ?? 0 : s === "error" ? 0 : speed.res.down ?? 0;
+  const to = Math.min(1, Math.log10(1 + v) / 3);
+  speedN = calm.matches ? to : speedN + (to - speedN) * 0.12;
+  const arc = $("speed-arc");
+  arc.style.strokeDasharray = `${speedN} 1`; arc.style.opacity = speedN > 0.002 ? 1 : 0;
+  arc.classList.toggle("up", s === "run" && speed.leg === "up");
+  const nd = $("speed-needle");
+  nd.style.transform = `rotate(${135 + 270 * speedN}deg)`; nd.style.opacity = s === "run" && speed.leg ? 1 : 0;
+  if (speedOpen() && (s === "run" || Math.abs(to - speedN) > 0.001)) speedRaf = requestAnimationFrame(speedDraw);
 }
 function openSpeed() {
   if (speedOpen()) return closeSpeed();
