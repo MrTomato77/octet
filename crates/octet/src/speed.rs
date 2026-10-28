@@ -150,6 +150,21 @@ fn ping(c: &mut Tls) -> Result<f64, String> {
     get(c, "/__down?bytes=0", false, &|_| {}).map(|r| r.2.as_secs_f64() * 1e3)
 }
 
+/// The name people know a Thai ISP by. Cloudflare gives the network's registered description instead
+/// ("Dynamic IP assignment for broadband service" for NT); holders checked against RIPEstat.
+fn brand(asn: u64) -> Option<&'static str> {
+    Some(match asn {
+        23969 | 38040 | 4651 | 9931 | 131293 | 56120 => "NT",
+        7470 | 17552 | 38082 => "True Online",
+        132061 => "TrueMove H",
+        24378 => "dtac",
+        45758 | 45629 => "3BB",
+        133481 => "AIS Fibre",
+        131445 | 45430 => "AIS",
+        _ => return None,
+    })
+}
+
 fn median(v: &[f64]) -> Option<u32> {
     let mut s = v.to_vec();
     s.sort_by(|a, b| a.total_cmp(b));
@@ -251,7 +266,8 @@ pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String
     if let Ok((200, body, _)) = get(&mut c, "/meta", true, &|_| {}) {
         let m: Value = serde_json::from_slice(&body).unwrap_or_default();
         // colo is the Cloudflare site ({iata, city}); the top-level city is a guess at the client's, not wanted here.
-        send(json!({ "kind": "meta", "isp": m["asOrganization"], "asn": m["asn"], "colo": m["colo"]["iata"], "city": m["colo"]["city"] }));
+        let isp = m["asn"].as_u64().and_then(brand).map(Value::from).unwrap_or_else(|| m["asOrganization"].clone());
+        send(json!({ "kind": "meta", "isp": isp, "asn": m["asn"], "colo": m["colo"]["iata"], "city": m["colo"]["city"] }));
     }
     ping(&mut c)?; // warms the connection; the first is slow
     for _ in 0..20 {
