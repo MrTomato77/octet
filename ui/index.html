@@ -615,7 +615,109 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .settings-view[hidden] { display: none; }
 .settings-view.in { animation: rise var(--t-base) var(--ease-out); }
 .settings-view.out { animation: fade-out var(--t-fast) ease-in forwards; }
-#open-settings.on { background: var(--sel-fill); }
+#open-settings.on, #open-speed.on { background: var(--sel-fill); }
+#refresh[hidden] { display: none; }
+#open-speed.on i, #open-speed.on .name { color: var(--sel-ink); }
+.window:has(#open-speed.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
+/* Speed test: a dial with the number in its middle, the three steps under it, the small numbers, then the button */
+.speed-view .dlg-body { height: 100%; box-sizing: border-box; grid-template-rows: auto 1fr auto auto auto auto; }
+.sp-dial { min-height: 0; display: grid; grid-template-rows: 1fr; }
+.sp-dial svg { width: 100%; height: 100%; min-height: 0; display: block; overflow: visible; }
+.sp-dial .track, .sp-dial .arc { fill: none; stroke-linecap: round; }
+.sp-dial .track { stroke: var(--border); }
+.sp-dial .bezel { fill: none; stroke: var(--border-strong); stroke-width: 2; }
+.sp-dial .led { fill: none; stroke: var(--accent); stroke-width: 4; stroke-dasharray: 8 5; transform-box: view-box; transform-origin: 120px 100px; animation: led-breathe 2.4s ease-in-out infinite; }
+#speed-dial:has(#sp-go:active) #sp-disc, #speed-dial:has(#sp-go:active) #sp-face { transform: scale(0.96); }
+#sp-disc, #sp-face { transform-box: view-box; transform-origin: 120px 100px; transition: transform 120ms; }
+@keyframes led-breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.sp-dial .eng { fill: var(--muted); font: 600 9px var(--mono); letter-spacing: 3px; text-anchor: middle; }
+.sp-dial .pw { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.sp-dial .start { fill: var(--ink); font: 700 12px var(--mono); letter-spacing: 1px; text-anchor: middle; }
+.sp-dial .stopw { fill: var(--faint); font: 600 9px var(--mono); letter-spacing: 1px; text-anchor: middle; }
+.sp-dial .arc { stroke: var(--accent); stroke-width: 10; transition: stroke 300ms; }
+.sp-dial .arc.up { stroke: var(--ok); }
+.sp-dial .disc { fill: var(--bg); stroke: var(--border-strong); stroke-width: 1.5; }
+.sp-dial .tick { fill: var(--faint); font-size: 10px; text-anchor: middle; dominant-baseline: middle; }
+.sp-dial .needle, .sp-dial .hub { fill: var(--ink); }
+.sp-dial .needle.on-disc { fill: var(--accent); }
+.sp-dial .now { fill: var(--ink); font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.sp-dial .unit { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+#speed-unit[data-leg="down"] { fill: var(--accent); } #speed-unit[data-leg="up"] { fill: var(--ok); }
+.sp-dial .prog { fill: none; stroke-width: 3; stroke-linecap: butt; }
+.sp-dial .prog.bg { stroke: var(--border); } .sp-dial .prog.ms { stroke: var(--ink); } .sp-dial .prog.down { stroke: var(--accent); } .sp-dial .prog.up { stroke: var(--ok); }
+.sp-dial .cap { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+.sp-dial .again { fill: var(--ink); font-size: 13px; font-weight: 600; dominant-baseline: middle; }
+.sp-dial .hit { fill: transparent; cursor: pointer; outline: none; }
+.sp-dial .hit:focus-visible { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 3; }
+/* A phone hotspot paints the button amber; a disconnected adapter greys it out */
+#speed-dial.warn .led, #speed-dial.warn .pw { stroke: oklch(0.78 0.13 75); }
+#speed-dial.warn .needle.on-disc { fill: oklch(0.78 0.13 75); }
+#speed-dial.off .led, #speed-dial.off .pw { stroke: var(--border-strong); animation: none; }
+#speed-dial.off .needle.on-disc { fill: var(--border-strong); }
+#speed-dial.off .start { fill: var(--faint); }
+#speed-dial.off #sp-go { cursor: default; }
+/* Before Start there is only the button: the steps and the small numbers come in with the test */
+.speed-view .sp-stats, .speed-view .sp-meta { transition: opacity 320ms var(--ease-out), transform 320ms var(--ease-out); }
+.speed-view[data-phase="run"] .sp-meta { transition-delay: 420ms; }
+.speed-view[data-phase="run"] .sp-stats { transition-delay: 500ms; }
+.speed-view[data-phase="idle"] .sp-stats, .speed-view[data-phase="idle"] .sp-meta { opacity: 0; transform: translateY(6px); pointer-events: none; }
+/* Game HUD around it: a floor grid that runs at the line's speed, a lap timer, two side gauges, gears */
+.speed-view { --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.sp-road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity 600ms var(--ease-out); }
+.speed-view[data-phase="idle"] .sp-road { opacity: 0; transition-duration: 300ms; }
+.speed-view .dlg-body { position: relative; }
+.sp-lap { margin-left: auto; font-family: var(--mono); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.speed-view[data-phase="idle"] .sp-lap { color: var(--faint); }
+.sp-dial { position: relative; }
+.sp-dial .now, .sp-stats b, .sp-gauge b { font-family: var(--mono); }
+.sp-gauge { position: absolute; top: 8%; display: grid; justify-items: center; gap: 4px; transition: opacity 320ms var(--ease-out); }
+#speed-g-ping { left: 0; } #speed-g-load { right: 0; }
+.sp-gauge .gl { font: 600 10px var(--mono); color: var(--muted); letter-spacing: 1px; }
+.sp-gauge .segs { display: flex; flex-direction: column-reverse; gap: 3px; }
+.sp-gauge .segs i { width: 12px; height: 7px; border-radius: 1px; background: var(--border); transition: background 200ms; }
+.sp-gauge .segs i.on { background: var(--ink); }
+.sp-gauge .segs i.on.hot { background: oklch(0.78 0.13 75); }
+.sp-gauge b { font-size: 13px; font-weight: 600; color: var(--ink); }
+.sp-gauge .u { font-size: 10px; color: var(--faint); }
+.speed-view:not([data-phase="run"]) .sp-gauge { opacity: 0; }
+.speed-view[data-phase="run"] .sp-gauge { transition-delay: 450ms; }
+.sp-foot { align-items: center; }
+.speed-view .via { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: var(--s2); }
+.sp-stats, .sp-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
+.sp-meta { grid-template-columns: 1.2fr 1.2fr 0.6fr; }
+.sp-stats > div, .sp-meta > div { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; column-gap: 4px; text-align: center; min-width: 0; }
+.sp-stats > div > span:first-child, .sp-meta > div > span { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.sp-meta b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.sp-stats .u { color: var(--faint); }
+.sp-stats b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sp-foot { display: grid; place-items: center; min-height: 44px; }
+.sp-foot > * { grid-area: 1 / 1; transition: opacity 300ms var(--ease-out), transform 300ms var(--ease-out); }
+.speed-view:not([data-phase="idle"]) .sp-note, .speed-view[data-phase="idle"] .sp-again { opacity: 0; transform: translateY(6px); pointer-events: none; visibility: hidden; }
+.speed-view[data-phase="run"] .sp-again { transition-delay: 600ms; }
+.sp-grade { --lv: var(--ok); min-height: 22px; display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); transition: opacity 300ms var(--ease-out) 500ms; }
+.speed-view:not([data-phase="sum"]) .sp-grade { opacity: 0; transition-delay: 0ms; }
+.sp-grade .lbl i { font-size: 13px; margin-right: 4px; vertical-align: -2px; }
+.sp-grade .lv { display: inline-flex; gap: 3px; }
+.sp-grade .lv i { width: 16px; height: 6px; border-radius: 2px; background: var(--border); }
+.sp-grade.good .lv i, .sp-grade.meh .lv i:nth-child(-n+2), .sp-grade.bad .lv i:first-child { background: var(--lv); }
+.sp-grade b { color: var(--lv); font-weight: 600; }
+.sp-grade.meh { --lv: oklch(0.78 0.13 75); } .sp-grade.bad { --lv: var(--bad); }
+.sp-stats > div > span:first-child i, .sp-meta > div > span i { font-size: 13px; margin-right: 4px; vertical-align: -2px; }
+/* Test again: the engine button, laid on its side: a round key with a dashed LED ring, then the words */
+.sp-again { display: inline-flex; align-items: center; gap: 10px; overflow: hidden; white-space: nowrap; height: 40px; padding: 0 18px 0 5px; border-radius: 20px; border: 1.5px solid var(--border-strong);
+  background: var(--bg); color: var(--ink); font: 700 12px var(--mono); letter-spacing: 1.5px; cursor: pointer; transition: border-color 200ms, transform 120ms; }
+.sp-again .key { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--accent); font-size: 15px; }
+.sp-again .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px dashed var(--accent); animation: led-breathe 2.4s ease-in-out infinite; }
+.sp-again:hover, .sp-again:focus-visible { border-color: var(--accent); outline: none; }
+.sp-again:active { transform: scale(0.97); }
+.sp-again .key i, .sp-again .ring { transition: color 300ms, border-color 300ms; }
+.sp-again.stop .key { color: var(--bad); } .sp-again.stop .ring { border-color: var(--bad); }
+.sp-again.stop:hover, .sp-again.stop:focus-visible { border-color: var(--bad); }
+.sp-note { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-note.bad { color: var(--bad); }
+/* Cloudflare's mark, the one the DNS templates use, in the text's own colour */
+.cf-logo, .sp-note.cf::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 5px; vertical-align: -2px; background: currentColor;
+  -webkit-mask: url(vendor/logos/cloudflare.svg) center / contain no-repeat; mask: url(vendor/logos/cloudflare.svg) center / contain no-repeat; }
 .window:has(#open-settings.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
 #open-settings.on i, #open-settings.on .name { color: var(--sel-ink); }
 /* Settings take effect as you change them, so the dialog only needs a close button */
@@ -836,7 +938,8 @@ html.app, html.app body { overflow: hidden; }
       </div>
       <ul class="list" id="list"></ul>
       <div class="side-foot">
-        <button class="item" id="refresh" title="Refresh (F5)"><i class="ph ph-arrow-clockwise"></i><span class="name" data-t="refresh">Refresh</span></button>
+        <button class="item" id="open-speed" title="Speed test"><i class="ph ph-gauge"></i><span class="name" data-t="speedTest">Speed test</span></button>
+        <button class="item" id="refresh" title="Refresh (F5)" hidden><i class="ph ph-arrow-clockwise"></i><span class="name" data-t="refresh">Refresh</span></button>
         <hr>
         <button class="item" id="open-settings" title="Settings"><i class="ph ph-gear-six"></i><span class="name" data-t="settings">Settings</span></button>
       </div>
@@ -945,6 +1048,70 @@ html.app, html.app body { overflow: hidden; }
         <button class="btn" id="revert" disabled><i class="ph ph-arrow-counter-clockwise"></i><span data-t="revert">Revert</span></button>
         <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
       </div>
+      <section class="settings-view speed-view" id="speed" aria-labelledby="sp-title" hidden>
+        <canvas class="sp-road" id="speed-road" aria-hidden="true"></canvas>
+        <div class="dlg-body">
+          <div class="dlg-head">
+            <h3 id="sp-title"><span data-t="speedTest">Speed test</span> <span class="via" id="speed-via"></span></h3>
+            <span class="sp-lap" id="speed-lap" aria-label="Elapsed">00:00.00</span>
+          </div>
+          <div class="sp-dial">
+            <div class="sp-gauge" id="speed-g-ping"><span class="gl">PING</span><span class="segs"></span><b>--</b><span class="u">ms</span><span class="u" id="speed-g-jit"></span></div>
+            <div class="sp-gauge" id="speed-g-load"><span class="gl">LOAD</span><span class="segs"></span><b>--</b><span class="u">ms</span></div>
+            <svg viewBox="0 6 240 188" id="speed-dial">
+              <g id="sp-main">
+                <circle class="track" id="sp-track" cx="120" cy="100"/>
+                <circle class="bezel" id="sp-bezel" cx="120" cy="100" r="70"/>
+                <g id="sp-led"><circle class="led" id="sp-ledc" cx="120" cy="100" r="63"/></g>
+                <circle class="arc" id="speed-arc" cx="120" cy="100"/>
+                <circle class="disc" id="sp-disc" cx="120" cy="100" r="54"/>
+                <g id="sp-face">
+                  <path id="sp-engarc" d="M80 100 A40 40 0 0 1 160 100" fill="none"/>
+                  <text class="eng"><textPath href="#sp-engarc" startOffset="50%">ENGINE</textPath></text>
+                  <path class="pw" d="M111.6 82 A13 13 0 1 0 128.4 82"/>
+                  <text class="start" x="120" y="126">START</text>
+                  <text class="stopw" x="120" y="138">STOP</text>
+                </g>
+                <g id="sp-prog" opacity="0">
+                  <circle class="prog bg" id="sp-pb0" cx="120" cy="100" r="91"/><circle class="prog bg" id="sp-pb1" cx="120" cy="100" r="91"/><circle class="prog bg" id="sp-pb2" cx="120" cy="100" r="91"/>
+                  <circle class="prog ms" id="sp-pf0" cx="120" cy="100" r="91"/><circle class="prog down" id="sp-pf1" cx="120" cy="100" r="91"/><circle class="prog up" id="sp-pf2" cx="120" cy="100" r="91"/>
+                </g>
+                <g id="sp-ticks"><text class="tick" x="48.6" y="171.4" transform="rotate(45 48.6 171.4)">0</text><text class="tick" x="48.6" y="28.6" transform="rotate(-45 48.6 28.6)">10</text><text class="tick" x="191.4" y="28.6" transform="rotate(45 191.4 28.6)">100</text><text class="tick" x="191.4" y="171.4" transform="rotate(-45 191.4 171.4)">1000</text></g>
+                <path class="needle on-disc" id="sp-needle-a"/>
+                <path class="needle" id="speed-needle"/>
+                <circle class="hub" id="sp-hub" cx="120" cy="100"/>
+              </g>
+              <g id="sp-twin" opacity="0">
+                <path class="track" stroke-width="10" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
+                <path class="arc up" id="sp-arc2" pathLength="1" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
+              </g>
+              <text class="now" id="speed-now" x="120" y="142"></text>
+              <text class="unit" id="speed-unit" x="120" y="160"></text>
+              <text class="now" id="sp-now2" x="190" y="100" opacity="0"></text>
+              <text class="unit" id="sp-unit2" x="190" y="118" opacity="0">Mbps</text>
+              <text class="cap" id="sp-cap1" x="50" y="182" opacity="0">Download</text>
+              <text class="cap" id="sp-cap2" x="190" y="182" opacity="0">Upload</text>
+              <circle class="hit" id="sp-go" cx="120" cy="100" r="44" role="button" tabindex="0" aria-label="Start"/>
+            </svg>
+          </div>
+          <div class="sp-meta">
+            <div><span><i class="ph ph-globe-hemisphere-west"></i><span data-t="isp">ISP</span></span><b id="speed-isp">-</b></div>
+            <div><span><span class="cf-logo"></span><span data-t="cfServer">Cloudflare</span></span><b id="speed-srv">-</b></div>
+            <div><span><i class="ph ph-database"></i><span data-t="data">Data</span></span><b id="speed-data">-</b></div>
+          </div>
+          <div class="sp-stats">
+            <div><span><i class="ph ph-timer"></i><span data-t="ping">Ping</span></span><b id="speed-ping">-</b><span class="u">ms</span></div>
+            <div><span><i class="ph ph-wave-sine"></i><span data-t="jitter">Jitter</span></span><b id="speed-jit">-</b><span class="u">ms</span></div>
+            <div><span><i class="ph ph-download-simple"></i><span data-t="loadDown">Loaded down</span></span><b id="speed-dl">-</b><span class="u">ms</span></div>
+            <div><span><i class="ph ph-upload-simple"></i><span data-t="loadUp">Loaded up</span></span><b id="speed-ul">-</b><span class="u">ms</span></div>
+          </div>
+          <div class="sp-grade" id="speed-grade"><span class="lbl"><i class="ph ph-activity"></i><span data-t="underLoad">Under load</span></span><span class="lv"><i></i><i></i><i></i></span><b id="speed-grade-w"></b><span class="hint" id="speed-grade-h"></span></div>
+          <div class="sp-foot">
+            <span class="sp-note" id="speed-note"></span>
+            <button type="button" class="sp-again" id="speed-again"><span class="key"><span class="ring"></span><i class="ph ph-power"></i></span><span class="t">TEST AGAIN</span></button>
+          </div>
+        </div>
+      </section>
       <section class="settings-view" id="settings" aria-labelledby="s-title" hidden>
           <div class="dlg-body">
             <div class="dlg-head">
@@ -1715,7 +1882,7 @@ function renderList(enter = false) {
       b.querySelector("i").animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 400, easing: "ease-out" });
     }
     seen[a.id] = a.state;
-    b.onclick = () => { closeSettings(); select(i); if (!isRail()) setRail(true); };
+    b.onclick = () => { closeSettings(); Promise.resolve(select(i)).then(() => speedOpen() && paintSpeed()); if (!isRail()) setRail(true); };
     li.append(b); ul.append(li);
   });
   let moved = false;
@@ -2135,7 +2302,7 @@ document.querySelectorAll(".set > *").forEach((el, i) => el.style.setProperty("-
 const settingsOpen = () => !$("settings").hidden;
 function openSettings() {
   if (settingsOpen()) return closeSettings();
-  renderHidden(); hideTip(); setTools(false);
+  closeSpeed(); renderHidden(); hideTip(); setTools(false);
   const v = $("settings");
   v.classList.remove("out"); v.hidden = false; replay(v, "in");
   $("open-settings").classList.add("on"); $("open-settings").setAttribute("aria-current", "page");
@@ -2328,6 +2495,7 @@ document.addEventListener("keydown", e => {
   if (document.documentElement.classList.contains("app") && (isMod(e) && (mac ? /^[psfgjuo+=\-0]$/i : /^[psfgjhuo+=\-0]$/i).test(e.key) || e.key === "F3" || e.key === "F7" || e.key === "F12")) e.preventDefault();
   if (isMod(e) && e.key >= "1" && e.key <= String(ptabs.length) && !settingsOpen()) { e.preventDefault(); showPage(ptabs[e.key - 1].dataset.page); }
   if (e.key === "Escape" && settingsOpen() && !document.querySelector("dialog[open]")) { closeSettings(); return; }
+  if (e.key === "Escape" && speedOpen() && !document.querySelector("dialog[open]")) { closeSpeed(); return; }
   if (e.key === "Escape" && tools.classList.contains("open")) { setTools(false); $("more").focus(); }
   else if (e.key === "Escape" && !isRail() && !document.querySelector("dialog[open]")) setRail(true);
   if (e.key === "Enter" && isMod(e) && !$("apply").disabled && !settingsOpen()) $("apply").click();
@@ -2724,6 +2892,20 @@ function roll(el, text) {
       el.animate([{ transform: "translateY(40%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 180, easing: "cubic-bezier(0.33, 1, 0.68, 1)" });
     }, () => {});
 }
+// A number that counts: it runs from what it shows to the new value, quick at first and settling in, instead of jumping.
+// A new value mid-run picks up from wherever the count is, so readings that keep coming in make one smooth run.
+function count(el, to, fmt = x => String(Math.round(x))) {
+  if (to === undefined || calm.matches) { cancelAnimationFrame(el._raf); el._at = el._to = to; el.textContent = to === undefined ? "-" : fmt(to); return; }
+  if (to === el._to) return;
+  const from = el._at ?? 0, t0 = performance.now();
+  el._to = to; cancelAnimationFrame(el._raf);
+  const step = now => {
+    const k = Math.min(1, (now - t0) / 700);
+    el._at = from + (to - from) * (1 - (1 - k) ** 3); el.textContent = fmt(el._at);
+    el._raf = k < 1 ? requestAnimationFrame(step) : 0;
+  };
+  el._raf = requestAnimationFrame(step);
+}
 // The graph runs DELAY behind the clock, so a new point is born past the right edge and scrolls in;
 // its height eases from the one before. The ceiling eases too. Rows: a line on each ms tick
 // (labelled on the left) that follows the scale; the columns stay put.
@@ -2805,6 +2987,285 @@ function centreUnder(foot, over, pageEl) {
 }
 new ResizeObserver(alignFoot).observe($("probe-graph"));
 document.addEventListener("visibilitychange", () => { if (!document.hidden && probe.asleep) { probe.asleep = false; probe.slept += performance.now() - probe.sleptAt; probeTick(); } });
+// ---------- Speed test: its own view, opened from the sidebar ----------
+// Download, then upload, against Cloudflare, out through the adapter on screen only (Rust pins the socket to it).
+// Nothing runs until Start. Another adapter, or closing the view, stops a test that is running.
+const speed = { state: "idle", res: {}, used: 0, stop: null, leg: "", run: 0, aid: null, lat: [] };
+// A phone hotspot (an iPhone's /28, Android's 192.168.43.x): data is metered, so it says so before it starts.
+const metered = a => !!a && (prefixOf(a.cfg.subnet) >= 28 || ["172.20.10.1", "192.168.43.1"].includes(a.cfg.gateway));
+const speedOpen = () => !$("speed").hidden;
+// One test. Events come from Rust over a Channel or, in the demo, from a stand-in with the same shape:
+// { kind: "meta", isp, asn, colo, city } · { kind: "latency", ms } · { kind: "down" | "up", mbps, loaded, bytes } · { kind: "done", bytes } · { kind: "error", message }
+// meta is what speed.cloudflare.com/meta says about this connection: who the ISP is and which Cloudflare site answered.
+function speedRun(a, on) {
+  if (tauri) {
+    const ch = new tauri.core.Channel(); ch.onmessage = on;
+    invoke("speed_test", { index: a.index ?? 0, source: a.cfg.address, events: ch }).catch(e => on({ kind: "error", message: String(e) }));
+    return () => invoke("speed_stop").catch(() => {});
+  }
+  // Demo: ~88 Mbps down, ~93 up, slow start over the first second, a little noise; the loaded latency climbs.
+  const timers = [], at = (ms, f) => timers.push(setTimeout(f, ms));
+  let bytes = 0;
+  at(80, () => on({ kind: "meta", isp: "True Internet", asn: 7470, colo: "BKK", city: "Bangkok" }));
+  for (let i = 0; i < 6; i++) at(150 + i * 120, () => on({ kind: "latency", ms: 19 + Math.round(Math.random() * 5) }));
+  const leg = (kind, t0, top) => { for (let i = 1; i <= 32; i++) at(t0 + i * 250, () => {
+    const mbps = +(top * Math.min(1, i / 5) * (0.94 + Math.random() * 0.08)).toFixed(1);
+    bytes += mbps * 1e6 / 8 / 4;
+    on({ kind, mbps, loaded: Math.round((kind === "down" ? 45 : 140) + Math.random() * 30), bytes });
+  }); };
+  leg("down", 1000, 88); leg("up", 9300, 93);
+  if (demo.speedFail) at(4000, () => on({ kind: "error", message: L("Can't get out through this adapter", "ออกเน็ตทาง adapter นี้ไม่ได้") }));
+  else at(17600, () => on({ kind: "done", bytes }));
+  return () => timers.forEach(clearTimeout);
+}
+function speedStart() {
+  const a = adapters[sel]; if (!a) return;
+  const run = ++speed.run;
+  Object.assign(speed, { state: "run", res: {}, used: 0, leg: "", aid: a.id, lat: [], meta: null, t0: performance.now(), t1: 0, d1: undefined });
+  speed.stop = speedRun(a, ev => {
+    if (run !== speed.run) return;
+    if (ev.kind === "meta") speed.meta = ev;
+    if (ev.kind === "latency") {
+      speed.lat.push(ev.ms);
+      const s = speed.lat.slice().sort((x, y) => x - y), d = speed.lat.slice(1).map((v, i) => Math.abs(v - speed.lat[i]));
+      speed.res.ms = s[s.length >> 1]; speed.res.jit = d.length ? Math.round(d.reduce((x, y) => x + y) / d.length) : undefined;
+    }
+    if (ev.kind === "down" || ev.kind === "up") {
+      if (speed.leg !== ev.kind) speed.legT0 = performance.now();
+      speed.leg = ev.kind;
+      speed.res[ev.kind] = ev.mbps; speed.res[ev.kind + "Load"] = ev.loaded; speed.used = ev.bytes;
+    }
+    if (ev.kind === "done") { speed.used = ev.bytes ?? speed.used; speedEnd("done"); }
+    if (ev.kind === "error") { speed.error = ev.message; speedEnd("error"); }
+    paintSpeed();
+  });
+  paintSpeed(); speedDraw();
+}
+function speedEnd(state) {
+  speed.stop?.(); speed.stop = null; speed.run++;
+  Object.assign(speed, { state, leg: state === "done" ? "" : speed.leg, t1: performance.now() });
+  paintSpeed(); speedDraw();
+}
+// Start is the button in the middle; once it opens into the dial, the key at the bottom stops it (or, when done, runs it again).
+$("sp-go").onclick = () => speed.live && speed.state !== "run" && speedStart();
+$("speed-again").onclick = () => speed.state === "run" ? speedEnd("stopped") : speed.state === "done" && speedStart();
+for (const id of ["sp-go"]) $(id).onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $(id).onclick(); } };
+function paintSpeed() {
+  const a = adapters[sel], s = speed.state;
+  // Another adapter on screen: a test for the last one stops, and its results go with it.
+  if (a && speed.aid && a.id !== speed.aid) { if (s === "run") speedEnd("stopped"); Object.assign(speed, { state: "idle", res: {}, used: 0, aid: null }); speedDraw(); return paintSpeed(); }
+  const live = a?.state === "up" && validIp(a.cfg.address || "");
+  $("speed-via").textContent = a ? `${a.name}${a.cfg.address ? " · " + a.cfg.address : ""}` : "";
+  const warn = s !== "run" && live && metered(a);
+  speed.live = live;
+  $("speed-dial").classList.toggle("warn", warn); $("speed-dial").classList.toggle("off", !live);
+  $("sp-go").setAttribute("aria-label", L("Start", "เริ่ม"));
+  const key = $("speed-again"), mode = s === "run" ? "stop" : "again", was = key.dataset.mode, w0 = key.offsetWidth;
+  key.dataset.mode = mode; key.classList.toggle("stop", mode === "stop");
+  key.querySelector(".ph").className = "ph " + (mode === "stop" ? "ph-stop" : "ph-power");
+  key.querySelector(".t").textContent = mode === "stop" ? L("STOP", "หยุด") : L("TEST AGAIN", "ทดสอบอีกครั้ง");
+  if (was && was !== mode && w0 && !calm.matches) {
+    const spring = "cubic-bezier(.2,.9,.3,1.25)";
+    key.animate([{ width: w0 + "px" }, { width: key.offsetWidth + "px" }], { duration: 420, easing: spring });
+    key.querySelector(".ph").animate([{ transform: "rotate(-140deg) scale(.3)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 460, easing: spring });
+    key.querySelector(".t").animate([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], { duration: 300, delay: 90, easing: "ease-out", fill: "backwards" });
+    led.w = 560;   // the ring kicks into a spin and coasts down
+  }
+  $("sp-cap1").textContent = L("Download", "ดาวน์โหลด"); $("sp-cap2").textContent = L("Upload", "อัปโหลด");
+  // idle: the button and one line. run: the dial, the steps and the small numbers. sum: two dials and the summary.
+  $("speed").dataset.phase = s === "run" ? "run" : s === "done" ? "sum" : "idle";
+  // How much worse the latency gets with the line full (bufferbloat): what games and calls feel.
+  const mb = Math.round(speed.used / 1e6), r = speed.res, bloat = Math.max(r.downLoad ?? 0, r.upLoad ?? 0) - (r.ms ?? 0);
+  const grade = s !== "done" ? "" : bloat < 30 ? "good" : bloat < 100 ? "meh" : "bad";
+  $("speed-note").textContent = !live ? L("This adapter isn't connected", "adapter นี้ยังไม่ได้เชื่อมต่อ")
+    : s === "run" ? (speed.leg === "up" ? L("Uploading…", "กำลังอัปโหลด…") : speed.leg === "down" ? L("Downloading…", "กำลังดาวน์โหลด…") : L("Measuring latency…", "กำลังวัดความหน่วง…"))
+    : s === "error" ? speed.error
+    : s === "done" ? ""
+    : s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`)
+    : warn ? L("Phone hotspot: uses about 250 MB of data", "ต่อผ่านมือถือ: ใช้ข้อมูลราว 250 MB")
+    : L("Cloudflare · about 250 MB · they see your IP", "Cloudflare · ราว 250 MB · Cloudflare เห็น IP ของคุณ");
+  $("speed-note").className = "sp-note " + (s === "error" ? "bad" : "") + ($("speed-note").textContent.startsWith("Cloudflare") ? " cf" : "");
+  if (grade) {
+    $("speed-grade-w").textContent = { good: L("Smooth", "ลื่น"), meh: L("Fair", "พอใช้"), bad: L("Laggy", "หน่วง") }[grade];
+    $("speed-grade-h").textContent = { good: "", meh: L("a little slower", "ช้าลงเล็กน้อย"), bad: L("calls and games may stutter", "วิดีโอคอลและเกมอาจสะดุด") }[grade];
+    $("speed-grade").className = "sp-grade " + grade;
+  }
+  const n = v => v === undefined ? "-" : String(v), now = s === "run" ? (speed.leg || "ms") : "";
+  roll($("speed-ping"), n(speed.res.ms));
+  const mt = speed.meta;
+  // Just the name; the AS number (and a name too long for the row) is there on hover.
+  $("speed-isp").textContent = mt?.isp || "-"; $("speed-isp").title = mt ? `${mt.isp}${mt.asn ? " · AS" + mt.asn : ""}` : "";
+  count($("speed-data"), s === "idle" ? undefined : speed.used / 1e6, x => `${Math.round(x)} MB`);
+  $("speed-srv").textContent = mt ? `${mt.colo}${mt.city ? " · " + mt.city : ""}` : "-";
+  // Side gauges: latency on the left, latency with the line full on the right; the top few segments go amber.
+  for (const [id, val, max] of [["speed-g-ping", speed.res.ms, 200], ["speed-g-load", speed.leg ? speed.res[speed.leg + "Load"] : undefined, 300]]) {
+    const g = $(id), segs = g.querySelector(".segs");
+    if (!segs.children.length) segs.innerHTML = "<i></i>".repeat(14);
+    const lit = val === undefined ? 0 : Math.round(Math.min(1, val / max) * 14);
+    [...segs.children].forEach((x, i) => { x.classList.toggle("on", i < lit); x.classList.toggle("hot", i >= 11); });
+    g.querySelector("b").textContent = val === undefined ? "--" : val;
+  }
+  $("speed-g-jit").textContent = speed.res.jit === undefined ? "" : `±${speed.res.jit}`;
+  $("speed-unit").textContent = now === "ms" ? "ms" : "Mbps";
+  $("speed-unit").dataset.leg = now;
+  roll($("speed-jit"), n(speed.res.jit));
+  count($("speed-dl"), speed.res.downLoad); count($("speed-ul"), speed.res.upLoad);
+}
+// The dial: log scale, 0 to 1000 Mbps, so Wi-Fi and gigabit both sit somewhere readable.
+// Start is a round button that opens into the dial: its label fades, its play triangle swings round and stretches into
+// the needle, its edge grows into the track while the fill shrinks to the hub, then the scale and the reading come in, and the key at the bottom
+// turns to STOP. Stopping plays that backwards. A finished test splits the dial in two: download slides left,
+// upload comes out of it to the right, and the key turns to TEST AGAIN.
+// Each piece runs on its own slice of one timeline, so the parts overlap instead of popping one after another.
+let speedRaf = 0, speedN = 0, speedV = 0, speedAt = 0;
+const SC = 120, SY = 100, SR = 80, VY = 6, VH = 188, LEG_MS = 8000;
+const mix = (a, b, t) => a + (b - a) * t, clamp01 = x => Math.min(1, Math.max(0, x));
+const inOut = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+const over = t => 1 + 2.4 * (t - 1) ** 3 + 1.4 * (t - 1) ** 2;   // a little past 1, then back
+const slice = (t, a, b, f = inOut) => f(clamp01((t - a) / (b - a)));
+// A tween: a value that walks from where it is to where it's told, over a set time.
+function tween(o, to, ms, at) {
+  if (o.to === to) return;
+  o.from = tweenAt(o, at); o.to = to; o.t0 = at; o.ms = calm.matches ? 1 : ms;
+}
+const tweenAt = (o, at) => o.to === undefined ? 0 : mix(o.from, o.to, clamp01((at - o.t0) / o.ms));
+speed.mt = {}; speed.zt = {};
+function speedDraw() {
+  cancelAnimationFrame(speedRaf);
+  const at = performance.now(), s = speed.state, open = s === "run" || s === "done" ? 1 : 0, sum = s === "done" ? 1 : 0;
+  tween(speed.mt, open, open ? 900 : 650, at); tween(speed.zt, sum, 800, at);
+  const m = tweenAt(speed.mt, at), z = tweenAt(speed.zt, at);
+  const v = s === "run" ? speed.res[speed.leg] ?? 0 : s === "done" ? speed.res.down ?? 0 : 0, to = open ? Math.min(1, Math.log10(1 + v) / 3) : 0;
+  // The needle hangs on a spring: it swings toward each new reading, runs a touch past and settles back, like a real gauge.
+  const dt = Math.min(48, at - (speedAt || at)) / 1000; speedAt = at;
+  speedV += ((to - speedN) * 90 - speedV * 12) * dt; speedN += speedV * dt;
+  if (calm.matches || (Math.abs(to - speedN) < 0.0005 && Math.abs(speedV) < 0.002)) { speedN = to; speedV = 0; }
+  const set = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
+  // Opening: face 0-.3, power stem to needle .1-.75, LED ring to track 0-.8 (overshoots a little), hub .3-.8, scale and reading .55-1, stop .7-1.
+  const grow = slice(m, 0, 0.8, open ? over : inOut), turn = slice(m, 0.1, 0.75), late = slice(m, 0.55, 1);
+  const r = mix(63, SR, grow), sweep = mix(360, 270, slice(m, 0, 0.8)), c = 2 * Math.PI * r, rot = `rotate(${90 + (360 - sweep) / 2} ${SC} ${SY})`;
+  const dash = f => `${Math.max(0, f) * sweep / 360 * c} ${c}`;
+  set("sp-track", { r, transform: rot, "stroke-width": 10 * slice(m, 0.15, 0.8), "stroke-dasharray": dash(1), opacity: slice(m, 0, 0.4) });
+  set("sp-led", { opacity: 1 - slice(m, 0.2, 0.6) }); set("sp-ledc", { r });
+  set("sp-bezel", { r: mix(70, SR + 14, grow), opacity: 1 - slice(m, 0, 0.45) });
+  set("speed-arc", { r, transform: rot, "stroke-dasharray": dash(speedN), opacity: late > 0.01 && speedN > 0.003 ? 1 : 0 });
+  $("speed-arc").classList.toggle("up", s === "run" && speed.leg === "up");
+  set("sp-disc", { r: 54 * (1 - slice(m, 0.05, 0.7)) });
+  set("sp-face", { opacity: 1 - slice(m, 0, 0.3) });
+  set("sp-ticks", { opacity: late * (1 - slice(z, 0, 0.4)) });
+  // Progress, round the outside: ping, then download, then upload, each part filling with its own time.
+  // Rust runs each leg for a fixed time (LEG_MS), so elapsed time is the progress.
+  const PC = 2 * Math.PI * 91, PL = 0.75 * PC, parts = [0.1, 0.45, 0.45], since = t => (at - (t ?? at));
+  const fill = s === "done" ? [1, 1, 1] : s !== "run" ? [0, 0, 0] : !speed.leg ? [Math.min(1, since(speed.t0) / 1000), 0, 0]
+    : speed.leg === "down" ? [1, Math.min(1, since(speed.legT0) / LEG_MS), 0] : [1, 1, Math.min(1, since(speed.legT0) / LEG_MS)];
+  let p0 = 0;
+  parts.forEach((f, i) => {
+    const len = f * PL - 3, rotP = `rotate(135 ${SC} ${SY})`;
+    set(`sp-pb${i}`, { "stroke-dasharray": `0 ${p0} ${len} ${PC}`, transform: rotP });
+    set(`sp-pf${i}`, { "stroke-dasharray": `0 ${p0} ${len * fill[i]} ${PC}`, transform: rotP });
+    p0 += f * PL;
+  });
+  set("sp-prog", { opacity: late * (1 - slice(z, 0, 0.4)) });
+  // The power symbol's stem, pointing up, swings round and stretches into the needle pointing at the reading.
+  const th = (mix(-90, 135, turn) + 270 * speedN * late) * Math.PI / 180, cs = Math.cos(th), sn = Math.sin(th), lift = 0;
+  const pts = [[mix(26, SR - 16, turn), 0], [mix(10, -10, turn), mix(-1.6, -4, turn)], [mix(10, -10, turn), mix(1.6, 4, turn)]];
+  const d = "M" + pts.map(([x, y]) => `${SC + x * cs - y * sn},${SY + lift + x * sn + y * cs}`).join("L") + "Z", ink = slice(m, 0.25, 0.6);
+  set("sp-needle-a", { d, opacity: 1 - ink }); set("speed-needle", { d, opacity: ink * (1 - slice(z, 0, 0.35)) });
+  set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
+  // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
+  // The two result dials use the whole width, not just the 240 units of the view box: each takes half, with room between.
+  const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / VH) || 1;
+  const X2 = Math.max(62, bx.width / k / 4), S2 = Math.min(1.05, (X2 - 14) / SR);
+  const zs = slice(z, 0, 0.75), sc = mix(1, S2, zs), tx = mix(0, -X2, zs), ty = 0;
+  const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
+  set("sp-main", { transform: place(tx) });
+  const twin = slice(z, 0.15, 0.85);
+  set("sp-twin", { transform: place(mix(0, X2, twin)), opacity: slice(z, 0.1, 0.4) });
+  $("sp-arc2").style.strokeDasharray = `${Math.min(1, Math.log10(1 + (speed.res.up ?? 0)) / 3) * slice(z, 0.4, 1)} 1`;
+  const big = 34 * S2, capY = SY + SR * S2 * 0.71 + 30;
+  set("speed-now", { x: mix(SC, SC - X2, zs), y: mix(142, SY + big * 0.3, zs), "font-size": mix(28, big, zs), opacity: late });
+  set("speed-unit", { x: mix(SC, SC - X2, zs), y: mix(160, SY + big * 0.3 + 18 * S2, zs), opacity: late });
+  if (z > 0) $("speed-unit").textContent = "Mbps";
+  const tw = slice(z, 0.45, 1);
+  set("sp-now2", { x: SC + X2, y: SY + big * 0.3, "font-size": big, opacity: tw }); set("sp-unit2", { x: SC + X2, y: SY + big * 0.3 + 18 * S2, opacity: tw });
+  set("sp-cap1", { x: SC - X2, y: capY, opacity: tw }); set("sp-cap2", { x: SC + X2, y: capY, opacity: tw });
+  $("sp-go").style.display = open ? "none" : "";
+  // Before Start the rows under the dial are empty, so the button sits in the middle of the view instead; it rises into place as it opens.
+  const head = svg.closest(".dlg-body").querySelector(".dlg-head").getBoundingClientRect(), foot = $("speed-note").getBoundingClientRect();
+  const centre = (head.bottom + foot.top) / 2 - (bx.top - (speed.lift ?? 0) + (bx.height - VH * k) / 2 + (SY - VY) * k);
+  speed.lift = centre * (1 - slice(m, 0, 0.8));
+  svg.style.transform = `translateY(${speed.lift + 12 * slice(m, 0, 0.8) * (1 - zs)}px)`;
+  const secs = s === "idle" || s === "stopped" || s === "error" ? 0 : ((speed.t1 || at) - speed.t0) / 1000;
+  $("speed-lap").textContent = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${(secs % 60).toFixed(2).padStart(5, "0")}`;
+  // The numbers run to each new reading (an odometer, not a jump); on the summary the upload counts up as its dial fills.
+  const inMs = s === "run" && !speed.leg, aim = s === "run" ? (inMs ? speed.res.ms : speed.res[speed.leg]) : s === "done" ? speed.res.down : undefined;
+  speed.d1 = aim === undefined ? undefined : speed.d1 === undefined || calm.matches || Math.abs(aim - speed.d1) < 0.05 ? aim : speed.d1 + (aim - speed.d1) * 0.12;
+  $("speed-now").textContent = speed.d1 === undefined ? "-" : inMs ? Math.round(speed.d1) : speed.d1.toFixed(1);
+  $("sp-now2").textContent = s === "done" ? ((speed.res.up ?? 0) * inOut(slice(z, 0.35, 1, x => x))).toFixed(1) : "-";
+  const moving = [speed.mt, speed.zt].some(o => at - o.t0 < o.ms) || Math.abs(to - speedN) > 0 || (aim !== undefined && speed.d1 !== aim);
+  if (speedOpen() && (s === "run" || moving)) speedRaf = requestAnimationFrame(speedDraw);
+}
+// The road: a floor grid running toward you at the line's speed (log scale), eased like a car gathering pace.
+// Download runs it toward you, upload away from you; between the two it slows through a standstill.
+const road = { off: 0, v: 0, at: 0 }, led = { a: 0, w: 0, hot: false };
+for (const id of ["sp-go", "speed-again"]) {
+  const b = $(id), on = () => led.hot = true, off = () => led.hot = false;
+  b.addEventListener("pointerenter", on); b.addEventListener("pointerleave", off); b.addEventListener("focus", on); b.addEventListener("blur", off);
+}
+let roadRaf = 0;
+function speedRoad(now) {
+  if (!speedOpen()) return;
+  const cv = $("speed-road"), w = cv.clientWidth, h = cv.clientHeight, dpr = devicePixelRatio || 1;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const dt = Math.min(64, now - (road.at || now)); road.at = now;
+  const mbps = speed.state === "run" ? speed.res[speed.leg] ?? 0 : 0;
+  const want = (speed.leg === "up" && speed.state === "run" ? -1 : 1) * (0.15 + 2.6 * Math.min(1, Math.log10(1 + mbps) / 3));
+  road.v += (want - road.v) * Math.min(1, dt / 700);
+  if (!calm.matches) road.off = ((road.off + road.v * dt / 1000) % 1 + 1) % 1;
+  const c = cv.getContext("2d"), css = getComputedStyle(cv);
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+  c.strokeStyle = css.getPropertyValue("--border-strong").trim() || "#555"; c.lineWidth = 1;
+  // The lines meet behind the needle's hub (on the summary, midway between the two dials), so the hub caps the vanishing point.
+  const cb = cv.getBoundingClientRect(), hub = new DOMPoint(SC, SY).matrixTransform($("speed-dial").getScreenCTM());
+  const vx = hub.x - cb.left, vy = hub.y - cb.top;
+  c.globalAlpha = 0.35;
+  for (let i = -9; i <= 9; i++) { c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx + i * w / 6, h); c.stroke(); }
+  for (let j = 0; j < 10; j++) { const f = (j + road.off) / 10, y = vy + (h - vy) * f * f; c.globalAlpha = 0.5 * f; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+  c.globalAlpha = 1;
+  // Horizon fog: the lines thin out into nothing before they meet, so there's no bright knot where they converge.
+  const fog = c.createRadialGradient(vx, vy, 0, vx, vy, (h - vy) * 0.6);
+  fog.addColorStop(0, "#000"); fog.addColorStop(0.35, "rgba(0,0,0,.85)"); fog.addColorStop(1, "rgba(0,0,0,0)");
+  c.globalCompositeOperation = "destination-out"; c.fillStyle = fog; c.fillRect(0, 0, w, h); c.globalCompositeOperation = "source-over";
+  // The LED rings: pointing at a button spins its ring up over most of a second; leaving lets it coast to a stop.
+  led.w += ((led.hot ? 200 : 0) - led.w) * Math.min(1, dt / (led.hot ? 650 : 900));
+  if (!calm.matches) led.a = (led.a + led.w * dt / 1000) % 360;
+  $("sp-ledc").style.transform = $("speed-again").querySelector(".ring").style.transform = `rotate(${led.a}deg)`;
+  roadRaf = requestAnimationFrame(speedRoad);
+}
+function openSpeed() {
+  if (speedOpen()) return closeSpeed();
+  closeSettings(); hideTip(); setTools(false);
+  const v = $("speed");
+  v.classList.remove("out"); v.hidden = false; replay(v, "in");
+  $("open-speed").classList.add("on"); $("open-speed").setAttribute("aria-current", "page");
+  indicator.style.opacity = 0;
+  paintSpeed(); speedDraw();
+  cancelAnimationFrame(roadRaf); road.at = 0; roadRaf = requestAnimationFrame(speedRoad);
+}
+function closeSpeed() {
+  const v = $("speed");
+  if (v.hidden) return;
+  if (speed.state === "run") speedEnd("stopped");   // no test runs where nobody can see it
+  $("open-speed").classList.remove("on"); $("open-speed").removeAttribute("aria-current");
+  placeIndicator();
+  let done = false;
+  const end = () => { if (done) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };
+  v.classList.add("out");
+  v.addEventListener("animationend", end, { once: true });
+  setTimeout(end, 200);
+}
+$("open-speed").onclick = openSpeed;
+
 // ---------- Scan: who answers on this subnet ----------
 // scan_host answers { mac, vendor, ms } for an address something holds (ARP or ping), or null.
 // The page scrolls one /24 at a time, snapping, with a map in the header that lights the one on screen.
@@ -3405,6 +3866,11 @@ const scenarios = {
     noping: ["Applied, gateway not answering", () => { demo.pingFail = true; return edit({ address: "10.0.1.60" }, true); }],
     cancel: ["UAC prompt declined", () => { demo.outcome = "cancel"; return edit({ address: "10.0.1.60" }, true); }],
     fail: ["Windows refused the change", () => { demo.outcome = "fail"; return edit({ address: "10.0.1.60" }, true); }],
+  },
+  "Speed test": {
+    speed: ["Speed test", async () => { await go(0); openSpeed(); }],
+    speedfail: ["Speed test fails", async () => { demo.speedFail = true; await go(0); openSpeed(); speedStart(); }],
+    speedhot: ["Speed test on a hotspot", async () => { await go(0); Object.assign(adapters[0].cfg, { subnet: "255.255.255.240", gateway: "172.20.10.1", address: "172.20.10.2" }); openSpeed(); }],
   },
   "Pages": {
     pgadv: ["Advanced", () => showPage("adv")],
