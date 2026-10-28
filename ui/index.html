@@ -625,35 +625,49 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-dial svg { width: 100%; height: 100%; min-height: 0; display: block; }
 .sp-dial .track, .sp-dial .arc { fill: none; stroke-linecap: round; }
 .sp-dial .track { stroke: var(--border); }
-.sp-dial .ring { fill: none; stroke: var(--accent); stroke-width: 3; }
+.sp-dial .bezel { fill: none; stroke: var(--border-strong); stroke-width: 2; }
+.sp-dial .led { fill: none; stroke: var(--accent); stroke-width: 4; stroke-dasharray: 8 5; transform-box: view-box; transform-origin: 120px 100px; animation: led-breathe 2.4s ease-in-out infinite; }
+#speed-dial:has(#sp-go:hover) .led, #speed-dial:has(#sp-go:focus-visible) .led { animation: led-spin 3s linear infinite; }
+#speed-dial:has(#sp-go:active) #sp-disc, #speed-dial:has(#sp-go:active) #sp-face { transform: scale(0.96); }
+#sp-disc, #sp-face { transform-box: view-box; transform-origin: 120px 100px; transition: transform 120ms; }
+@keyframes led-breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@keyframes led-spin { from { opacity: 1; transform: rotate(0deg); } to { opacity: 1; transform: rotate(360deg); } }
+.sp-dial .eng { fill: var(--muted); font: 600 9px var(--mono); letter-spacing: 3px; text-anchor: middle; }
+.sp-dial .pw { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.sp-dial .start { fill: var(--ink); font: 700 12px var(--mono); letter-spacing: 1px; text-anchor: middle; }
+.sp-dial .stopw { fill: var(--faint); font: 600 9px var(--mono); letter-spacing: 1px; text-anchor: middle; }
+.sp-dial .ctlring { fill: none; stroke: var(--bad); stroke-width: 3; stroke-dasharray: 5 3; }
+.sp-dial .ctl { fill: var(--bg); stroke: var(--border-strong); stroke-width: 1.5; }
+#sp-rankg rect { fill: none; stroke: oklch(0.78 0.13 75); stroke-width: 2; }
+#sp-rankg text { fill: oklch(0.78 0.13 75); font: 700 17px var(--mono); text-anchor: middle; dominant-baseline: middle; }
 .sp-dial .arc { stroke: var(--accent); stroke-width: 10; transition: stroke 300ms; }
 .sp-dial .arc.up { stroke: var(--ok); }
-.sp-dial .disc { fill: var(--accent); transition: fill 300ms; }
+.sp-dial .disc { fill: var(--bg); stroke: var(--border-strong); stroke-width: 1.5; }
 .sp-dial .tick { fill: var(--faint); font-size: 10px; text-anchor: middle; dominant-baseline: middle; }
-.sp-dial .needle, .sp-dial .hub, .sp-dial .ctl { fill: var(--ink); }
-.sp-dial .needle.on-disc { fill: var(--accent-ink); }
-.sp-dial .cic { fill: var(--surface); }
-.sp-dial .lbl { fill: var(--accent-ink); font-size: 14px; font-weight: 600; text-anchor: middle; }
+.sp-dial .needle, .sp-dial .hub { fill: var(--ink); }
+.sp-dial .needle.on-disc { fill: var(--accent); }
+.sp-dial .cic { fill: var(--accent); }
+.sp-dial .cic.stop { fill: var(--bad); }
 .sp-dial .now { fill: var(--ink); font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
 .sp-dial #sp-now2 { font-size: 22px; }
 .sp-dial .unit { fill: var(--muted); font-size: 12px; text-anchor: middle; }
 .sp-dial .cap { fill: var(--muted); font-size: 12px; text-anchor: middle; }
-.sp-dial .again { fill: var(--surface); font-size: 13px; font-weight: 600; dominant-baseline: middle; }
+.sp-dial .again { fill: var(--ink); font-size: 13px; font-weight: 600; dominant-baseline: middle; }
 .sp-dial .hit { fill: transparent; cursor: pointer; outline: none; }
 .sp-dial .hit:focus-visible { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 3; }
 /* A phone hotspot paints the button amber; a disconnected adapter greys it out */
-#speed-dial.warn .disc, #speed-dial.warn .ring { fill: oklch(0.78 0.13 75); stroke: oklch(0.78 0.13 75); }
-#speed-dial.warn .lbl, #speed-dial.warn .needle.on-disc { fill: oklch(0.25 0.03 75); }
-#speed-dial.off .disc { fill: var(--border-strong); }
-#speed-dial.off .ring { stroke: var(--border-strong); }
+#speed-dial.warn .led, #speed-dial.warn .pw { stroke: oklch(0.78 0.13 75); }
+#speed-dial.warn .needle.on-disc { fill: oklch(0.78 0.13 75); }
+#speed-dial.off .led, #speed-dial.off .pw { stroke: var(--border-strong); animation: none; }
+#speed-dial.off .needle.on-disc { fill: var(--border-strong); }
+#speed-dial.off .start { fill: var(--faint); }
 #speed-dial.off #sp-go { cursor: default; }
 /* Before Start there is only the button: the steps and the small numbers come in with the test */
 .speed-view .sp-steps, .speed-view .sp-stats { transition: opacity 320ms var(--ease-out), transform 320ms var(--ease-out); }
-.speed-view[data-phase="run"] .sp-stats { transition-delay: 380ms; }
 .speed-view[data-phase="run"] .sp-steps { transition-delay: 300ms; }
 .speed-view[data-phase="sum"] .sp-stats { transition-delay: 420ms; }
 .speed-view[data-phase="idle"] .sp-steps, .speed-view[data-phase="idle"] .sp-stats,
-.speed-view[data-phase="sum"] .sp-steps { opacity: 0; transform: translateY(6px); pointer-events: none; }
+.speed-view[data-phase="sum"] .sp-steps, .speed-view[data-phase="run"] .sp-stats { opacity: 0; transform: translateY(6px); pointer-events: none; }
 .sp-note.good { color: var(--ok); }
 .sp-note.meh { color: oklch(0.78 0.13 75); }
 /* Game HUD around it: a floor grid that runs at the line's speed, a lap timer, two side gauges, gears */
@@ -682,8 +696,6 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-steps .st.on .gear { background: var(--accent); color: var(--accent-ink); }
 #speed-up.on .gear { background: var(--ok); }
 .sp-steps .st.got .gear { color: var(--ink); }
-.sp-rank { display: none; place-items: center; width: 26px; height: 26px; margin-right: var(--s2); border: 2px solid oklch(0.78 0.13 75); border-radius: 4px; color: oklch(0.78 0.13 75); font: 700 15px var(--mono); }
-.speed-view[data-phase="sum"] .sp-rank { display: inline-grid; animation: rise var(--t-base) var(--ease-out) 600ms both; }
 .sp-foot { align-items: center; }
 .sp-steps { display: flex; justify-content: center; gap: var(--s6); }
 .sp-steps .st { display: flex; align-items: center; gap: 6px; color: var(--faint); }
@@ -1036,16 +1048,24 @@ html.app, html.app body { overflow: hidden; }
             <span class="sp-lap" id="speed-lap" aria-label="Elapsed">00:00.00</span>
           </div>
           <div class="sp-dial">
-            <div class="sp-gauge" id="speed-g-ping"><span class="gl">PING</span><span class="segs"></span><b>--</b><span class="u">ms</span></div>
+            <div class="sp-gauge" id="speed-g-ping"><span class="gl">PING</span><span class="segs"></span><b>--</b><span class="u">ms</span><span class="u" id="speed-g-jit"></span></div>
             <div class="sp-gauge" id="speed-g-load"><span class="gl">LOAD</span><span class="segs"></span><b>--</b><span class="u">ms</span></div>
             <svg viewBox="0 0 240 214" id="speed-dial">
               <g id="sp-finish" opacity="0"><rect x="72" y="4" width="96" height="20"/><text x="120" y="15">FINISH</text></g>
               <g id="sp-main">
                 <circle class="under" id="sp-under" cx="120" cy="100"/>
                 <circle class="track" id="sp-track" cx="120" cy="100"/>
-                <circle class="ring" id="sp-ring" cx="120" cy="100"/>
+                <circle class="bezel" id="sp-bezel" cx="120" cy="100" r="70"/>
+                <g id="sp-led"><circle class="led" id="sp-ledc" cx="120" cy="100" r="63"/></g>
                 <circle class="arc" id="speed-arc" cx="120" cy="100"/>
-                <circle class="disc" id="sp-disc" cx="120" cy="100"/>
+                <circle class="disc" id="sp-disc" cx="120" cy="100" r="54"/>
+                <g id="sp-face">
+                  <path id="sp-engarc" d="M80 100 A40 40 0 0 1 160 100" fill="none"/>
+                  <text class="eng"><textPath href="#sp-engarc" startOffset="50%">ENGINE</textPath></text>
+                  <path class="pw" d="M111.6 82 A13 13 0 1 0 128.4 82"/>
+                  <text class="start" x="120" y="126">START</text>
+                  <text class="stopw" x="120" y="138">STOP</text>
+                </g>
                 <g id="sp-ticks"><text class="tick" x="51" y="169">0</text><text class="tick" x="55" y="27">10</text><text class="tick" x="190" y="31">100</text><text class="tick" x="189" y="169">1000</text></g>
                 <path class="needle on-disc" id="sp-needle-a"/>
                 <path class="needle" id="speed-needle"/>
@@ -1056,13 +1076,14 @@ html.app, html.app body { overflow: hidden; }
                 <path class="track" stroke-width="10" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
                 <path class="arc up" id="sp-arc2" pathLength="1" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
               </g>
-              <text class="lbl" id="sp-lbl" x="120" y="122">Start</text>
+              <g id="sp-rankg" opacity="0"><rect x="105" y="62" width="30" height="30" rx="4"/><text id="speed-rank" x="120" y="78"></text></g>
               <text class="now" id="speed-now" x="120" y="142"></text>
               <text class="unit" id="speed-unit" x="120" y="160"></text>
-              <text class="now" id="sp-now2" x="175" y="86" opacity="0"></text>
-              <text class="unit" id="sp-unit2" x="175" y="102" opacity="0">Mbps</text>
-              <text class="cap" id="sp-cap1" x="65" y="136" opacity="0">Download</text>
-              <text class="cap" id="sp-cap2" x="175" y="136" opacity="0">Upload</text>
+              <text class="now" id="sp-now2" x="180" y="86" opacity="0"></text>
+              <text class="unit" id="sp-unit2" x="180" y="102" opacity="0">Mbps</text>
+              <text class="cap" id="sp-cap1" x="60" y="130" opacity="0">Download</text>
+              <text class="cap" id="sp-cap2" x="180" y="130" opacity="0">Upload</text>
+              <circle class="ctlring" id="sp-ctlring" cx="120" cy="192" r="19"/>
               <rect class="ctl" id="sp-ctl"/>
               <path class="cic" id="sp-cic"/>
               <text class="again" id="sp-again" y="196" opacity="0">Test again</text>
@@ -1070,9 +1091,9 @@ html.app, html.app body { overflow: hidden; }
               <rect class="hit" id="sp-stop" role="button" tabindex="0" aria-label="Stop"/>
             </svg>
             <div class="sp-steps">
-              <span class="st" id="speed-lat"><span class="gear">P</span><b id="speed-ms">-</b><span class="u">ms</span></span>
-              <span class="st" id="speed-down"><span class="gear">D</span><b>-</b><span class="u">↓</span></span>
-              <span class="st" id="speed-up"><span class="gear">U</span><b>-</b><span class="u">↑</span></span>
+              <span class="st" id="speed-lat"><span class="gear">P</span></span>
+              <span class="st" id="speed-down"><span class="gear">D</span></span>
+              <span class="st" id="speed-up"><span class="gear">U</span></span>
             </div>
           </div>
           <div class="sp-stats">
@@ -1082,7 +1103,6 @@ html.app, html.app body { overflow: hidden; }
             <div><span data-t="loadUp">Loaded up</span><b id="speed-ul">-</b><span class="u">ms</span></div>
           </div>
           <div class="sp-foot">
-            <b class="sp-rank" id="speed-rank"></b>
             <span class="sp-note" id="speed-note"></span>
           </div>
         </div>
@@ -3016,7 +3036,7 @@ function paintSpeed() {
   const warn = s !== "run" && live && metered(a);
   speed.live = live;
   $("speed-dial").classList.toggle("warn", warn); $("speed-dial").classList.toggle("off", !live);
-  $("sp-lbl").textContent = L("Start", "เริ่ม"); $("sp-go").setAttribute("aria-label", L("Start", "เริ่ม"));
+  $("sp-go").setAttribute("aria-label", L("Start", "เริ่ม"));
   $("sp-stop").setAttribute("aria-label", s === "run" ? L("Stop", "หยุด") : L("Test again", "ทดสอบอีกครั้ง"));
   $("sp-again").textContent = L("Test again", "ทดสอบอีกครั้ง");
   $("sp-cap1").textContent = L("Download", "ดาวน์โหลด"); $("sp-cap2").textContent = L("Upload", "อัปโหลด");
@@ -3039,7 +3059,6 @@ function paintSpeed() {
   for (const [k, id, val] of [["ms", "speed-lat", speed.res.ms], ["down", "speed-down", speed.res.down], ["up", "speed-up", speed.res.up]]) {
     const st = $(id);
     st.classList.toggle("on", now === k); st.classList.toggle("got", val !== undefined && now !== k);
-    roll(st.querySelector("b"), n(val));
   }
   // The middle of the dial: the reading under way, or the download once it's over.
   $("speed-now").textContent = s === "run" ? n(now === "ms" ? speed.res.ms : speed.res[now]) : n(speed.res.down);
@@ -3053,6 +3072,7 @@ function paintSpeed() {
     [...segs.children].forEach((x, i) => { x.classList.toggle("on", i < lit); x.classList.toggle("hot", i >= 11); });
     g.querySelector("b").textContent = val === undefined ? "--" : val;
   }
+  $("speed-g-jit").textContent = speed.res.jit === undefined ? "" : `±${speed.res.jit}`;
   // A rank, like a game's: the download speed sets the tier, lag with the line full takes it down.
   const tier = d => d >= 500 ? 4 : d >= 100 ? 3 : d >= 25 ? 2 : d >= 5 ? 1 : 0;
   $("speed-rank").textContent = grade ? "DCBAS"[Math.max(0, tier(speed.res.down ?? 0) - (bloat >= 150 ? 2 : bloat >= 50 ? 1 : 0))] : "";
@@ -3088,38 +3108,43 @@ function speedDraw() {
   const v = s === "run" ? speed.res[speed.leg] ?? 0 : s === "done" ? speed.res.down ?? 0 : 0, to = open ? Math.min(1, Math.log10(1 + v) / 3) : 0;
   speedN = calm.matches || Math.abs(to - speedN) < 0.002 ? to : speedN + (to - speedN) * 0.1;
   const set = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
-  // Opening: label 0-.3, triangle to needle .1-.75, edge to track 0-.8 (overshoots a little), hub .3-.8, scale and reading .55-1, stop .7-1.
+  // Opening: face 0-.3, power stem to needle .1-.75, LED ring to track 0-.8 (overshoots a little), hub .3-.8, scale and reading .55-1, stop .7-1.
   const grow = slice(m, 0, 0.8, open ? over : inOut), turn = slice(m, 0.1, 0.75), late = slice(m, 0.55, 1), stopIn = slice(m, 0.7, 1, open ? over : inOut);
-  const r = mix(40, SR, grow), sweep = mix(360, 270, slice(m, 0, 0.8)), c = 2 * Math.PI * r, rot = `rotate(${90 + (360 - sweep) / 2} ${SC} ${SY})`;
+  const r = mix(63, SR, grow), sweep = mix(360, 270, slice(m, 0, 0.8)), c = 2 * Math.PI * r, rot = `rotate(${90 + (360 - sweep) / 2} ${SC} ${SY})`;
   const dash = f => `${Math.max(0, f) * sweep / 360 * c} ${c}`;
   set("sp-track", { r, transform: rot, "stroke-width": 10 * slice(m, 0.15, 0.8), "stroke-dasharray": dash(1), opacity: slice(m, 0, 0.4) });
-  set("sp-ring", { r, transform: rot, "stroke-dasharray": dash(1), opacity: 1 - slice(m, 0.2, 0.6) });
+  set("sp-led", { opacity: 1 - slice(m, 0.2, 0.6) }); set("sp-ledc", { r });
+  set("sp-bezel", { r: mix(70, SR + 14, grow), opacity: 1 - slice(m, 0, 0.45) });
   set("speed-arc", { r, transform: rot, "stroke-dasharray": dash(speedN), opacity: late > 0.01 && speedN > 0.003 ? 1 : 0 });
   $("speed-arc").classList.toggle("up", s === "run" && speed.leg === "up");
-  set("sp-disc", { r: 40 * (1 - slice(m, 0.05, 0.7)) });
+  set("sp-disc", { r: 54 * (1 - slice(m, 0.05, 0.7)) });
+  set("sp-face", { opacity: 1 - slice(m, 0, 0.3) });
   set("sp-ticks", { opacity: late * (1 - slice(z, 0, 0.4)) });
-  // The play triangle, in its own frame pointing right, becomes the needle pointing at the reading.
-  const th = (mix(0, 135, turn) + 270 * speedN * late) * Math.PI / 180, cs = Math.cos(th), sn = Math.sin(th), lift = mix(-7, 0, turn);
-  const pts = [[mix(11, SR - 16, turn), 0], [mix(-7, -10, turn), mix(-10, -4, turn)], [mix(-7, -10, turn), mix(10, 4, turn)]];
+  // The power symbol's stem, pointing up, swings round and stretches into the needle pointing at the reading.
+  const th = (mix(-90, 135, turn) + 270 * speedN * late) * Math.PI / 180, cs = Math.cos(th), sn = Math.sin(th), lift = 0;
+  const pts = [[mix(26, SR - 16, turn), 0], [mix(10, -10, turn), mix(-1.6, -4, turn)], [mix(10, -10, turn), mix(1.6, 4, turn)]];
   const d = "M" + pts.map(([x, y]) => `${SC + x * cs - y * sn},${SY + lift + x * sn + y * cs}`).join("L") + "Z", ink = slice(m, 0.25, 0.6);
   set("sp-needle-a", { d, opacity: 1 - ink }); set("speed-needle", { d, opacity: ink * (1 - slice(z, 0, 0.35)) });
   set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
-  set("sp-lbl", { opacity: 1 - slice(m, 0, 0.3) });
   // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
-  const zs = slice(z, 0, 0.75), sc = mix(1, 0.55, zs), tx = mix(0, -55, zs), ty = mix(0, -20, zs);
+  const zs = slice(z, 0, 0.75), sc = mix(1, 0.5, zs), tx = mix(0, -60, zs), ty = mix(0, -20, zs);
   const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
   set("sp-main", { transform: place(tx) });
   const twin = slice(z, 0.15, 0.85);
-  set("sp-twin", { transform: place(mix(0, 55, twin)), opacity: slice(z, 0.1, 0.4) });
+  set("sp-twin", { transform: place(mix(0, 60, twin)), opacity: slice(z, 0.1, 0.4) });
   $("sp-arc2").style.strokeDasharray = `${Math.min(1, Math.log10(1 + (speed.res.up ?? 0)) / 3) * slice(z, 0.4, 1)} 1`;
-  set("speed-now", { x: mix(SC, 65, zs), y: mix(142, 86, zs), "font-size": mix(28, 22, zs), opacity: late });
-  set("speed-unit", { x: mix(SC, 65, zs), y: mix(160, 102, zs), opacity: late });
+  set("speed-now", { x: mix(SC, 60, zs), y: mix(142, 86, zs), "font-size": mix(28, 22, zs), opacity: late });
+  set("speed-unit", { x: mix(SC, 60, zs), y: mix(160, 102, zs), opacity: late });
   if (z > 0) $("speed-unit").textContent = "Mbps";
   const tw = slice(z, 0.45, 1);
+  set("sp-rankg", { opacity: slice(z, 0.6, 1) });
   set("sp-now2", { opacity: tw }); set("sp-unit2", { opacity: tw }); set("sp-cap1", { opacity: tw }); set("sp-cap2", { opacity: tw });
   // The small button: grows out of the gap; when it's over, stretches into a pill that says what it does.
   const pz = slice(z, 0.3, 1, over), w = mix(30, 132, pz) * stopIn, h = mix(30, 32, pz) * stopIn, cy = mix(192, 190, pz);
   set("sp-ctl", { x: SC - w / 2, y: cy - h / 2, width: Math.max(0, w), height: Math.max(0, h), rx: h / 2 });
+  set("sp-ctlring", { cy, r: 19 * stopIn, opacity: stopIn * (1 - slice(z, 0, 0.3)) });
+  $("sp-ctl").style.stroke = pz > 0.05 ? "var(--accent)" : "";
+  $("sp-cic").classList.toggle("stop", s === "run");
   set("sp-stop", { x: SC - Math.max(w, 30) / 2 - 4, y: cy - 19, width: Math.max(w, 30) + 8, height: 38 });
   const ix = SC + (1 - q) + mix(0, -48, pz);
   set("sp-cic", { d: "M" + PLAY.map((p, i) => `${ix + mix(p[0], STOP[i][0], q) * 0.8},${cy + mix(p[1], STOP[i][1], q) * 0.8}`).join("L") + "Z", opacity: stopIn });
