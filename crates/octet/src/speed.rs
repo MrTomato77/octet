@@ -165,6 +165,24 @@ fn brand(asn: u64) -> Option<&'static str> {
     })
 }
 
+/// Bytes the far end has acknowledged on these sockets (SIO_TCP_INFO): sent, less what's still in flight or was sent again.
+#[cfg(windows)]
+fn acked(socks: &[TcpStream]) -> Option<u64> {
+    use std::os::windows::io::AsRawSocket;
+    use windows_sys::Win32::Networking::WinSock::{SIO_TCP_INFO, TCP_INFO_v0, WSAIoctl};
+    socks.iter().map(|s| {
+        let (ver, mut info, mut got) = (0u32, TCP_INFO_v0::default(), 0u32);
+        let ok = unsafe { WSAIoctl(s.as_raw_socket() as usize, SIO_TCP_INFO, (&ver as *const u32).cast(), 4,
+            (&mut info as *mut TCP_INFO_v0).cast(), size_of::<TCP_INFO_v0>() as u32, &mut got, std::ptr::null_mut(), None) } == 0;
+        ok.then(|| info.BytesOut.saturating_sub(info.BytesInFlight as u64 + info.BytesRetrans as u64))
+    }).sum()
+}
+
+#[cfg(not(windows))]
+fn acked(_: &[TcpStream]) -> Option<u64> {
+    None
+}
+
 fn median(v: &[f64]) -> Option<u32> {
     let mut s = v.to_vec();
     s.sort_by(|a, b| a.total_cmp(b));
@@ -175,21 +193,14 @@ fn median(v: &[f64]) -> Option<u32> {
 /// Every TICK the view gets the speed so far, the loaded latency so far and the bytes moved in the whole test.
 fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send: &dyn Fn(Value)) -> Result<(), String> {
     let stop = Arc::new(AtomicBool::new(false));
-    let counted = Arc::new(AtomicU64::new(0));
-    let warm = Arc::new(AtomicBool::new(false));
     let err = Arc::new(Mutex::new(None::<String>));
     let socks = Arc::new(Mutex::new(Vec::<TcpStream>::new()));
     let loaded = Arc::new(Mutex::new(Vec::<f64>::new()));
     let body = Arc::new(vec![0u8; if up { UP_CHUNK } else { 0 }]);
     let mut threads: Vec<_> = (0..STREAMS).map(|_| {
-        let (stop, counted, warm, err, socks, body, used) = (stop.clone(), counted.clone(), warm.clone(), err.clone(), socks.clone(), body.clone(), used.clone());
+        let (stop, err, socks, body, used) = (stop.clone(), err.clone(), socks.clone(), body.clone(), used.clone());
         std::thread::spawn(move || {
-            let count = |n: u64| {
-                used.fetch_add(n, Relaxed);
-                if warm.load(Relaxed) {
-                    counted.fetch_add(n, Relaxed);
-                }
-            };
+            let count = |n: u64| { used.fetch_add(n, Relaxed); };
             let run = || -> Result<(), String> {
                 let mut c = open(via)?;
                 socks.lock().unwrap().push(c.get_ref().try_clone().map_err(|e| e.to_string())?);
@@ -218,7 +229,12 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
             }
         }));
     }
-    let (t0, base) = (Instant::now(), used.load(Relaxed));   // used runs over the whole test; this leg's bytes are what's past base
+    // What this leg has moved. Downloaded bytes are counted as they're read. Uploaded ones are counted as the far
+    // end acknowledges them: counting writes would count what only reached the socket's send buffer, megabytes a
+    // stream in the first moments, and the dial would shoot up as upload starts.
+    let base = used.load(Relaxed);   // used runs over the whole test
+    let moved = || if up { acked(&socks.lock().unwrap()) } else { None }.unwrap_or_else(|| used.load(Relaxed) - base);
+    let t0 = Instant::now();
     let mut warm_at = None;
     let result = loop {
         std::thread::sleep(TICK);
@@ -228,10 +244,11 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
         if !live() {
             break Ok(());
         }
+        // The speed counts from the end of the warm-up; before that, a rough figure so the dial moves.
         let (since, bits) = match warm_at {
-            None if t0.elapsed() >= WARM => { warm.store(true, Relaxed); warm_at = Some(Instant::now()); continue }
-            None => (t0.elapsed(), used.load(Relaxed) - base),   // before the warm-up is over: a rough figure, so the dial moves
-            Some(w) => (w.elapsed(), counted.load(Relaxed)),
+            None if t0.elapsed() >= WARM => { warm_at = Some((Instant::now(), moved())); continue }
+            None => (t0.elapsed(), moved()),
+            Some((w, at)) => (w.elapsed(), moved().saturating_sub(at)),
         };
         let mut ev = json!({ "kind": if up { "up" } else { "down" }, "mbps": (bits as f64 * 8.0 / since.as_secs_f64() / 1e5).round() / 10.0, "bytes": used.load(Relaxed) });
         if let Some(l) = median(&loaded.lock().unwrap()) { ev["loaded"] = json!(l); }
