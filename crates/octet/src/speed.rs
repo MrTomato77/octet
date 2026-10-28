@@ -154,7 +154,7 @@ fn ping(c: &mut Tls) -> Result<f64, String> {
 /// ("Dynamic IP assignment for broadband service" for NT); holders checked against RIPEstat.
 fn brand(asn: u64) -> Option<&'static str> {
     Some(match asn {
-        23969 | 38040 | 4651 | 9931 | 131293 | 56120 => "NT",
+        23969 | 38040 | 4651 | 9931 | 131293 | 56120 => "National Telecom",   // NT: TOT and CAT as one
         7470 | 17552 | 38082 => "True Online",
         132061 => "TrueMove H",
         24378 => "dtac",
@@ -218,7 +218,7 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
             }
         }));
     }
-    let t0 = Instant::now();
+    let (t0, base) = (Instant::now(), used.load(Relaxed));   // used runs over the whole test; this leg's bytes are what's past base
     let mut warm_at = None;
     let result = loop {
         std::thread::sleep(TICK);
@@ -230,7 +230,7 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
         }
         let (since, bits) = match warm_at {
             None if t0.elapsed() >= WARM => { warm.store(true, Relaxed); warm_at = Some(Instant::now()); continue }
-            None => (t0.elapsed(), used.load(Relaxed)),   // before the warm-up is over: a rough figure, so the dial moves
+            None => (t0.elapsed(), used.load(Relaxed) - base),   // before the warm-up is over: a rough figure, so the dial moves
             Some(w) => (w.elapsed(), counted.load(Relaxed)),
         };
         let mut ev = json!({ "kind": if up { "up" } else { "down" }, "mbps": (bits as f64 * 8.0 / since.as_secs_f64() / 1e5).round() / 10.0, "bytes": used.load(Relaxed) });

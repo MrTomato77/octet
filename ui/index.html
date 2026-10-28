@@ -3093,7 +3093,8 @@ function paintSpeed() {
   const n = v => v === undefined ? "-" : String(v), now = s === "run" ? (speed.leg || "ms") : "";
   roll($("speed-ping"), n(speed.res.ms));
   const mt = speed.meta;
-  $("speed-isp").textContent = mt ? `${mt.isp}${mt.asn ? " · AS" + mt.asn : ""}` : "-";
+  // Just the name; the AS number (and a name too long for the row) is there on hover.
+  $("speed-isp").textContent = mt?.isp || "-"; $("speed-isp").title = mt ? `${mt.isp}${mt.asn ? " · AS" + mt.asn : ""}` : "";
   count($("speed-data"), s === "idle" ? undefined : speed.used / 1e6, x => `${Math.round(x)} MB`);
   $("speed-srv").textContent = mt ? `${mt.colo}${mt.city ? " · " + mt.city : ""}` : "-";
   // Side gauges: latency on the left, latency with the line full on the right; the top few segments go amber.
