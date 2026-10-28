@@ -5,6 +5,7 @@ mod change;
 #[cfg(target_os = "macos")]
 mod mac;
 mod net;
+mod speed;
 mod update;
 
 use change::Request;
@@ -100,6 +101,19 @@ async fn scan_host(address: String, source: Option<String>, index: u32) -> Resul
     let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
     let from = source.and_then(|s| s.parse().ok());
     blocking(move || Ok(net::scan_host(ip, from, index))).await
+}
+
+/// Speed test out through the adapter (`index`, its own `source` address); the view hears how it goes over `events`.
+/// Resolves when the test is over; a stopped one just ends.
+#[tauri::command]
+async fn speed_test(index: u32, source: String, events: tauri::ipc::Channel<serde_json::Value>) -> Result<(), String> {
+    let src: Ipv4Addr = source.parse().map_err(|_| "Not an IPv4 address".to_string())?;
+    blocking(move || speed::run(index, src, |v| { let _ = events.send(v); })).await
+}
+
+#[tauri::command]
+fn speed_stop() {
+    speed::stop();
 }
 
 /// Settings, Updates: the newer version on GitHub, or None.
@@ -280,7 +294,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");
