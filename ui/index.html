@@ -642,7 +642,6 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-dial .needle.on-disc { fill: var(--accent); }
 .sp-dial .now { fill: var(--ink); font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
 .sp-dial .unit { fill: var(--muted); font-size: 12px; text-anchor: middle; }
-#speed-unit[data-leg]:not([data-leg=""]) { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; }
 #speed-unit[data-leg="down"] { fill: var(--accent); } #speed-unit[data-leg="up"] { fill: var(--ok); }
 .sp-dial .prog { fill: none; stroke-width: 3; stroke-linecap: butt; }
 .sp-dial .prog.bg { stroke: var(--border); } .sp-dial .prog.ms { stroke: var(--ink); } .sp-dial .prog.down { stroke: var(--accent); } .sp-dial .prog.up { stroke: var(--ok); }
@@ -670,7 +669,6 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-lap { margin-left: auto; font-family: var(--mono); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .speed-view[data-phase="idle"] .sp-lap { color: var(--faint); }
 .sp-dial { position: relative; }
-.sp-dial .under { fill: var(--surface); }
 .sp-dial .now, .sp-stats b, .sp-gauge b { font-family: var(--mono); }
 .sp-gauge { position: absolute; top: 8%; display: grid; justify-items: center; gap: 4px; transition: opacity 320ms var(--ease-out); }
 #speed-g-ping { left: 0; } #speed-g-load { right: 0; }
@@ -706,7 +704,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-grade.meh { --lv: oklch(0.78 0.13 75); } .sp-grade.bad { --lv: var(--bad); }
 .sp-stats > div > span:first-child i, .sp-meta > div > span i { font-size: 13px; margin-right: 4px; vertical-align: -2px; }
 /* Test again: the engine button, laid on its side: a round key with a dashed LED ring, then the words */
-.sp-again { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 5px; border-radius: 20px; border: 1.5px solid var(--border-strong);
+.sp-again { display: inline-flex; align-items: center; gap: 10px; overflow: hidden; white-space: nowrap; height: 40px; padding: 0 18px 0 5px; border-radius: 20px; border: 1.5px solid var(--border-strong);
   background: var(--bg); color: var(--ink); font: 700 12px var(--mono); letter-spacing: 1.5px; cursor: pointer; transition: border-color 200ms, transform 120ms; }
 .sp-again .key { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--accent); font-size: 15px; }
 .sp-again .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px dashed var(--accent); animation: led-breathe 2.4s ease-in-out infinite; }
@@ -1059,7 +1057,6 @@ html.app, html.app body { overflow: hidden; }
             <div class="sp-gauge" id="speed-g-load"><span class="gl">LOAD</span><span class="segs"></span><b>--</b><span class="u">ms</span></div>
             <svg viewBox="0 6 240 188" id="speed-dial">
               <g id="sp-main">
-                <circle class="under" id="sp-under" cx="120" cy="100"/>
                 <circle class="track" id="sp-track" cx="120" cy="100"/>
                 <circle class="bezel" id="sp-bezel" cx="120" cy="100" r="70"/>
                 <g id="sp-led"><circle class="led" id="sp-ledc" cx="120" cy="100" r="63"/></g>
@@ -1082,7 +1079,6 @@ html.app, html.app body { overflow: hidden; }
                 <circle class="hub" id="sp-hub" cx="120" cy="100"/>
               </g>
               <g id="sp-twin" opacity="0">
-                <circle class="under" cx="120" cy="100" r="88"/>
                 <path class="track" stroke-width="10" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
                 <path class="arc up" id="sp-arc2" pathLength="1" d="M63.4 156.6 A80 80 0 1 1 176.6 156.6"/>
               </g>
@@ -3047,9 +3043,17 @@ function paintSpeed() {
   speed.live = live;
   $("speed-dial").classList.toggle("warn", warn); $("speed-dial").classList.toggle("off", !live);
   $("sp-go").setAttribute("aria-label", L("Start", "เริ่ม"));
-  $("speed-again").classList.toggle("stop", s === "run");
-  $("speed-again").querySelector(".ph").className = "ph " + (s === "run" ? "ph-stop" : "ph-power");
-  $("speed-again").querySelector(".t").textContent = s === "run" ? L("STOP", "หยุด") : L("TEST AGAIN", "ทดสอบอีกครั้ง");
+  const key = $("speed-again"), mode = s === "run" ? "stop" : "again", was = key.dataset.mode, w0 = key.offsetWidth;
+  key.dataset.mode = mode; key.classList.toggle("stop", mode === "stop");
+  key.querySelector(".ph").className = "ph " + (mode === "stop" ? "ph-stop" : "ph-power");
+  key.querySelector(".t").textContent = mode === "stop" ? L("STOP", "หยุด") : L("TEST AGAIN", "ทดสอบอีกครั้ง");
+  if (was && was !== mode && w0 && !calm.matches) {
+    const spring = "cubic-bezier(.2,.9,.3,1.25)";
+    key.animate([{ width: w0 + "px" }, { width: key.offsetWidth + "px" }], { duration: 420, easing: spring });
+    key.querySelector(".ph").animate([{ transform: "rotate(-140deg) scale(.3)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 460, easing: spring });
+    key.querySelector(".t").animate([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], { duration: 300, delay: 90, easing: "ease-out", fill: "backwards" });
+    led.w = 560;   // the ring kicks into a spin and coasts down
+  }
   $("sp-cap1").textContent = L("Download", "ดาวน์โหลด"); $("sp-cap2").textContent = L("Upload", "อัปโหลด");
   // idle: the button and one line. run: the dial, the steps and the small numbers. sum: two dials and the summary.
   $("speed").dataset.phase = s === "run" ? "run" : s === "done" ? "sum" : "idle";
@@ -3084,7 +3088,7 @@ function paintSpeed() {
     g.querySelector("b").textContent = val === undefined ? "--" : val;
   }
   $("speed-g-jit").textContent = speed.res.jit === undefined ? "" : `±${speed.res.jit}`;
-  $("speed-unit").textContent = s !== "run" ? "Mbps" : now === "ms" ? "ms · PING" : now === "up" ? "Mbps · UPLOAD" : "Mbps · DOWNLOAD";
+  $("speed-unit").textContent = now === "ms" ? "ms" : "Mbps";
   $("speed-unit").dataset.leg = now;
   roll($("speed-jit"), n(speed.res.jit));
   roll($("speed-dl"), n(speed.res.downLoad)); roll($("speed-ul"), n(speed.res.upLoad));
@@ -3165,12 +3169,11 @@ function speedDraw() {
   set("sp-now2", { x: SC + X2, y: SY + big * 0.3, "font-size": big, opacity: tw }); set("sp-unit2", { x: SC + X2, y: SY + big * 0.3 + 18 * S2, opacity: tw });
   set("sp-cap1", { x: SC - X2, y: capY, opacity: tw }); set("sp-cap2", { x: SC + X2, y: capY, opacity: tw });
   $("sp-go").style.display = open ? "none" : "";
-  set("sp-under", { r: r + 14 });
   // Before Start the rows under the dial are empty, so the button sits in the middle of the view instead; it rises into place as it opens.
   const head = svg.closest(".dlg-body").querySelector(".dlg-head").getBoundingClientRect(), foot = $("speed-note").getBoundingClientRect();
   const centre = (head.bottom + foot.top) / 2 - (bx.top - (speed.lift ?? 0) + (bx.height - VH * k) / 2 + (SY - VY) * k);
   speed.lift = centre * (1 - slice(m, 0, 0.8));
-  svg.style.transform = `translateY(${speed.lift}px)`;
+  svg.style.transform = `translateY(${speed.lift + 12 * slice(m, 0, 0.8) * (1 - zs)}px)`;
   const secs = s === "idle" || s === "stopped" || s === "error" ? 0 : ((speed.t1 || at) - speed.t0) / 1000;
   $("speed-lap").textContent = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${(secs % 60).toFixed(2).padStart(5, "0")}`;
   // The numbers run to each new reading (an odometer, not a jump); on the summary the upload counts up as its dial fills.
