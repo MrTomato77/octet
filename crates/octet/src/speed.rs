@@ -197,7 +197,7 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
     let socks = Arc::new(Mutex::new(Vec::<TcpStream>::new()));
     let loaded = Arc::new(Mutex::new(Vec::<f64>::new()));
     let body = Arc::new(vec![0u8; if up { UP_CHUNK } else { 0 }]);
-    let mut threads: Vec<_> = (0..STREAMS).map(|_| {
+    for _ in 0..STREAMS {
         let (stop, err, socks, body, used) = (stop.clone(), err.clone(), socks.clone(), body.clone(), used.clone());
         std::thread::spawn(move || {
             let count = |n: u64| { used.fetch_add(n, Relaxed); };
@@ -216,18 +216,18 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
             if let Err(e) = run() && !stop.load(Relaxed) {
                 err.lock().unwrap().get_or_insert(e);
             }
-        })
-    }).collect();
+        });
+    }
     {
         let (stop, loaded, socks) = (stop.clone(), loaded.clone(), socks.clone());
-        threads.push(std::thread::spawn(move || {
+        std::thread::spawn(move || {
             let Ok(mut c) = open(via) else { return };
             if let Ok(s) = c.get_ref().try_clone() { socks.lock().unwrap().push(s); }
             while !stop.load(Relaxed) {
                 if let Ok(ms) = ping(&mut c) { loaded.lock().unwrap().push(ms); }
                 std::thread::sleep(TICK);
             }
-        }));
+        });
     }
     // What this leg has moved. Downloaded bytes are counted as they're read. Uploaded ones are counted as the far
     // end acknowledges them: counting writes would count what only reached the socket's send buffer, megabytes a
@@ -258,12 +258,12 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
         }
     };
     // Cut every stream now: a 25 MB request left to finish costs data nobody counts.
+    // The threads aren't waited for. One still connecting or in its TLS handshake has no socket here to cut yet,
+    // and waiting on it held the next leg up for its whole timeout (15-21 s, the dial frozen meanwhile).
+    // Each sees the stop once its call returns and ends on its own, its socket closed as it goes.
     stop.store(true, Relaxed);
     for s in socks.lock().unwrap().iter() {
         s.shutdown(Shutdown::Both).ok();
-    }
-    for t in threads {
-        t.join().ok();
     }
     result
 }
