@@ -3204,7 +3204,9 @@ function speedRoad(now) {
   const c = cv.getContext("2d"), css = getComputedStyle(cv);
   c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
   c.strokeStyle = css.getPropertyValue("--border-strong").trim() || "#555"; c.lineWidth = 1;
-  const vx = w / 2, vy = h * 0.4;
+  // The lines meet behind the needle's hub (on the summary, midway between the two dials), so the hub caps the vanishing point.
+  const cb = cv.getBoundingClientRect(), hub = new DOMPoint(SC, SY).matrixTransform($("speed-dial").getScreenCTM());
+  const vx = hub.x - cb.left, vy = hub.y - cb.top;
   c.globalAlpha = 0.35;
   for (let i = -9; i <= 9; i++) { c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx + i * w / 6, h); c.stroke(); }
   for (let j = 0; j < 10; j++) { const f = (j + road.off) / 10, y = vy + (h - vy) * f * f; c.globalAlpha = 0.5 * f; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
