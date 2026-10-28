@@ -621,7 +621,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .window:has(#open-speed.on) .list .item[aria-current="true"] .dot { box-shadow: none; }
 /* Speed test: a dial with the number in its middle, the three steps under it, the small numbers, then the button */
 .speed-view .dlg-body { height: 100%; box-sizing: border-box; grid-template-rows: auto 1fr auto auto auto auto; }
-.sp-dial { min-height: 0; display: grid; grid-template-rows: 1fr auto; gap: var(--s2); }
+.sp-dial { min-height: 0; display: grid; grid-template-rows: 1fr; }
 .sp-dial svg { width: 100%; height: 100%; min-height: 0; display: block; overflow: visible; }
 .sp-dial .track, .sp-dial .arc { fill: none; stroke-linecap: round; }
 .sp-dial .track { stroke: var(--border); }
@@ -646,6 +646,10 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-dial .cic.stop { fill: var(--bad); }
 .sp-dial .now { fill: var(--ink); font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
 .sp-dial .unit { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+#speed-unit[data-leg]:not([data-leg=""]) { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; }
+#speed-unit[data-leg="down"] { fill: var(--accent); } #speed-unit[data-leg="up"] { fill: var(--ok); }
+.sp-dial .prog { fill: none; stroke-width: 3; stroke-linecap: butt; }
+.sp-dial .prog.bg { stroke: var(--border); } .sp-dial .prog.ms { stroke: var(--ink); } .sp-dial .prog.down { stroke: var(--accent); } .sp-dial .prog.up { stroke: var(--ok); }
 .sp-dial .cap { fill: var(--muted); font-size: 12px; text-anchor: middle; }
 .sp-dial .again { fill: var(--ink); font-size: 13px; font-weight: 600; dominant-baseline: middle; }
 .sp-dial .hit { fill: transparent; cursor: pointer; outline: none; }
@@ -658,12 +662,10 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 #speed-dial.off .start { fill: var(--faint); }
 #speed-dial.off #sp-go { cursor: default; }
 /* Before Start there is only the button: the steps and the small numbers come in with the test */
-.speed-view .sp-steps, .speed-view .sp-stats, .speed-view .sp-meta { transition: opacity 320ms var(--ease-out), transform 320ms var(--ease-out); }
-.speed-view[data-phase="run"] .sp-steps { transition-delay: 300ms; }
+.speed-view .sp-stats, .speed-view .sp-meta { transition: opacity 320ms var(--ease-out), transform 320ms var(--ease-out); }
 .speed-view[data-phase="run"] .sp-meta { transition-delay: 420ms; }
 .speed-view[data-phase="run"] .sp-stats { transition-delay: 500ms; }
-.speed-view[data-phase="idle"] .sp-steps, .speed-view[data-phase="idle"] .sp-stats,
-.speed-view[data-phase="sum"] .sp-steps, .speed-view[data-phase="idle"] .sp-meta { opacity: 0; transform: translateY(6px); pointer-events: none; }
+.speed-view[data-phase="idle"] .sp-stats, .speed-view[data-phase="idle"] .sp-meta { opacity: 0; transform: translateY(6px); pointer-events: none; }
 /* Game HUD around it: a floor grid that runs at the line's speed, a lap timer, two side gauges, gears */
 .speed-view { --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
 .sp-road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity 600ms var(--ease-out); }
@@ -673,7 +675,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .speed-view[data-phase="idle"] .sp-lap { color: var(--faint); }
 .sp-dial { position: relative; }
 .sp-dial .under { fill: var(--surface); }
-.sp-dial .now, .sp-steps b, .sp-stats b, .sp-gauge b { font-family: var(--mono); }
+.sp-dial .now, .sp-stats b, .sp-gauge b { font-family: var(--mono); }
 .sp-gauge { position: absolute; top: 8%; display: grid; justify-items: center; gap: 4px; transition: opacity 320ms var(--ease-out); }
 #speed-g-ping { left: 0; } #speed-g-load { right: 0; }
 .sp-gauge .gl { font: 600 10px var(--mono); color: var(--muted); letter-spacing: 1px; }
@@ -685,15 +687,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-gauge .u { font-size: 10px; color: var(--faint); }
 .speed-view:not([data-phase="run"]) .sp-gauge { opacity: 0; }
 .speed-view[data-phase="run"] .sp-gauge { transition-delay: 450ms; }
-.sp-steps .gear { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; font: 600 12px var(--mono); color: var(--faint); transition: background 250ms, color 250ms; }
-.sp-steps .st.on .gear { background: var(--accent); color: var(--accent-ink); }
-#speed-up.on .gear { background: var(--ok); }
-.sp-steps .st.got .gear { color: var(--ink); }
 .sp-foot { align-items: center; }
-.sp-steps { display: flex; justify-content: center; gap: var(--s6); }
-.sp-steps .st { display: flex; align-items: center; gap: 6px; color: var(--faint); }
-.sp-steps .st b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); }
-.sp-steps .st.got b { color: var(--ink); }
 .speed-view .via { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: var(--s2); }
 .sp-stats, .sp-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
 .sp-meta { grid-template-columns: 1.2fr 1.2fr 0.6fr; }
@@ -1064,7 +1058,7 @@ html.app, html.app body { overflow: hidden; }
           <div class="sp-dial">
             <div class="sp-gauge" id="speed-g-ping"><span class="gl">PING</span><span class="segs"></span><b>--</b><span class="u">ms</span><span class="u" id="speed-g-jit"></span></div>
             <div class="sp-gauge" id="speed-g-load"><span class="gl">LOAD</span><span class="segs"></span><b>--</b><span class="u">ms</span></div>
-            <svg viewBox="0 0 240 214" id="speed-dial">
+            <svg viewBox="0 14 240 200" id="speed-dial">
               <g id="sp-main">
                 <circle class="under" id="sp-under" cx="120" cy="100"/>
                 <circle class="track" id="sp-track" cx="120" cy="100"/>
@@ -1078,6 +1072,10 @@ html.app, html.app body { overflow: hidden; }
                   <path class="pw" d="M111.6 82 A13 13 0 1 0 128.4 82"/>
                   <text class="start" x="120" y="126">START</text>
                   <text class="stopw" x="120" y="138">STOP</text>
+                </g>
+                <g id="sp-prog" opacity="0">
+                  <circle class="prog bg" id="sp-pb0" cx="120" cy="100" r="91"/><circle class="prog bg" id="sp-pb1" cx="120" cy="100" r="91"/><circle class="prog bg" id="sp-pb2" cx="120" cy="100" r="91"/>
+                  <circle class="prog ms" id="sp-pf0" cx="120" cy="100" r="91"/><circle class="prog down" id="sp-pf1" cx="120" cy="100" r="91"/><circle class="prog up" id="sp-pf2" cx="120" cy="100" r="91"/>
                 </g>
                 <g id="sp-ticks"><text class="tick" x="51" y="169">0</text><text class="tick" x="55" y="27">10</text><text class="tick" x="190" y="31">100</text><text class="tick" x="189" y="169">1000</text></g>
                 <path class="needle on-disc" id="sp-needle-a"/>
@@ -1101,11 +1099,6 @@ html.app, html.app body { overflow: hidden; }
               <circle class="hit" id="sp-go" cx="120" cy="100" r="44" role="button" tabindex="0" aria-label="Start"/>
               <rect class="hit" id="sp-stop" role="button" tabindex="0" aria-label="Stop"/>
             </svg>
-            <div class="sp-steps">
-              <span class="st" id="speed-lat"><span class="gear">P</span></span>
-              <span class="st" id="speed-down"><span class="gear">D</span></span>
-              <span class="st" id="speed-up"><span class="gear">U</span></span>
-            </div>
           </div>
           <div class="sp-meta">
             <div><span><i class="ph ph-globe-hemisphere-west"></i><span data-t="isp">ISP</span></span><b id="speed-isp">-</b></div>
@@ -3030,6 +3023,7 @@ function speedStart() {
       speed.res.ms = s[s.length >> 1]; speed.res.jit = d.length ? Math.round(d.reduce((x, y) => x + y) / d.length) : undefined;
     }
     if (ev.kind === "down" || ev.kind === "up") {
+      if (speed.leg !== ev.kind) speed.legT0 = performance.now();
       speed.leg = ev.kind;
       speed.res[ev.kind] = ev.mbps; speed.res[ev.kind + "Load"] = ev.loaded; speed.used = ev.bytes;
     }
@@ -3080,12 +3074,7 @@ function paintSpeed() {
     $("speed-grade-h").textContent = { good: "", meh: L("a little slower", "ช้าลงเล็กน้อย"), bad: L("calls and games may stutter", "วิดีโอคอลและเกมอาจสะดุด") }[grade];
     $("speed-grade").className = "sp-grade " + grade;
   }
-  // Three steps under the dial: the one under way is lit, the ones with a number are inked.
   const n = v => v === undefined ? "-" : String(v), now = s === "run" ? (speed.leg || "ms") : "";
-  for (const [k, id, val] of [["ms", "speed-lat", speed.res.ms], ["down", "speed-down", speed.res.down], ["up", "speed-up", speed.res.up]]) {
-    const st = $(id);
-    st.classList.toggle("on", now === k); st.classList.toggle("got", val !== undefined && now !== k);
-  }
   roll($("speed-ping"), n(speed.res.ms));
   const mt = speed.meta;
   $("speed-isp").textContent = mt ? `${mt.isp}${mt.asn ? " · AS" + mt.asn : ""}` : "-";
@@ -3100,7 +3089,8 @@ function paintSpeed() {
     g.querySelector("b").textContent = val === undefined ? "--" : val;
   }
   $("speed-g-jit").textContent = speed.res.jit === undefined ? "" : `±${speed.res.jit}`;
-  $("speed-unit").textContent = s === "run" && now === "ms" ? "ms" : `Mbps ${now === "up" ? "↑" : "↓"}`;
+  $("speed-unit").textContent = s !== "run" ? "Mbps" : now === "ms" ? "ms · PING" : now === "up" ? "Mbps · UPLOAD" : "Mbps · DOWNLOAD";
+  $("speed-unit").dataset.leg = now;
   roll($("speed-jit"), n(speed.res.jit));
   roll($("speed-dl"), n(speed.res.downLoad)); roll($("speed-ul"), n(speed.res.upLoad));
 }
@@ -3111,7 +3101,7 @@ function paintSpeed() {
 // upload comes out of it to the right, and the stop button stretches into a "Test again" pill.
 // Each piece runs on its own slice of one timeline, so the parts overlap instead of popping one after another.
 let speedRaf = 0, speedN = 0;
-const SC = 120, SY = 100, SR = 80;
+const SC = 120, SY = 100, SR = 80, VY = 14, VH = 200, LEG_MS = 8000;
 const PLAY = [[-5, -7], [7, 0], [7, 0], [-5, 7]], STOP = [[-6, -6], [6, -6], [6, 6], [-6, 6]];
 const mix = (a, b, t) => a + (b - a) * t, clamp01 = x => Math.min(1, Math.max(0, x));
 const inOut = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
@@ -3144,6 +3134,19 @@ function speedDraw() {
   set("sp-disc", { r: 54 * (1 - slice(m, 0.05, 0.7)) });
   set("sp-face", { opacity: 1 - slice(m, 0, 0.3) });
   set("sp-ticks", { opacity: late * (1 - slice(z, 0, 0.4)) });
+  // Progress, round the outside: ping, then download, then upload, each part filling with its own time.
+  // Rust runs each leg for a fixed time (LEG_MS), so elapsed time is the progress.
+  const PC = 2 * Math.PI * 91, PL = 0.75 * PC, parts = [0.1, 0.45, 0.45], since = t => (at - (t ?? at));
+  const fill = s === "done" ? [1, 1, 1] : s !== "run" ? [0, 0, 0] : !speed.leg ? [Math.min(1, since(speed.t0) / 1000), 0, 0]
+    : speed.leg === "down" ? [1, Math.min(1, since(speed.legT0) / LEG_MS), 0] : [1, 1, Math.min(1, since(speed.legT0) / LEG_MS)];
+  let p0 = 0;
+  parts.forEach((f, i) => {
+    const len = f * PL - 3, rotP = `rotate(135 ${SC} ${SY})`;
+    set(`sp-pb${i}`, { "stroke-dasharray": `0 ${p0} ${len} ${PC}`, transform: rotP });
+    set(`sp-pf${i}`, { "stroke-dasharray": `0 ${p0} ${len * fill[i]} ${PC}`, transform: rotP });
+    p0 += f * PL;
+  });
+  set("sp-prog", { opacity: late * (1 - slice(z, 0, 0.4)) });
   // The power symbol's stem, pointing up, swings round and stretches into the needle pointing at the reading.
   const th = (mix(-90, 135, turn) + 270 * speedN * late) * Math.PI / 180, cs = Math.cos(th), sn = Math.sin(th), lift = 0;
   const pts = [[mix(26, SR - 16, turn), 0], [mix(10, -10, turn), mix(-1.6, -4, turn)], [mix(10, -10, turn), mix(1.6, 4, turn)]];
@@ -3152,7 +3155,7 @@ function speedDraw() {
   set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
   // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
   // The two result dials use the whole width, not just the 240 units of the view box: each takes half, with room between.
-  const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / 214) || 1;
+  const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / VH) || 1;
   const X2 = Math.max(62, bx.width / k / 4), S2 = Math.min(1.05, (X2 - 14) / SR);
   const zs = slice(z, 0, 0.75), sc = mix(1, S2, zs), tx = mix(0, -X2, zs), ty = 0;
   const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
@@ -3179,7 +3182,7 @@ function speedDraw() {
   set("sp-under", { r: r + 14 });
   // Before Start the rows under the dial are empty, so the button sits in the middle of the view instead; it rises into place as it opens.
   const head = svg.closest(".dlg-body").querySelector(".dlg-head").getBoundingClientRect(), foot = $("speed-note").getBoundingClientRect();
-  const centre = (head.bottom + foot.top) / 2 - (bx.top - (speed.lift ?? 0) + (bx.height - 214 * k) / 2 + SY * k);
+  const centre = (head.bottom + foot.top) / 2 - (bx.top - (speed.lift ?? 0) + (bx.height - VH * k) / 2 + (SY - VY) * k);
   speed.lift = centre * (1 - slice(m, 0, 0.8));
   svg.style.transform = `translateY(${speed.lift}px)`;
   const secs = s === "idle" || s === "stopped" || s === "error" ? 0 : ((speed.t1 || at) - speed.t0) / 1000;
