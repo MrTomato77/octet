@@ -7,9 +7,17 @@ https://github.com/MrTomato77/octet. Please don't open a public issue for it.
 
 ## How elevation works
 
-- The window itself never runs as administrator.
-- Apply, enable/disable and DHCP release/renew start a second copy of `Octet.exe` through UAC.
+- The window runs without administrator rights, unless you set *Settings → Run as admin* to
+  *Always*: then Octet asks once at start and the whole app runs elevated.
+- Otherwise Apply, enable/disable and DHCP release/renew start a second copy of `Octet.exe` through UAC.
   It receives one request on its command line, validates it again, runs `netsh` or `ipconfig`
-  directly (no shell), and exits.
+  directly (no shell), and exits. Its only output, error text, goes into a file the normal copy
+  created beforehand: the elevated copy never creates a file and never writes through a link.
 - Only fixed command shapes are possible; addresses are parsed as IPv4 before use.
-- Octet has no server of its own and no telemetry. It sends only an ARP check before Apply, a ping to the gateway and DNS after it, and for the gateway a reverse name lookup (through your configured DNS) and an ARP request. Device makers come from the IEEE list built into the app, never from an online lookup.
+- `Octet.exe` loads its DLLs from System32 only, so a DLL planted next to it (in Downloads, say)
+  is never picked up, elevated or not.
+- Updates come from this repository's releases, only when you ask. Octet installs one only if
+  its Ed25519 signature checks out against the key built into the app, and only if it is newer
+  than the copy running.
+- No server of its own, no telemetry. What reaches your network and the internet is listed under
+  *Privacy* in the [README](README.md).
