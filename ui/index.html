@@ -3080,7 +3080,7 @@ function speedEnd(state) {
   Object.assign(speed, { state, leg: state === "done" ? "" : speed.leg, t1: performance.now() });
   // The result lives in the dial's drawing, which a screen reader can't follow: say it once, when it's in.
   const r = speed.res, f = v => v === undefined ? "-" : (+v).toFixed(1);
-  $("speed-said").textContent = state !== "done" ? "" : L(`Download ${f(r.down)} Mbps, upload ${f(r.up)} Mbps, ping ${r.ms ?? "-"} ms`, `ดาวน์โหลด ${f(r.down)} Mbps อัปโหลด ${f(r.up)} Mbps ping ${r.ms ?? "-"} ms`);
+  $("speed-said").textContent = state !== "done" ? "" : L(`Download ${f(r.down)} Mbps, upload ${f(r.up)} Mbps, ping ${r.ms === undefined ? "-" : msOf(r.ms)}`, `ดาวน์โหลด ${f(r.down)} Mbps อัปโหลด ${f(r.up)} Mbps ping ${r.ms === undefined ? "-" : msOf(r.ms)}`);
   paintSpeed(); speedDraw();
 }
 // Start is the button in the middle; once it opens into the dial, the key at the bottom stops it (or, when done, runs it again).
@@ -3663,7 +3663,7 @@ async function scanPorts(h, cell, ip) {
   m.firstChild.append(spin);
   // Checked all at once; the open ones come in together when it is done, the menu opening down to them like an accordion.
   // How long a port may take: a few of this device's ping times, it answers a connect about as fast.
-  const wait = Math.min(400, Math.max(120, (scan.hosts[h]?.ms || 20) * 4 + 80));
+  const wait = Math.min(400, Math.max(120, (scan.hosts[h]?.ms ?? 20) * 4 + 80));
   const got = await Promise.all(PORTS.map(([port]) => net("tcping", { address: ip, port, source: scan.src || a.cfg.address, timeout: wait }).catch(() => null)));
   if (run !== scan.portRun || scan.menu !== h) return;
   const open = PORTS.map(([port, what], k) => [port, what, got[k]?.open]).filter(x => x[2] !== undefined).sort((x, y) => x[0] - y[0]);
