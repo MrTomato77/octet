@@ -56,7 +56,7 @@ fn tcp(via: Via) -> Result<TcpStream, String> {
         if s == INVALID_SOCKET {
             return Err(format!("socket: {}", WSAGetLastError()));
         }
-        let fail = |what: &str| { let e = WSAGetLastError(); closesocket(s); Err(format!("{what}: {e}")) };
+        let fail = |what: &str| { let e = WSAGetLastError(); closesocket(s); Err(format!("{what}: {}", said(e))) };
         let idx = via.index.to_be(); // IPv4 wants the index in network byte order
         if setsockopt(s, IPPROTO_IP, IP_UNICAST_IF, (&idx as *const u32).cast(), 4) != 0 {
             return fail("IP_UNICAST_IF");
@@ -81,11 +81,24 @@ fn tcp(via: Via) -> Result<TcpStream, String> {
         getsockopt(s, SOL_SOCKET, SO_ERROR, (&mut e as *mut i32).cast(), &mut len);
         if e != 0 || p.revents & (POLLERR | POLLHUP) != 0 {
             closesocket(s);
-            return Err(format!("connect: {e}"));
+            return Err(format!("connect: {}", said(e)));
         }
         nb = 0;
         ioctlsocket(s, FIONBIO, &mut nb);
         Ok(TcpStream::from_raw_socket(s as u64))
+    }
+}
+
+/// The Winsock errors a connect meets most, in words; any other keeps its number.
+#[cfg(windows)]
+fn said(e: i32) -> String {
+    match e {
+        10051 => "no route to the internet".into(),   // WSAENETUNREACH
+        10065 => "no route to Cloudflare".into(),     // WSAEHOSTUNREACH
+        10060 => "timed out".into(),                  // WSAETIMEDOUT
+        10061 => "refused".into(),                    // WSAECONNREFUSED
+        10049 => "this adapter's address isn't usable".into(),   // WSAEADDRNOTAVAIL (bind)
+        _ => format!("error {e}"),
     }
 }
 
@@ -350,6 +363,16 @@ pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String
 
 #[cfg(test)]
 mod tests {
+    // Sends nothing: an address this PC doesn't have fails at bind, before any connect.
+    #[test]
+    #[cfg(windows)]
+    fn says_why_it_cant_connect() {
+        let _ = std::net::TcpListener::bind("127.0.0.1:0");   // starts Winsock, as resolving the host does in a real run
+        let via = super::Via { index: 1, src: "192.0.2.1".parse().unwrap(), to: "192.0.2.2:443".parse().unwrap() };
+        let e = super::tcp(via).unwrap_err();
+        assert!(e.contains("isn't usable"), "{e}");
+    }
+
     // Real traffic (~200 MB): OCTET_IF=<adapter index> OCTET_SRC=<its IPv4> cargo test -p octet speed -- --ignored --nocapture
     #[test]
     #[ignore]
