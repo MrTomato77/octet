@@ -1364,6 +1364,8 @@ const kindName = { wifi: "Wi-Fi", ethernet: "Ethernet", bluetooth: "Bluetooth", 
 
 // ---------- address classification ----------
 const ipNum = v => v.split(".").reduce((n, o) => n * 256 + +o, 0);
+// Windows times a ping in whole ms, so 0 is a reply under 1 ms (a wired LAN), not "no reply".
+const msOf = v => v < 1 ? "<1 ms" : `${v} ms`;
 const inNet = (v, net, bits) => (ipNum(v) >>> (32 - bits)) === (ipNum(net) >>> (32 - bits));
 function scope(v) {
   if (!validIp(v)) return null;
@@ -2034,7 +2036,7 @@ $("apply").onclick = async () => {
         }
       };
       const [gw, dns] = await Promise.all([probe(cfg.gateway), probe(cfg.dns1 === cfg.gateway ? "" : cfg.dns1)]);
-      const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${ms} ms`;
+      const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${msOf(ms)}`;
       const fail = gw === null || dns === null;
       say([part("Gateway", gw), part(`DNS ${cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? "wifi-x" : "check-circle");
     }, calm.matches ? 0 : 180 + marks.length * 60);
@@ -2894,7 +2896,7 @@ function paintProbe() {
   const r = probe.rows[probe.pick]; if (!r) return;
   const own = probe.rows.at(-1);
   if (r !== own && own?.f && !own.el.contains(document.activeElement)) { own.f.set(r.target, probe.live, true); own.el.classList.toggle("empty", !r.target); }
-  const ok = r.got.filter(v => v !== null), ms = v => v === null ? "-" : String(v);   // the unit sits after it, small
+  const ok = r.got.filter(v => v !== null), ms = v => v === null ? "-" : v < 1 ? "<1" : String(v);   // the unit sits after it, small
   roll($("ps-max"), ms(ok.length ? Math.max(...ok) : null));
   roll($("ps-avg"), ms(ok.length ? Math.round(ok.reduce((a, b) => a + b) / ok.length) : null));
   // Jitter: how far each reply is from the one before, on average.
@@ -2969,7 +2971,7 @@ function drawGraph() {
     const near = shown.reduce((a, b) => Math.abs(b.x - probe.cx) < Math.abs(a.x - probe.cx) ? b : a);
     out += `<line class="cursor" x1="${probe.cx}" x2="${probe.cx}" y1="0" y2="${h}" opacity="${0.6 * probe.show}"/><circle class="knob" cx="${near.x}" cy="${near.y}" r="4" opacity="${probe.show}"/>`;
     const ago = Math.max(0, Math.round((now - near.q.t) / 1000));
-    tip.innerHTML = `${near.q.v} ms<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
+    tip.innerHTML = `${msOf(near.q.v)}<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
     tip.style.transform = `translateX(${Math.min(Math.max(probe.cx + 10, 4), w - tip.offsetWidth - 4)}px)`;
   }
   tip.style.opacity = probe.show > 0.01 ? probe.show : 0;
@@ -3428,7 +3430,7 @@ function scanStart(again = false) {
   const gwIp = a.cfg.gateway, gwMac = !scan.off && validIp(gwIp || "") ? scanAsk(gwIp, a, scan.src).then(x => x?.mac ?? null) : Promise.resolve(null);
   const ready = gwMac.then(m => { memKey = `${net}|${n}|${gwIp}|${m ?? ""}`; mem = seenLoad(memKey); if (run === scan.run) scan.proxy = !!mem.proxy; });
   const confirm = async (ip, x) => {
-    if (!x?.mac || x.ms || ip === gwIp || ownsIp(a, ip) || x.mac !== await gwMac) return x;
+    if (!x?.mac || x.ms != null || ip === gwIp || ownsIp(a, ip) || x.mac !== await gwMac) return x;
     const open = await Promise.any(PROXY_PORTS.map(port => scanTcp(ip, port, scan.src || a.cfg.address)
       .then(t => t?.open ? port : Promise.reject()))).catch(() => 0);
     return open ? { mac: null, vendor: null, ms: null, port: open } : { proxy: true };
@@ -3511,7 +3513,7 @@ function scanSays(ip, x, a) {
   const who = role ? [role, x?.vendor].filter(Boolean).join(" · ") : x && scan.off && !x.mac ? L("Answers ping", "ตอบ ping")
     : !x && scan.off ? L("No answer to ping, may still be in use", "ไม่ตอบ ping อาจมีเครื่องใช้อยู่") : x ? maker
     : (h === 0 || h === 255) ? L(`Free, valid on a /${prefixOf(a.cfg.subnet)}`, `ว่าง ใช้ได้ในวง /${prefixOf(a.cfg.subnet)}`) : L("Free, click to use", "ว่าง กดเพื่อใช้");
-  return [[ip, x?.ms ? `${x.ms} ms` : ""].filter(Boolean).join(" · "), who, x?.mac].filter(Boolean).join("\n");
+  return [[ip, x?.ms != null ? msOf(x.ms) : ""].filter(Boolean).join(" · "), who, x?.mac].filter(Boolean).join("\n");
 }
 // Footer: the key and the tally.
 function scanTell() {
@@ -3659,7 +3661,7 @@ async function scanPorts(h, cell, ip) {
   open.forEach(([port, what, ms]) => {
     const row = document.createElement("div"); row.className = "sp";
     row.innerHTML = `<b></b><span></span><em></em>`;
-    row.children[0].textContent = port; row.children[1].textContent = what; row.children[2].textContent = `${ms} ms`;
+    row.children[0].textContent = port; row.children[1].textContent = what; row.children[2].textContent = msOf(ms);
     if (WEB[port]) {
       const go = document.createElement("button"); go.className = "icon-btn"; go.title = L(`Open ${WEB[port]}://${ip}:${port}`, `เปิด ${WEB[port]}://${ip}:${port}`);
       go.innerHTML = `<i class="ph ph-arrow-square-out"></i>`;
