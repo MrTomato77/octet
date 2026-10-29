@@ -2861,9 +2861,9 @@ async function probeTick() {
   const t0 = Date.now();
   if (adapters[sel]) probeBuild();
   await Promise.all(probe.rows.filter(r => r.target).map(async r => {
-    const t = r.target, port = r.port || 0, source = adapters[sel]?.cfg.address || null;   // out through this adapter
+    const t = r.target, port = r.port || 0, source = adapters[sel]?.cfg.address || null, key = probe.key;   // out through this adapter
     const v = await (port ? net("tcping", { address: t, port, source }) : net("ping", { address: t, source })).catch(() => null);
-    if ((r.port || 0) !== port) return;
+    if ((r.port || 0) !== port || probe.key !== key) return;   // another adapter by now (maybe with the same gateway): not its reading
     r.closed = v?.closed !== undefined;   // refused: the device answered, nothing listens on that port
     if (r.target !== t || !probe.rows.includes(r)) return;
     const ms = v === null ? null : v.open ?? v.closed ?? v.ms ?? v;
