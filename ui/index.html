@@ -356,6 +356,7 @@ button, input, select { font: inherit; color: inherit; }
 .scell.edge { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--border) 60%, transparent); color: var(--faint); font: inherit; font-size: 10px; line-height: 1; }
 .scell:not(.edge):hover, .scell.pick { box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--ink) 70%, transparent); }
 .sgrid.off .scell { opacity: 0.4; }
+.scell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* A key in the footer points at its cells: a click holds it, another lets go. */
 .sgrid[data-only=me] .scell:not(.me), .sgrid[data-only=gw] .scell:not(.gw),
 .sgrid[data-only=used] .scell:not(.used) { opacity: 0.2; }
@@ -3371,6 +3372,7 @@ function scanStart(again = false) {
     if (e && e !== "out") c.dataset.tip = `${numIp(first + i)} · ` + (e === "bc" ? L("Broadcast: reaches every device here, not one", "Broadcast: ส่งถึงทุกเครื่องในวง ใช้เป็น IP ไม่ได้") : L("Network: names the subnet itself", "Network: ชื่อของวงนี้ ใช้เป็น IP ไม่ได้"));
   });
   scanTell();
+  scanCur(live ? base - first : 0, false);   // Tab lands on this PC's own address
   if (!live) return;
   const todo = [...Array(n * 256).keys()].filter(i => !scan.edge(i));
   scan.total = todo.length;
@@ -3446,6 +3448,18 @@ function scanStart(again = false) {
     scanTell();
   };
 }
+// Keyboard: the grid is one Tab stop (the address last on), arrows move 16 to a row, Enter or Space opens one.
+function scanCur(i, focus = true) {
+  scan.cells.forEach(c => c.tabIndex = -1);
+  scan.cells[i].tabIndex = 0;
+  if (focus) scan.cells[i].focus();
+}
+$("scan-grid").addEventListener("keydown", e => {
+  const i = scan.cells.indexOf(document.activeElement), d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -16, ArrowDown: 16 }[e.key];
+  if (i < 0 || d === undefined) return;
+  e.preventDefault();
+  if (i + d >= 0 && i + d < scan.n * 256) scanCur(i + d);
+});
 // The header map: one segment per /24 (none for a single one). Click one to go there.
 function scanMap(n) {
   $("scan-map").replaceChildren(...[...Array(n > 1 ? n : 0)].map((_, b) => {
