@@ -62,6 +62,8 @@ struct Raw {
     #[serde(default)]
     conflict: String,
     #[serde(default)]
+    metered: bool,
+    #[serde(default)]
     suffix: String,
     #[serde(default)]
     ipv6: Vec<String>,
@@ -139,6 +141,8 @@ pub struct Adapter {
     pub ppp: bool,
     /// An address set on this adapter that another device on the network already has: Windows keeps it but won't use it.
     pub conflict: String,
+    /// Windows counts this connection as metered: a phone hotspot it recognised, or one set as metered in Settings.
+    pub metered: bool,
     /// "up", "down" or "disabled"
     pub state: &'static str,
     pub dhcp_server: String,
@@ -217,6 +221,7 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 mhz: r.mhz,
                 ppp: r.ppp,
                 conflict: r.conflict,
+                metered: r.metered,
                 state,
                 dhcp_server,
                 extra_ips,
@@ -556,9 +561,9 @@ mod native {
 
     pub fn read() -> Result<Vec<Raw>, String> {
         // Each asks Windows something that takes some 20 ms: asked side by side, a read takes one of those, not three.
-        let (live, mut wlans, mut v6) = std::thread::scope(|s| {
-            let (w, v) = (s.spawn(wlans), s.spawn(ipv6s));
-            (live(), w.join().unwrap_or_default(), v.join().unwrap_or_default())
+        let (live, mut wlans, mut v6, metered) = std::thread::scope(|s| {
+            let (w, v, m) = (s.spawn(wlans), s.spawn(ipv6s), s.spawn(crate::net::metered));
+            (live(), w.join().unwrap_or_default(), v.join().unwrap_or_default(), m.join().unwrap_or_default())
         });
         let mut live = live?;
         let mut out = vec![];
@@ -589,6 +594,7 @@ mod native {
                     let w = w.unwrap_or_default();
                     (raw.ssid, raw.phy, raw.mhz) = (w.ssid, w.phy, w.mhz);
                     raw.ipv6 = v6.remove(&id).unwrap_or_default();
+                    raw.metered = metered.contains(&id);
                     // The lease, in seconds since 1970, as Windows keeps it for the interface.
                     if raw.dhcp && raw.status == "Up" {
                         let s = |v| reg_dword(&tcp, v).map_or(0, |t| u64::from(t) * 1000);
@@ -668,6 +674,7 @@ mod native {
                     mhz: w.as_ref().map_or(0, |w| w.mhz),
                     ppp: false,
                     conflict: String::new(),   // ponytail: macOS duplicate-address state not read yet
+                    metered: false,   // ponytail: macOS's "Low Data Mode" not read; the view guesses from the address
                     suffix: s.suffix,
                     ipv6: link.map(|l| l.ipv6.clone()).unwrap_or_default(),
                     lease_got: s.lease_got,

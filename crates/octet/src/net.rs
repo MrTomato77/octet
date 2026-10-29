@@ -194,6 +194,33 @@ pub fn flush_dns() -> bool {
     crate::change::elevate(&crate::change::Request::FlushDns).is_ok()
 }
 
+/// Adapters (by GUID, "{...}" upper case) whose connection Windows counts as metered: a phone hotspot it
+/// recognised, or a network set as metered in Settings. Asked of Windows' Network List Manager.
+#[cfg(windows)]
+pub fn metered() -> std::collections::HashSet<String> {
+    use windows::Win32::Networking::NetworkListManager::*;
+    use windows::Win32::System::Com::{CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize};
+    use windows::core::Interface;
+    let mut out = std::collections::HashSet::new();
+    unsafe {
+        let com = CoInitializeEx(None, COINIT_MULTITHREADED).is_ok();
+        if let Ok(list) = CoCreateInstance::<_, INetworkListManager>(&NetworkListManager, None, CLSCTX_ALL).and_then(|m| m.GetNetworkConnections()) {
+            loop {
+                let mut c = [None];
+                let Some(c) = list.Next(&mut c, None).ok().and(c[0].take()) else { break };
+                let (Ok(id), Ok(cost)) = (c.GetAdapterId(), c.cast::<INetworkConnectionCost>().and_then(|k| k.GetCost())) else { continue };
+                if cost & (NLM_CONNECTION_COST_FIXED.0 | NLM_CONNECTION_COST_VARIABLE.0) as u32 != 0 {
+                    out.insert(format!("{{{id:?}}}").to_uppercase());
+                }
+            }
+        }
+        if com {
+            CoUninitialize();
+        }
+    }
+    out
+}
+
 /// One ICMP echo; round-trip milliseconds, or None when there is no reply in `timeout_ms`.
 /// With `from`, it is sent from that address, so it leaves through the adapter that holds it
 /// rather than whichever one has the default route.

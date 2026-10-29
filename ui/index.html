@@ -3023,7 +3023,9 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && pr
 // Nothing runs until Start. Another adapter, or closing the view, stops a test that is running.
 const speed = { state: "idle", res: {}, used: 0, stop: null, leg: "", run: 0, aid: null, lat: [] };
 // A phone hotspot (an iPhone's /28, Android's 192.168.43.x): data is metered, so it says so before it starts.
-const metered = a => !!a && (prefixOf(a.cfg.subnet) >= 28 || ["172.20.10.1", "192.168.43.1"].includes(a.cfg.gateway));
+// Windows' own word first (a phone hotspot it recognised, or a network you set as metered); else a guess from the
+// address: an iPhone or older Android hotspot, or a subnet too small for anything but a few devices.
+const metered = a => !!a && (a.metered || prefixOf(a.cfg.subnet) >= 28 || ["172.20.10.1", "192.168.43.1"].includes(a.cfg.gateway));
 const speedOpen = () => viewShown($("speed"));
 // One test. Events come from Rust over a Channel or, in the demo, from a stand-in with the same shape:
 // { kind: "meta", isp, asn, colo, city } · { kind: "latency", ms } · { kind: "down" | "up", mbps, loaded, bytes } · { kind: "done", bytes } · { kind: "error", message }
@@ -3118,7 +3120,7 @@ function paintSpeed() {
     : s === "done" ? ""
     : s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`)
     // The test runs for a set time, so the data it moves grows with the line's speed (a gigabit line: about 1 GB).
-    : warn ? L("Phone hotspot: about 250 MB per 100 Mbps of speed", "ต่อผ่านมือถือ: ใช้ราว 250 MB ต่อความเร็ว 100 Mbps")
+    : warn ? L("Metered or hotspot: about 250 MB per 100 Mbps", "เน็ตจำกัดปริมาณ/มือถือ: ใช้ราว 250 MB ต่อ 100 Mbps")
     : L("Cloudflare · ~250 MB per 100 Mbps · they see your IP", "Cloudflare · ~250 MB ต่อ 100 Mbps · Cloudflare เห็น IP ของคุณ");
   $("speed-note").className = "sp-note " + (s === "error" ? "bad" : "") + ($("speed-note").textContent.startsWith("Cloudflare") ? " cf" : "");
   if (grade) {
