@@ -1943,6 +1943,8 @@ function precheck(c) {
   if (c.address === c.gateway) return ["address", L("Same address as the gateway", "IP ซ้ำกับ Gateway")];
   const p = prefixOf(c.subnet);
   if (c.gateway && p > 0 && !inNet(c.gateway, c.address, p)) return ["gateway", L("Gateway is outside this subnet", "Gateway อยู่นอก subnet นี้")];
+  const host = c.gateway && p > 0 && p < 31 ? ipNum(c.gateway) % 2 ** (32 - p) : null;   // /31 and /32 have no network or broadcast address
+  if (host === 0 || host === 2 ** (32 - p) - 1) return ["gateway", L("Gateway can't be the subnet's network or broadcast address", "Gateway เป็นเลข network หรือ broadcast ของ subnet ไม่ได้")];
   return null;
 }
 // Icons return to rest after a moment; a newer action cancels the pending reset.
@@ -2011,11 +2013,14 @@ $("apply").onclick = async () => {
       if (tauri) await reload().catch(() => {});   // show what Windows actually took
       lock(false); renderAdapter();
       iconLater("apply", "shield-check", 1200);
-      if (!a.cfg.gateway && !a.cfg.dns1) { say(t("applied")(a.name), "ok", "check"); return; }
+      // A reload makes new adapter objects: test what this one has now, not what was sent.
+      const fresh = () => (adapters.find(x => x.id === a.id) ?? a).cfg;
+      if (!fresh().gateway && !fresh().dns1) { say(t("applied")(a.name), "ok", "check"); return; }
       say(t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…"));
       await new Promise(res => setTimeout(res, 1000));   // let the new address settle
       // Back on DHCP, the leased DNS servers arrive a moment after Apply: test those, not the old ones.
       if (tauri) { await reload().catch(() => {}); renderAdapter(); }
+      const cfg = fresh();
       // macOS brings the routes up a moment after the address: there, a few tries before "not answering".
       const probe = async ip => {
         if (!ip) return undefined;
@@ -2025,10 +2030,10 @@ $("apply").onclick = async () => {
           await new Promise(res => setTimeout(res, 500));
         }
       };
-      const [gw, dns] = await Promise.all([probe(a.cfg.gateway), probe(a.cfg.dns1 === a.cfg.gateway ? "" : a.cfg.dns1)]);
+      const [gw, dns] = await Promise.all([probe(cfg.gateway), probe(cfg.dns1 === cfg.gateway ? "" : cfg.dns1)]);
       const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${ms} ms`;
       const fail = gw === null || dns === null;
-      say([part("Gateway", gw), part(`DNS ${a.cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? "wifi-x" : "check-circle");
+      say([part("Gateway", gw), part(`DNS ${cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? "wifi-x" : "check-circle");
     }, calm.matches ? 0 : 180 + marks.length * 60);
   });
 };
@@ -2258,11 +2263,12 @@ function parseConfig(text) {
   const ip = "(\\d{1,3}(?:\\.\\d{1,3}){3})";
   const m = text.match(new RegExp(`^\\s*${ip}\\s*(?:/(\\d{1,2})|\\s+(?:mask\\s+)?${ip})`, "i"));
   if (!m) return null;
-  const mask = m[2] !== undefined ? masks[+m[2]] : m[3];
-  if (!mask || !validIp(m[1])) return null;
+  const n = v => v ? v.split(".").map(Number).join(".") : "";   // 192.168.001.050 is 192.168.1.50
+  const mask = m[2] !== undefined ? masks[+m[2]] : n(m[3]);
+  if (!mask || !validIp(n(m[1]))) return null;
   const gw = text.match(new RegExp(`(?:gw|gateway)\\s*:?\\s*${ip}`, "i"));
   const dns = text.match(new RegExp(`dns\\s*:?\\s*${ip}(?:\\s*[,\\s]\\s*${ip})?`, "i"));
-  return { address: m[1], subnet: mask, gateway: gw ? gw[1] : "", dns1: dns ? dns[1] : "", dns2: dns && dns[2] ? dns[2] : "" };
+  return { address: n(m[1]), subnet: mask, gateway: n(gw?.[1]), dns1: n(dns?.[1]), dns2: n(dns?.[2]) };
 }
 function pasteConfig(text) {
   const c = parseConfig(text);
@@ -2286,7 +2292,8 @@ document.addEventListener("copy", e => {
   e.preventDefault(); e.clipboardData.setData("text/plain", configText()); say(L("Configuration copied", "คัดลอกค่าทั้งหมดแล้ว"), "ok", "check");
 });
 document.addEventListener("paste", e => {
-  if (document.activeElement?.matches(".ip input, .prefix")) return;   // the field handles it
+  // A text box keeps its own paste (an IP field takes a whole config itself); elsewhere it fills the IP page only.
+  if (document.activeElement?.matches("input, textarea") || page !== "ip") return;
   if (pasteConfig(e.clipboardData.getData("text"))) e.preventDefault();
 });
 
@@ -2351,6 +2358,7 @@ document.querySelectorAll("input[name=lang]").forEach(x => x.onchange = () => {
   crossfade(() => {
     lang = x.value; document.documentElement.lang = lang; translate(); renderList(); renderHidden();
     if (draft) { renderAdapterFacts(); renderForm(); } else renderAdapter();
+    renderInfo(); scanTell(); paintProbe();   // the pages drawn by script, so they don't wait for new data to change language
   });
 });
 // Always run as administrator: saved now, and Octet restarts elevated if it isn't already.
@@ -3307,7 +3315,7 @@ scan.divs = scan.blocks.map(() => { const d = document.createElement("div"); d.c
 $("scan-grid").append(...scan.blocks.flatMap((g, b) => b ? [scan.divs[b], g] : [g]));
 // Where block b starts, in the grid's scroll space.
 const scanTop = b => scan.blocks[b].offsetTop - $("scan-grid").offsetTop;
-const scanGo = (b, how = "smooth") => $("scan-grid").scrollTo({ top: scanTop(b), behavior: how });
+const scanGo = (b, how = calm.matches ? "instant" : "smooth") => $("scan-grid").scrollTo({ top: scanTop(b), behavior: how });
 $("scan-again").onclick = () => scanStart(true);
 // The range swept: the adapter's own unless another was picked from the header (a secondary IP's, or one typed in).
 // `src` is the address the pings go out from: the adapter's own address inside that range, or its main one.
@@ -3669,7 +3677,7 @@ function scanMenu(h, cell, from) {
   m.style.top = `${below + m.offsetHeight > pg.height ? b.top - pg.top - m.offsetHeight - 6 : below}px`;
   m.style.transformOrigin = below + m.offsetHeight > pg.height ? "bottom left" : "top left";
   // The same box grows to what came in (from: its height and top before), an accordion, not a jump.
-  if (again && from && from[0] !== m.offsetHeight) m.animate([{ height: `${from[0]}px`, top: from[1], overflow: "hidden" }, { height: `${m.offsetHeight}px`, top: m.style.top, overflow: "hidden" }],
+  if (again && from && from[0] !== m.offsetHeight && !calm.matches) m.animate([{ height: `${from[0]}px`, top: from[1], overflow: "hidden" }, { height: `${m.offsetHeight}px`, top: m.style.top, overflow: "hidden" }],
     { duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
 }
 document.addEventListener("pointerdown", e => { if (scan.menu !== null && !e.target.closest("#scan-menu, .scell.free, .scell.maybe, .scell.used, .scell.gw")) scanMenu(null); });
