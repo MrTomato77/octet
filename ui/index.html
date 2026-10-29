@@ -28,7 +28,7 @@
   --t-press: 100ms; --t-fast: 140ms; --t-base: 180ms; --t-slow: 240ms;
 
   --bg: oklch(0.965 0.002 250); --surface: oklch(0.99 0.001 250); --side: oklch(0.94 0.004 250);
-  --ink: oklch(0.24 0.01 250); --muted: oklch(0.47 0.012 250); --faint: oklch(0.52 0.01 250);   /* 4.5:1 or better on the page and panels (about 4.3:1 on a hovered row) */
+  --ink: oklch(0.24 0.01 250); --muted: oklch(0.47 0.012 250); --faint: oklch(0.52 0.01 250);   /* 4.5:1 or better on the page and panels; about 4.3:1 on a hovered row, 4.0:1 on the selected one (dark alike) */
   --border: oklch(0.86 0.006 250); --border-strong: oklch(0.72 0.008 250);
   --hover: oklch(0.915 0.006 250); --select: oklch(0.895 0.008 250);
   --accent: oklch(0.5 0.15 255); --accent-ink: oklch(0.99 0 0); --accent-soft: oklch(0.93 0.035 255);
@@ -1308,7 +1308,7 @@ async function reload() {
 const change = request => net("change", { request });
 const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const keep = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
-let sel = 0, draft = null, applies = 0, lang =pref("octet-lang") || (navigator.language.startsWith("th") ? "th" : "en");
+let sel = 0, draft = null, applies = 0, lang = pref("octet-lang") || (navigator.language.startsWith("th") ? "th" : "en");
 
 const T = {
   en: { adapters: "Adapters", settings: "Settings", refresh: "Refresh", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
@@ -1597,12 +1597,15 @@ function problems() {
 }
 const keys = ["ipAuto", "address", "subnet", "gateway", "extra", "gws", "gwMetric", "metric", "dnsAuto", "dns1", "dns2", "register"];
 const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
-const changed = () => !draft ? [] : keys.filter(k => {
+const changed = () => {
+  if (!draft) return [];
   const a = cfgOf(adapters[sel]);   // a reloaded adapter has no Advanced values yet: without them every reload looks like an edit
-  if (draft.ipAuto && ["address", "subnet", "gateway", "gwMetric"].includes(k)) return false;
-  if (draft.dnsAuto && ["dns1", "dns2"].includes(k)) return false;
-  return !same(a[k], draft[k]);
-});
+  return keys.filter(k => {
+    if (draft.ipAuto && ["address", "subnet", "gateway", "gwMetric"].includes(k)) return false;
+    if (draft.dnsAuto && ["dns1", "dns2"].includes(k)) return false;
+    return !same(a[k], draft[k]);
+  });
+};
 // The Advanced values (more addresses and gateways, metrics) with what Windows reported.
 function cfgOf(a) {
   a.cfg.extra ??= (a.extraIps || []).map((address, i) => ({ address, subnet: a.extraSubnets?.[i] || a.cfg.subnet }));
@@ -1971,6 +1974,8 @@ function rowsOf(diff) {
 $("apply").onclick = async () => {
   if (busyNow || !draft) return;
   const btn = $("apply"), a = adapters[sel], d = changed(), rows = rowsOf(d), has = ks => d.some(k => ks.includes(k));
+  // An earlier Apply's slow test says its result only while this is still its adapter and no Apply came after it.
+  const run = ++applies, here = () => adapters[sel]?.id === a.id && run === applies;
   const sent = structuredClone(draft);   // what is applied, whatever happens to the form meanwhile
   clearMsgs();
   const pre = precheck(sent);
@@ -1997,7 +2002,6 @@ $("apply").onclick = async () => {
       flag("address", L(`Not applied · ${sent.address} is in use by ${who}`, `ยังไม่ได้บันทึก · ${sent.address} มี ${who} ใช้อยู่`)); return;
     }
   }
-  const run = ++applies;   // a later Apply's line isn't overwritten by this one's slow test
   lock(true); btn.classList.add("spin"); iconNow("apply", "circle-notch");
   rows.forEach(el => el.classList.add("working"));
   say(L("Waiting for permission…", "รอสิทธิ์ Admin…"));
@@ -2010,10 +2014,11 @@ $("apply").onclick = async () => {
     rows.forEach(el => el.classList.remove("working"));
     btn.classList.remove("spin");
     if (err) {
-      // Part of it may have gone through: show what Windows has now, keep the edits.
+      // Part of it may have gone through: show what Windows has now, keep the edits (only on their own adapter).
       if (tauri) await reload().catch(() => {});
       lock(false); iconNow("apply", "shield-check");
-      renderAdapterFacts(); renderForm();
+      renderList();
+      if (adapters[sel]?.id === a.id) { renderAdapterFacts(); renderForm(); } else renderAdapter();
       if (err === "Cancelled") say(L("Permission declined, nothing changed", "ไม่ได้ให้สิทธิ์ Admin จึงยังไม่ได้เปลี่ยนอะไร"), "", "shield-slash");
       else { say(L("Not applied: ", "บันทึกไม่สำเร็จ: ") + err, "bad"); $("status").title = err; }
       return;
@@ -2025,16 +2030,25 @@ $("apply").onclick = async () => {
       marks.forEach(b => b.classList.remove("settle"));
       a.cfg = sent;
       if (tauri) await reload().catch(() => {});   // show what Windows actually took
-      lock(false); renderAdapter();
+      lock(false); renderList(); renderAdapter();   // a new gateway can move the adapter up the list
       iconLater("apply", "shield-check", 1200);
       if (!sent.ipAuto && !sent.gateway && !sent.dns1) { say(t("applied")(a.name), "ok", "check"); return; }   // nothing to test
-      say(t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…"));
+      const testing = t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…");
+      say(testing);
       await new Promise(res => setTimeout(res, 1000));   // let the new address settle
       // Back on DHCP, the leased DNS servers arrive a moment after Apply: test those, not the old ones.
-      // The form is open again by now: what's being typed (here or on another adapter) stays, only the list updates.
-      if (tauri) { const open = adapters[sel]?.id; await reload().catch(() => {}); if (adapters[sel]?.id === open && changed().length) renderList(); else renderAdapter(); }
+      // The form is open again by now: what's being typed (here or on another adapter) stays. An untouched form shows
+      // the new values, without renderAdapter: a Scan started at Apply goes on rather than starting over.
+      if (tauri) {
+        const open = adapters[sel]?.id;
+        await reload().catch(() => {});
+        renderList();
+        if (adapters[sel]?.id !== open) renderAdapter();
+        else if (!changed().length) { renderAdapterFacts(); draft = structuredClone(cfgOf(adapters[sel])); renderForm(); }
+        if (here()) say(testing);
+      }
       // A reload makes new adapter objects: test what this one has now (a DHCP lease's), not what was sent.
-      const cfg = (adapters.find(x => x.id === a.id) ?? a).cfg, here = () => adapters[sel]?.id === a.id && run === applies;   // the result is said only beside its adapter
+      const cfg = (adapters.find(x => x.id === a.id) ?? a).cfg;
       if (!cfg.gateway && !cfg.dns1) { if (here()) say(t("applied")(a.name), "ok", "check"); return; }
       // macOS brings the routes up a moment after the address: there, a few tries before "not answering".
       const probe = async ip => {
