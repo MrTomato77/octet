@@ -1629,7 +1629,11 @@ function sync(from) {
   if (bad.length && diff.length) say(bad.map(b => b[1]).join(", ") + L(" needs a valid value", " ไม่ถูกต้อง"), "bad");
   else if (diff.length) say(t("changes")(diff.length), "", "", true);
   // Idle: the line explains an adapter that is down or off instead of "No changes".
-  else if (adapters[sel].state === "disabled") {
+  else if (adapters[sel].conflict) {
+    // Windows found another device already on this address and won't use it: the first thing to fix.
+    say(L(`${adapters[sel].conflict} is already used by another device: not in use here`, `${adapters[sel].conflict} มีอุปกรณ์อื่นใช้อยู่ เครื่องนี้จึงใช้ไม่ได้`), "bad", "warning");
+    $("status").title = L("Pick another address, or find the other device with Scan", "เลือก IP อื่น หรือหาอุปกรณ์ที่ใช้อยู่ด้วย Scan");
+  } else if (adapters[sel].state === "disabled") {
     // The chip already says Disabled: the line says what that means for these settings.
     say(L("Kept, used once the adapter is enabled", "ค่าเก็บไว้ จะใช้เมื่อเปิดอะแดปเตอร์"), "", "power", true);
     $("status").title = L("Enable it from the ··· menu", "เปิดได้จากเมนู ···");
@@ -1979,7 +1983,9 @@ $("apply").onclick = async () => {
   lock(true); btn.classList.add("spin"); iconNow("apply", "circle-notch");
   rows.forEach(el => el.classList.add("working"));
   say(L("Waiting for permission…", "รอสิทธิ์ Admin…"));
-  const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]),
+  const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway", "gwMetric"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]),
+    // The first gateway's metric only goes on with `set address`, so a change to it counts as an IP change (static only:
+    // on DHCP it isn't counted as a change at all).
     extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: a.extraIps || [], wasGws: a.extraGws || [] })
     .then(() => null, e => String(e));
   work.then(async err => {

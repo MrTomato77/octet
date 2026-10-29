@@ -101,6 +101,16 @@ pub fn commands(r: &Request) -> Result<Vec<Vec<String>>, String> {
     platform(r, index, name)
 }
 
+/// Manual DNS servers in order; none = take them from DHCP. An Alternate typed in with Preferred
+/// left empty still counts (it becomes the first): dropping it would quietly switch DNS to automatic.
+fn dns_servers(cfg: &Cfg) -> Result<Vec<String>, String> {
+    if cfg.dns_auto {
+        return Ok(vec![]);
+    }
+    [(&cfg.dns1, "Preferred DNS"), (&cfg.dns2, "Alternate DNS")].into_iter().filter(|(v, _)| !v.is_empty())
+        .map(|(v, what)| ipv4(v, what).map(|ip| ip.to_string())).collect()
+}
+
 fn cmd(args: &[&str]) -> Vec<String> {
     args.iter().map(|s| s.to_string()).collect()
 }
@@ -143,13 +153,7 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                 }
             }
             if *dns {
-                let mut servers = vec![];
-                if !cfg.dns_auto && !cfg.dns1.is_empty() {
-                    servers.push(ipv4(&cfg.dns1, "Preferred DNS")?.to_string());
-                    if !cfg.dns2.is_empty() {
-                        servers.push(ipv4(&cfg.dns2, "Alternate DNS")?.to_string());
-                    }
-                }
+                let servers = dns_servers(cfg)?;
                 // "Empty": the servers come from DHCP again.
                 let mut c = ns(&["-setdnsservers", name]);
                 c.extend(if servers.is_empty() { vec!["Empty".to_string()] } else { servers });
@@ -236,13 +240,7 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
             if *dns {
                 // Done in-process with SetInterfaceDnsSettings (what Windows Settings uses): no netsh,
                 // well under 10 ms. No servers = take them from DHCP.
-                let mut servers = vec![];
-                if !cfg.dns_auto && !cfg.dns1.is_empty() {
-                    servers.push(ipv4(&cfg.dns1, "Preferred DNS")?.to_string());
-                    if !cfg.dns2.is_empty() {
-                        servers.push(ipv4(&cfg.dns2, "Alternate DNS")?.to_string());
-                    }
-                }
+                let servers = dns_servers(cfg)?;
                 out.push(cmd(&[DNS, &index.to_string(), &servers.join(","), if cfg.register { "register" } else { "noregister" }]));
             }
             out
@@ -471,6 +469,9 @@ mod tests {
         let mut auto = cfg();
         (auto.ip_auto, auto.dns_auto, auto.register) = (true, true, true);
         assert_eq!(commands(&apply(auto, false, true)).unwrap()[0].join(" "), "octet:set-dns 12  register", "automatic DNS = no servers");
+        let mut alt = cfg();
+        alt.dns1 = String::new();
+        assert_eq!(commands(&apply(alt, false, true)).unwrap()[0].join(" "), "octet:set-dns 12 8.8.8.8 noregister", "an Alternate alone is kept, not dropped");
     }
 
     #[test]

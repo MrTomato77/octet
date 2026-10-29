@@ -58,6 +58,9 @@ struct Raw {
     mhz: u32,
     #[serde(default)]
     ppp: bool,
+    /// An address Windows found another device already using (duplicate address detection): set but not in use.
+    #[serde(default)]
+    conflict: String,
     #[serde(default)]
     suffix: String,
     #[serde(default)]
@@ -134,6 +137,8 @@ pub struct Adapter {
     pub mhz: u32,
     /// A dial-up link (PPPoE, VPN): no DHCP, so no lease to renew.
     pub ppp: bool,
+    /// An address set on this adapter that another device on the network already has: Windows keeps it but won't use it.
+    pub conflict: String,
     /// "up", "down" or "disabled"
     pub state: &'static str,
     pub dhcp_server: String,
@@ -211,6 +216,7 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 phy: r.phy,
                 mhz: r.mhz,
                 ppp: r.ppp,
+                conflict: r.conflict,
                 state,
                 dhcp_server,
                 extra_ips,
@@ -425,6 +431,15 @@ mod native {
             while !u.is_null() {
                 let x = unsafe { &*u };
                 if let Some(ip) = unsafe { ipv4(&x.Address) } {
+                    // Duplicate address detection failed: another device has it. It stays the main address (it is
+                    // what's set, and the form must show it), with the conflict flagged.
+                    if x.DadState == 2 {   // IpDadStateDuplicate
+                        raw.conflict = ip.to_string();
+                        raw.ip.insert(0, ip.to_string());
+                        raw.subnet.insert(0, mask(x.OnLinkPrefixLength));
+                        u = x.Next;
+                        continue;
+                    }
                     // The leased address is the main one, wherever Windows lists it: a typed-in extra can
                     // come first, and the leased one would then be offered for deletion (which netsh refuses).
                     let at = if x.PrefixOrigin == 3 { 0 } else { raw.ip.len() };   // IpPrefixOriginDhcp
@@ -585,16 +600,29 @@ mod native {
                     }
                     out.push(raw);
                 }
-                Device::Disabled(description) => out.push(Raw {
-                    id,
-                    name,
-                    description,
-                    status: "Disabled".into(),
-                    static_dns,
-                    dhcp: reg_dword(&tcp, "EnableDHCP").is_none_or(|d| d != 0),
-                    register: reg_dword(&tcp, "RegistrationEnabled").is_none_or(|d| d != 0),
-                    ..Default::default()
-                }),
+                Device::Disabled(description) => {
+                    // Windows reports nothing live for a disabled adapter, so its settings come from the registry,
+                    // where they wait for it to come back. Left blank, the form would show a static adapter as
+                    // empty, and an Apply from it would wipe what's there.
+                    let dhcp = reg_dword(&tcp, "EnableDHCP").is_none_or(|d| d != 0);
+                    let list = |v| reg_text(&tcp, v).map(|t| t.split([',', ' ']).filter(|x| !x.is_empty() && *x != "0.0.0.0").map(String::from).collect::<Vec<_>>()).unwrap_or_default();
+                    let (ip, subnet, gateway) = if dhcp { Default::default() } else { (list("IPAddress"), list("SubnetMask"), list("DefaultGateway")) };
+                    let (ip, subnet): (Vec<_>, Vec<_>) = ip.into_iter().zip(subnet).unzip();   // read as pairs
+                    out.push(Raw {
+                        id,
+                        name,
+                        description,
+                        status: "Disabled".into(),
+                        static_dns,
+                        dhcp,
+                        register: reg_dword(&tcp, "RegistrationEnabled").is_none_or(|d| d != 0),
+                        ip,
+                        subnet,
+                        gateway,
+                        dns: if static_dns { list("NameServer") } else { vec![] },
+                        ..Default::default()
+                    })
+                }
             }
         }
         Ok(out)
@@ -636,6 +664,7 @@ mod native {
                     phy: w.as_ref().map(|w| w.phy.clone()).unwrap_or_default(),
                     mhz: w.as_ref().map_or(0, |w| w.mhz),
                     ppp: false,
+                    conflict: String::new(),   // ponytail: macOS duplicate-address state not read yet
                     suffix: s.suffix,
                     ipv6: link.map(|l| l.ipv6.clone()).unwrap_or_default(),
                     lease_got: s.lease_got,
