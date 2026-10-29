@@ -1257,11 +1257,13 @@ const demo = {
   macs: { "10.0.0.1": "D8-B3-70-5E-21-0A", "192.168.50.254": "00-0C-42-9A-11-30" },
   vendors: { "3C5282": "Hewlett Packard", "D8B370": "Ubiquiti", "000C42": "Routerboard.com" },   // a slice of data/oui.txt
 };
+// The demo's connection, as Cloudflare would describe it (Info's public IP and the speed test share it).
+const demoWho = { ip: "203.0.113.48", isp: "True Online", asn: 7470, city: "Bangkok", colo: "BKK", site: "Bangkok" };
 const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   if (cmd === "who_has") return res(demo.taken[a.address]?.[0] ?? demo.macs[a.address] ?? (demo.proxyArp ? demo.macs[adapters[sel].cfg.gateway] ?? "02-00-00-00-AA-01" : null));
   if (cmd === "vendor") return res(demo.vendors[a.mac.replace(/[^0-9A-F]/gi, "").slice(0, 6).toUpperCase()] ?? null);
   if (cmd === "hostname") return res(demo.names[a.address] ?? demo.taken[a.address]?.[1] ?? null);
-  if (cmd === "public_ip") return demo.outcome === "fail" ? rej("offline") : res({ ip: "203.0.113.48", isp: "True Internet", city: "Bangkok" });   // one ipinfo-style answer: address and who it belongs to
+  if (cmd === "public_ip") return demo.outcome === "fail" ? rej("offline") : res(demoWho);   // Cloudflare's view of the connection, as the speed test gets it
   if (cmd === "scan_host") {
     const [n3, h] = [a.address.split(".").slice(0, 3).join("."), +a.address.split(".")[3]];
     const me = adapters.find(x => x.cfg.address === a.address), gw = adapters.some(x => x.cfg.gateway === a.address);
@@ -3013,7 +3015,7 @@ function speedRun(a, on) {
   // Demo: ~88 Mbps down, ~93 up, slow start over the first second, a little noise; the loaded latency climbs.
   const timers = [], at = (ms, f) => timers.push(setTimeout(f, ms));
   let bytes = 0;
-  at(80, () => on({ kind: "meta", isp: "True Internet", asn: 7470, colo: "BKK", city: "Bangkok" }));
+  at(80, () => on({ kind: "meta", ...demoWho }));
   for (let i = 0; i < 6; i++) at(150 + i * 120, () => on({ kind: "latency", ms: 19 + Math.round(Math.random() * 5) }));
   const leg = (kind, t0, top) => { for (let i = 1; i <= 32; i++) at(t0 + i * 250, () => {
     const mbps = +(top * Math.min(1, i / 5) * (0.94 + Math.random() * 0.08)).toFixed(1);
@@ -3031,7 +3033,8 @@ function speedStart() {
   Object.assign(speed, { state: "run", res: {}, used: 0, leg: "", aid: a.id, lat: [], meta: null, t0: performance.now(), t1: 0, d1: undefined });
   speed.stop = speedRun(a, ev => {
     if (run !== speed.run) return;
-    if (ev.kind === "meta") speed.meta = ev;
+    // Who the line is: also Info's public IP for this adapter, so the two pages show one answer.
+    if (ev.kind === "meta") { speed.meta = ev; info.pub[pubKey(a)] = ev; }
     if (ev.kind === "latency") {
       speed.lat.push(ev.ms);
       const s = speed.lat.slice().sort((x, y) => x - y), d = speed.lat.slice(1).map((v, i) => Math.abs(v - speed.lat[i]));
@@ -3103,7 +3106,7 @@ function paintSpeed() {
   // Just the name; the AS number (and a name too long for the row) is there on hover.
   $("speed-isp").textContent = mt?.isp || "-"; $("speed-isp").title = mt ? `${mt.isp}${mt.asn ? " · AS" + mt.asn : ""}` : "";
   count($("speed-data"), s === "idle" ? undefined : speed.used / 1e6, x => `${Math.round(x)} MB`);
-  $("speed-srv").textContent = mt ? `${mt.colo}${mt.city ? " · " + mt.city : ""}` : "-";
+  $("speed-srv").textContent = mt ? `${mt.colo}${mt.site ? " · " + mt.site : ""}` : "-";
   // Side gauges: latency on the left, latency with the line full on the right; the top few segments go amber.
   for (const [id, val, max] of [["speed-g-ping", speed.res.ms, 200], ["speed-g-load", speed.leg ? speed.res[speed.leg + "Load"] : undefined, 300]]) {
     const g = $(id), segs = g.querySelector(".segs");
@@ -3677,6 +3680,8 @@ new ResizeObserver(() => centreUnder($("scan-foot"), $("scan-grid"), $("page-sca
 // ---------- Info: a summary to read, copy one value, or copy all as text ----------
 // ponytail: the public address is asked for only when you click it (it leaves this machine), and kept per adapter for the session.
 const info = { pub: {} };
+// The public-IP answer is kept per adapter and address: a new address (Apply, a new lease) means asking again.
+const pubKey = a => `${a.id}|${a.cfg.address}`;
 let hostName = "MRTOMATO-PC";   // demo; the app asks Windows
 if (tauri) invoke("computer_name").then(n => { hostName = n; if (page === "info") renderInfo(); }, () => {});
 // Wi-Fi channel from the centre frequency.
@@ -3687,7 +3692,7 @@ function infoRows() {
   // A day-long lease starts and ends at the same clock time, so any day but today carries its date.
   const at = t => new Date(t).toLocaleString(lang === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit",
     ...(new Date(t).toDateString() !== new Date().toDateString() && { day: "numeric", month: "short" }) });
-  const pub = info.pub[a.id];
+  const pub = info.pub[pubKey(a)];
   return [
     { icon: "plugs-connected", head: L("Connection", "การเชื่อมต่อ"), rows: [
       [L("Computer", "ชื่อเครื่อง"), hostName, ""],
@@ -3781,9 +3786,10 @@ $("info-copy").onclick = () => {
   clearTimeout(b.t); b.t = setTimeout(() => { popIcon(i, "ph ph-copy"); roll(sp, L("Copy all", "คัดลอกทั้งหมด")); }, 1400);
 };
 async function infoPublic() {
-  const id = adapters[sel].id;
+  const id = pubKey(adapters[sel]);
   info.pub[id] = null; renderInfo();
-  info.pub[id] = await net("public_ip").catch(() => "");
+  // Out through this adapter, from the same Cloudflare answer the speed test uses.
+  info.pub[id] = await net("public_ip", { index: adapters[sel].index ?? 0, source: adapters[sel].cfg.address }).catch(() => "");
   if (page === "info") renderInfo();
 }
 function infoShow(on) {

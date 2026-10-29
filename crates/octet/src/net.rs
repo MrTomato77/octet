@@ -57,18 +57,6 @@ pub fn computer_name() -> String {
     String::from_utf16_lossy(&buf[..len as usize])
 }
 
-/// The address the internet sees, with who it belongs to. Asked only when the user clicks
-/// (it leaves this machine): one HTTPS request to ipinfo.io through WinHTTP.
-#[derive(serde::Serialize, Debug, PartialEq)]
-pub struct Public {
-    pub ip: String,
-    pub isp: String,
-    pub city: String,
-}
-pub fn public_ip() -> Result<Public, String> {
-    parse_public(&https_get("ipinfo.io", "/json").ok_or("Could not reach the internet")?)
-}
-
 /// GET https://{host}{path}: the body when the answer is 200, else None. Windows' own HTTP
 /// stack, so the system proxy and certificate store apply; gives up after 6 s per step.
 pub fn https_get(host: &str, path: &str) -> Option<Vec<u8>> {
@@ -136,20 +124,6 @@ pub fn dhcp(index: u32, renew: bool) -> Result<(), String> {
         e => Err(format!("Windows could not {} the lease (error {e})", if renew { "renew" } else { "release" })),
     }
 }
-/// ipinfo's answer: {"ip": "...", "city": "...", "org": "AS7470 True Internet ..."}.
-fn parse_public(json: &[u8]) -> Result<Public, String> {
-    let v: serde_json::Value = serde_json::from_slice(json).map_err(|_| "Unexpected answer".to_string())?;
-    let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
-    let ip = s("ip");
-    if ip.parse::<std::net::IpAddr>().is_err() {
-        return Err("Unexpected answer".into());
-    }
-    // "AS7470 True Internet Co.,Ltd." -> "True Internet Co.,Ltd."
-    let org = s("org");
-    let isp = org.split_once(' ').filter(|(a, _)| a.starts_with("AS")).map_or(org.as_str(), |(_, b)| b).to_string();
-    Ok(Public { ip, isp, city: s("city") })
-}
-
 /// Who made the network card, from the first 3 bytes of its MAC ("00-11-32-.." -> "Synology").
 /// The IEEE list is built into the exe (data/oui.txt), so nothing is looked up online.
 pub fn vendor(mac: &str) -> Option<&'static str> {
@@ -394,11 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn reads_ipinfo_answers() {
-        let p = super::parse_public(br#"{"ip":"203.0.113.48","city":"Bangkok","org":"AS7470 True Internet Co.,Ltd."}"#).unwrap();
-        assert_eq!((p.ip.as_str(), p.isp.as_str(), p.city.as_str()), ("203.0.113.48", "True Internet Co.,Ltd.", "Bangkok"));
-        assert!(super::parse_public(b"<html>rate limited</html>").is_err());
-        assert!(super::parse_public(br#"{"ip":"not an ip"}"#).is_err());
+    fn names_this_computer() {
         assert!(!super::computer_name().is_empty());
     }
 
@@ -410,7 +380,6 @@ mod tests {
         assert!(super::dhcp(999_999, true).is_err());
     }
 
-    /// Reaches the internet: `cargo test -p octet asks_ipinfo -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn asks_ipinfo() {

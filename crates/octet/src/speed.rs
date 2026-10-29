@@ -268,23 +268,41 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
     result
 }
 
+/// Who this adapter's connection is, as Cloudflare sees it: public IP, ISP and the Cloudflare site that answered.
+/// The one answer behind Info's public IP and the speed test's ISP and site, so the two can't disagree.
+fn meta(c: &mut Tls) -> Result<Value, String> {
+    let (status, body, _) = get(c, "/meta", true, &|_| {})?;
+    let m: Value = serde_json::from_slice(&body).map_err(|_| "Unexpected answer from Cloudflare".to_string())?;
+    let ip = m["clientIp"].as_str().filter(|ip| ip.parse::<std::net::IpAddr>().is_ok()).filter(|_| status == 200).ok_or("Unexpected answer from Cloudflare")?;
+    let isp = m["asn"].as_u64().and_then(brand).map(Value::from).unwrap_or_else(|| m["asOrganization"].clone());
+    // city: a guess at where this connection is; site: where the Cloudflare server that answered is.
+    Ok(json!({ "ip": ip, "isp": isp, "asn": m["asn"], "city": m["city"], "colo": m["colo"]["iata"], "site": m["colo"]["city"] }))
+}
+
+fn resolve(index: u32, src: Ipv4Addr) -> Result<Via, String> {
+    // ponytail: the name is looked up the system's way (default route); only the test itself is pinned.
+    let to = (HOST, 443).to_socket_addrs().ok().and_then(|mut a| a.find(SocketAddr::is_ipv4)).ok_or("Can't look up speed.cloudflare.com")?;
+    Ok(Via { index, src, to })
+}
+
+/// Info's public IP: the same answer the speed test gets, out through the same adapter.
+pub fn whois(index: u32, src: Ipv4Addr) -> Result<Value, String> {
+    let mut c = open(resolve(index, src)?).map_err(|e| format!("Can't reach the internet through this adapter ({e})"))?;
+    meta(&mut c)
+}
+
 /// The whole test. Returns once it's over, stopped or failed; a stopped test sends nothing more.
 pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String> {
     let me = RUN.fetch_add(1, Relaxed) + 1;
     let live = || RUN.load(Relaxed) == me;
     let send = |v: Value| if live() { send(v) };
-    // ponytail: the name is looked up the system's way (default route); only the test itself is pinned.
-    let to = (HOST, 443).to_socket_addrs().ok().and_then(|mut a| a.find(SocketAddr::is_ipv4)).ok_or("Can't look up speed.cloudflare.com")?;
-    let via = Via { index, src, to };
+    let via = resolve(index, src)?;
     let used = Arc::new(AtomicU64::new(0));
 
     let mut c = open(via).map_err(|e| format!("Can't reach Cloudflare through this adapter ({e})"))?;
-    // Who the line is: Cloudflare's view of this connection (ISP, and the Cloudflare site that answered).
-    if let Ok((200, body, _)) = get(&mut c, "/meta", true, &|_| {}) {
-        let m: Value = serde_json::from_slice(&body).unwrap_or_default();
-        // colo is the Cloudflare site ({iata, city}); the top-level city is a guess at the client's, not wanted here.
-        let isp = m["asn"].as_u64().and_then(brand).map(Value::from).unwrap_or_else(|| m["asOrganization"].clone());
-        send(json!({ "kind": "meta", "isp": isp, "asn": m["asn"], "colo": m["colo"]["iata"], "city": m["colo"]["city"] }));
+    if let Ok(mut m) = meta(&mut c) {
+        m["kind"] = json!("meta");
+        send(m);
     }
     ping(&mut c)?; // warms the connection; the first is slow
     for _ in 0..20 {

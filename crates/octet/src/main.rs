@@ -149,10 +149,11 @@ fn computer_name() -> String {
     net::computer_name()
 }
 
-/// Info: the public address, only when the user asks for it.
+/// Info's public IP, only when the user asks for it, out through the adapter on screen: the same Cloudflare answer the speed test uses.
 #[tauri::command]
-async fn public_ip() -> Result<net::Public, String> {
-    blocking(net::public_ip).await
+async fn public_ip(index: u32, source: String) -> Result<serde_json::Value, String> {
+    let src: Ipv4Addr = source.parse().map_err(|_| "Not an IPv4 address".to_string())?;
+    blocking(move || speed::whois(index, src)).await
 }
 
 /// Who made the card behind a MAC, from the built-in IEEE list.
