@@ -132,7 +132,7 @@ async fn update_install(app: tauri::AppHandle, version: String) -> Result<(), St
 #[tauri::command]
 fn update_restart(app: tauri::AppHandle) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    std::process::Command::new(exe).arg("--updated").spawn().map_err(|e| e.to_string())?;
+    std::process::Command::new(exe).args(["--updated", &format!("--after={}", std::process::id())]).spawn().map_err(|e| e.to_string())?;
     app.exit(0);
     Ok(())
 }
@@ -224,7 +224,7 @@ fn set_always_admin(on: bool) -> Result<(), String> {
 #[tauri::command]
 fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    change::run_as_admin(&exe, "--restarted", false)?;
+    change::run_as_admin(&exe, &format!("--restarted --after={}", std::process::id()), false)?;
     app.exit(0);
     Ok(())
 }
@@ -238,6 +238,22 @@ fn ready(window: tauri::WebviewWindow) {
 
 static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 
+/// Until process `pid` has closed (5 s at most).
+fn wait_for(pid: u32) {
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::{Foundation::CloseHandle, System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject}};
+        let h = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
+        if !h.is_null() {
+            WaitForSingleObject(h, 5000);
+            CloseHandle(h);
+            return;
+        }
+    }
+    let _ = pid;
+    std::thread::sleep(std::time::Duration::from_millis(700)); // can't watch it: the old fixed wait
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if let [_, flag, request, out] = args.as_slice() && flag == "--elevated" {
@@ -245,14 +261,12 @@ fn main() {
     }
     update::tidy();
     let restarted = args.iter().any(|a| a == "--restarted");
-    // After an update: wait for the old copy to close, then start as usual (elevated again if set to).
-    if args.iter().any(|a| a == "--updated") {
-        std::thread::sleep(std::time::Duration::from_millis(700));
+    // After an update or a restart as admin: let the copy that started this one close first, or single-instance
+    // would hand off to it (and both would be gone). Then start as usual (elevated again if set to).
+    if let Some(pid) = args.iter().find_map(|a| a.strip_prefix("--after=")?.parse().ok()) {
+        wait_for(pid);
     }
-    if restarted {
-        // Let the copy that started us close first, or single-instance would hand off to it.
-        std::thread::sleep(std::time::Duration::from_millis(700));
-    } else if always_admin() && !args.iter().any(|a| a == "--admin") && !net::elevated() && let Ok(exe) = std::env::current_exe() {
+    if !restarted && always_admin() && !args.iter().any(|a| a == "--admin") && !net::elevated() && let Ok(exe) = std::env::current_exe() {
         // No window or single-instance lock exists yet, so the elevated copy needn't wait.
         if change::run_as_admin(&exe, "--admin", false).is_ok() {
             return;
@@ -294,4 +308,16 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    #[test]
+    fn waits_for_the_old_copy_to_close() {
+        let mut child = std::process::Command::new("ping").args(["-n", "2", "127.0.0.1"]).stdout(std::process::Stdio::null()).spawn().unwrap();
+        let t = std::time::Instant::now();
+        super::wait_for(child.id());
+        assert!(child.try_wait().unwrap().is_some(), "returned before it closed");
+        assert!(t.elapsed() < std::time::Duration::from_secs(5));
+    }
 }
