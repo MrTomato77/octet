@@ -17,13 +17,30 @@ use tauri::{Emitter, Manager};
 /// A child process without a console window flashing up.
 pub fn hidden(program: &str) -> std::process::Command {
     #[allow(unused_mut)]   // only Windows sets flags
-    let mut c = std::process::Command::new(program);
+    let mut c = std::process::Command::new(tool(program));
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     c
+}
+
+/// A Windows tool by its full path: System32, else the Windows folder ("explorer"). Named bare, Windows looks in
+/// Octet's own folder first (Downloads, say), where a planted netsh.exe would run with Octet's admin rights.
+#[cfg(windows)]
+fn tool(name: &str) -> std::path::PathBuf {
+    use windows_sys::Win32::System::SystemInformation::{GetSystemDirectoryW, GetWindowsDirectoryW};
+    let name = if name.ends_with(".exe") { name.to_string() } else { format!("{name}.exe") };
+    let (mut sys, mut win) = ([0u16; 260], [0u16; 260]);
+    let (s, w) = unsafe { (GetSystemDirectoryW(sys.as_mut_ptr(), 260) as usize, GetWindowsDirectoryW(win.as_mut_ptr(), 260) as usize) };
+    let sys = std::path::PathBuf::from(String::from_utf16_lossy(&sys[..s.min(260)])).join(&name);
+    if sys.exists() { sys } else { std::path::PathBuf::from(String::from_utf16_lossy(&win[..w.min(260)])).join(name) }
+}
+
+#[cfg(not(windows))]
+fn tool(name: &str) -> &str {
+    name
 }
 
 /// Opens a URL in the default browser (or a settings page).
@@ -256,8 +273,16 @@ fn wait_for(pid: u32) {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if let [_, flag, request, out] = args.as_slice() && flag == "--elevated" {
-        std::process::exit(change::run_elevated(request, out));
+    if let [_, flag, request, out, id @ ..] = args.as_slice() && flag == "--elevated" {
+        std::process::exit(change::run_elevated(request, out, id.first().map(String::as_str)));
+    }
+    // Running as administrator (Always run as admin): WebView2 takes extra browser arguments, even another browser
+    // folder, from WEBVIEW2_* variables, which any program of yours can set (HKCU\Environment). One of them opens a
+    // debugging port, through which a program without admin rights could drive this window and change the network.
+    if net::elevated() {
+        for (k, _) in std::env::vars_os().filter(|(k, _)| k.to_string_lossy().to_ascii_uppercase().starts_with("WEBVIEW2_")) {
+            unsafe { std::env::remove_var(k) };   // still one thread: nothing else reads the environment yet
+        }
     }
     update::tidy();
     let restarted = args.iter().any(|a| a == "--restarted");
@@ -314,6 +339,16 @@ fn main() {
 
 #[cfg(all(test, windows))]
 mod tests {
+    #[test]
+    fn runs_windows_tools_from_the_system_folders_only() {
+        let sys = super::tool("netsh").parent().unwrap().to_path_buf();
+        assert!(sys.ends_with("System32") || sys.ends_with("system32"), "{sys:?}");
+        for t in ["netsh", "control", "explorer", r"WindowsPowerShell\v1.0\powershell.exe"] {
+            let p = super::tool(t);
+            assert!(p.is_absolute() && p.exists(), "{t}: {p:?}");
+        }
+    }
+
     #[test]
     fn waits_for_the_old_copy_to_close() {
         let mut child = std::process::Command::new("ping").args(["-n", "2", "127.0.0.1"]).stdout(std::process::Stdio::null()).spawn().unwrap();

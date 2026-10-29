@@ -290,10 +290,12 @@ pub fn elevate(r: &Request) -> Result<(), String> {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let out = std::env::temp_dir().join(format!("octet-{}-{nanos}.out", std::process::id()));
     // Made here, by this (unelevated) copy: the elevated one only writes into it (`write_out`).
-    std::fs::OpenOptions::new().write(true).create_new(true).open(&out).map_err(|e| format!("Could not prepare the change: {e}"))?;
+    let made = std::fs::OpenOptions::new().write(true).create_new(true).open(&out).map_err(|e| format!("Could not prepare the change: {e}"))?;
+    let id = file_id(&made).ok_or("Could not prepare the change")?;
+    drop(made);
     // The request travels on the command line, so nothing can swap it between the
     // UAC prompt and the elevated copy reading it. The .out file only carries error text.
-    let params = format!("--elevated {} \"{}\"", hex(&serde_json::to_vec(r).map_err(|e| e.to_string())?), out.display());
+    let params = format!("--elevated {} \"{}\" {id}", hex(&serde_json::to_vec(r).map_err(|e| e.to_string())?), out.display());
     let code = run_as_admin(&exe, &params, true);
     let detail = std::fs::read_to_string(&out).unwrap_or_default();
     let _ = std::fs::remove_file(&out);   // also when UAC was declined
@@ -347,30 +349,47 @@ pub fn run_as_admin(_: &std::path::Path, _: &str, _: bool) -> Result<Option<u32>
     Err("On macOS, Octet asks for your password with each change".into())
 }
 
+/// Which file this is, wherever its path leads: volume and file index ("" off Windows).
+#[cfg(windows)]
+fn file_id(f: &std::fs::File) -> Option<String> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle};
+    let mut i: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    (unsafe { GetFileInformationByHandle(f.as_raw_handle(), &mut i) } != 0)
+        .then(|| format!("{:x}-{:x}-{:x}", i.dwVolumeSerialNumber, i.nFileIndexHigh, i.nFileIndexLow))
+}
+
+#[cfg(not(windows))]
+fn file_id(_: &std::fs::File) -> Option<String> {
+    Some(String::new())
+}
+
 /// Elevated side: run the request, write any failure to `out`. Out "-" (macOS): print it and
 /// exit 0, so the administrator prompt's caller gets the text as the command's output.
-/// The elevated copy writes its error text only into the file the unelevated side made for it: never
-/// creating one, and never through a link, so the path on its command line can't aim an admin write elsewhere.
-fn write_out(out: &str, msg: &str) -> std::io::Result<()> {
+/// The elevated copy writes its error text only into the file the unelevated side made for it: never creating
+/// one, never through a link, and only into that very file (`id`), so a folder on the way swapped for a junction
+/// can't aim an admin write at another file either.
+fn write_out(out: &str, id: Option<&str>, msg: &str) -> std::io::Result<()> {
     use std::io::Write;
     let mut o = std::fs::OpenOptions::new();
-    o.write(true).truncate(true);
+    o.write(true);
     #[cfg(windows)]
     std::os::windows::fs::OpenOptionsExt::custom_flags(&mut o, 0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT
     let mut f = o.open(out)?;
-    if !f.metadata()?.file_type().is_file() {
+    if !f.metadata()?.file_type().is_file() || file_id(&f).as_deref() != id {
         return Err(std::io::ErrorKind::InvalidInput.into());
     }
+    f.set_len(0)?;   // emptied only once it's known to be the right file
     f.write_all(msg.as_bytes())
 }
 
-pub fn run_elevated(request_hex: &str, out: &str) -> i32 {
+pub fn run_elevated(request_hex: &str, out: &str, id: Option<&str>) -> i32 {
     let fail = |msg: String| {
         if out == "-" {
             print!("{msg}");
             return 0;
         }
-        let _ = write_out(out, &msg);
+        let _ = write_out(out, id, &msg);
         1
     };
     let req: Request = match unhex(request_hex).and_then(|b| serde_json::from_slice(&b).ok()) {
@@ -439,12 +458,19 @@ mod tests {
     fn writes_errors_only_into_a_file_made_for_them() {
         let p = std::env::temp_dir().join(format!("octet-test-{}.out", std::process::id()));
         let _ = std::fs::remove_file(&p);
-        assert!(super::write_out(p.to_str().unwrap(), "x").is_err() && !p.exists());
+        let path = p.to_str().unwrap();
+        assert!(super::write_out(path, None, "x").is_err() && !p.exists());
         std::fs::write(&p, "old text").unwrap();
-        super::write_out(p.to_str().unwrap(), "new").unwrap();
+        let id = super::file_id(&std::fs::File::open(&p).unwrap());
+        super::write_out(path, id.as_deref(), "new").unwrap();
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "new");
+        // Another file at that path (a folder on the way swapped for a junction, say) is not the one made for it.
         std::fs::remove_file(&p).unwrap();
-        assert!(super::write_out(std::env::temp_dir().to_str().unwrap(), "x").is_err());
+        std::fs::write(&p, "someone else's").unwrap();
+        assert!(super::write_out(path, id.as_deref(), "x").is_err());
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "someone else's");
+        std::fs::remove_file(&p).unwrap();
+        assert!(super::write_out(std::env::temp_dir().to_str().unwrap(), id.as_deref(), "x").is_err());
     }
 
     #[test]

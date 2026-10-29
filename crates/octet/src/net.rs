@@ -420,6 +420,19 @@ pub fn watch(on_change: fn()) {
 
 #[cfg(test)]
 mod tests {
+    /// `cargo test --release -p octet bench_vendor -- --ignored --nocapture`: the table's one-time parse, then lookups.
+    #[test]
+    #[ignore]
+    fn bench_vendor() {
+        let t = std::time::Instant::now();
+        super::vendor("00-11-32-00-00-01");
+        println!("first lookup (parses the table): {:?}", t.elapsed());
+        let macs: Vec<String> = (0..100_000u32).map(|i| format!("{:02X}-{:02X}-{:02X}-00-00-01", (i >> 16) as u8 & 0xFC, (i >> 8) as u8, i as u8)).collect();
+        let t = std::time::Instant::now();
+        let hits = macs.iter().filter(|m| super::vendor(m).is_some()).count();
+        println!("100k lookups: {:?} ({hits} named)", t.elapsed());
+    }
+
     #[test]
     fn loopback_answers_ping() {
         assert!(super::ping(std::net::Ipv4Addr::LOCALHOST, None, 1000).is_some());
@@ -474,7 +487,7 @@ mod tests {
         assert_eq!(super::vendor("b8:27:eb:00:00:01"), Some("Raspberry Pi Foundation"));
         assert_eq!(super::vendor("02-00-00-00-00-01"), None);
         // A 28-bit block (MA-M) inside a 24-bit one the IEEE split up: the block's own maker, not the IEEE.
-        assert_eq!(super::vendor("C8-5C-E2-70-00-01").is_some_and(|v| !v.contains("IEEE")), true);
+        assert!(super::vendor("C8-5C-E2-70-00-01").is_some_and(|v| !v.contains("IEEE")));
         // Made-up (locally administered) and multicast MACs have no maker, even when the bytes match a block.
         assert_eq!(super::vendor("02-60-8C-00-00-01"), None);
         assert_eq!(super::vendor("01-00-5E-00-00-01"), None);

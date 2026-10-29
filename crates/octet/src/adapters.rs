@@ -166,7 +166,7 @@ pub fn read() -> Result<Vec<Adapter>, String> {
 
 #[cfg(test)]
 fn read_ps() -> Result<Vec<Adapter>, String> {
-    let output = crate::hidden("powershell.exe")
+    let output = crate::hidden(r"WindowsPowerShell\v1.0\powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
         .output()
         .map_err(|e| e.to_string())?;
