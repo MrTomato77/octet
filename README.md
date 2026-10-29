@@ -59,7 +59,7 @@ A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simpl
 
 ## Fast, all the way down
 
-The backend is Rust talking to Windows directly: IP Helper for addresses, DNS and DHCP, ICMP for ping, WinHTTP for the one web request. No `ipconfig`, no PowerShell, no console windows flashing by. A DNS change takes milliseconds.
+The backend is Rust talking to Windows directly: IP Helper for addresses, DNS and DHCP, ICMP for ping, WinHTTP for update checks, and TLS sockets pinned to the adapter on screen for the speed test and public IP. No `ipconfig`, no PowerShell, no console windows flashing by. A DNS change takes milliseconds.
 
 ## Download
 
