@@ -2308,7 +2308,8 @@ function renderHidden() {
   box.querySelectorAll(":scope > *").forEach((el, i) => el.style.setProperty("--i", i + 6));
 }
 document.querySelectorAll(".set > *").forEach((el, i) => el.style.setProperty("--i", i));
-const settingsOpen = () => !$("settings").hidden;
+const viewShown = v => !v.hidden && !v.classList.contains("out");   // fading out counts as closed: a click then reopens it
+const settingsOpen = () => viewShown($("settings"));
 function openSettings() {
   if (settingsOpen()) return closeSettings();
   closeSpeed(); renderHidden(); hideTip(); setTools(false);
@@ -2324,8 +2325,8 @@ function closeSettings() {
   $("open-settings").classList.remove("on"); $("open-settings").removeAttribute("aria-current");
   placeIndicator();
   let done = false;
-  const end = () => { if (done) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };
-  v.classList.add("out");
+  const end = () => { if (done || !v.classList.contains("out")) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };   // reopened meanwhile: stays open
+  v.classList.add("out"); wakeGraph();
   v.addEventListener("animationend", end, { once: true });
   setTimeout(end, 200);   // a hidden window may never run the animation
 }
@@ -2962,15 +2963,18 @@ function drawGraph() {
   tip.style.opacity = probe.show > 0.01 ? probe.show : 0;
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.innerHTML = out;
-  graphRaf = page === "probe" ? requestAnimationFrame(drawGraph) : 0;
+  graphRaf = page === "probe" && !covered() ? requestAnimationFrame(drawGraph) : 0;
 }
+// Speed and Settings cover the whole page: under them the graph isn't drawn, and it picks up again as they close.
+function covered() { return settingsOpen() || speedOpen(); }
+function wakeGraph() { if (page === "probe" && !graphRaf) graphRaf = requestAnimationFrame(drawGraph); }
 $("probe-graph").addEventListener("pointermove", e => { probe.hx = e.clientX - e.currentTarget.getBoundingClientRect().left; });
 $("probe-graph").addEventListener("pointerleave", () => { probe.hx = null; });
 function probeShow(on) {
   if (!on) return;
   if (adapters[sel]) probeBuild();
   paintProbe(); placeThumb(false); alignFoot();
-  if (!graphRaf) graphRaf = requestAnimationFrame(drawGraph);
+  wakeGraph();
 }
 setTimeout(probeTick, 1000);
 // Measure each footer item at its widest ("999 ms", "100%") and keep that width (once the fonts are in,
@@ -3002,7 +3006,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && pr
 const speed = { state: "idle", res: {}, used: 0, stop: null, leg: "", run: 0, aid: null, lat: [] };
 // A phone hotspot (an iPhone's /28, Android's 192.168.43.x): data is metered, so it says so before it starts.
 const metered = a => !!a && (prefixOf(a.cfg.subnet) >= 28 || ["172.20.10.1", "192.168.43.1"].includes(a.cfg.gateway));
-const speedOpen = () => !$("speed").hidden;
+const speedOpen = () => viewShown($("speed"));
 // One test. Events come from Rust over a Channel or, in the demo, from a stand-in with the same shape:
 // { kind: "meta", isp, asn, colo, city } · { kind: "latency", ms } · { kind: "down" | "up", mbps, loaded, bytes } · { kind: "done", bytes } · { kind: "error", message }
 // meta is what speed.cloudflare.com/meta says about this connection: who the ISP is and which Cloudflare site answered.
@@ -3276,8 +3280,8 @@ function closeSpeed() {
   $("open-speed").classList.remove("on"); $("open-speed").removeAttribute("aria-current");
   placeIndicator();
   let done = false;
-  const end = () => { if (done) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };
-  v.classList.add("out");
+  const end = () => { if (done || !v.classList.contains("out")) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };   // reopened meanwhile: stays open
+  v.classList.add("out"); wakeGraph();
   v.addEventListener("animationend", end, { once: true });
   setTimeout(end, 200);
 }
@@ -3338,7 +3342,7 @@ function scanStart(again = false) {
   scan.note = !live ? "" : scan.off ? L("Past the gateway: ping only", "อยู่หลัง Gateway: ใช้ ping อย่างเดียว")
     : n === 1 && p > 0 && p < 24 ? L(`Showing ${net}.x, too wide for all`, `แสดง ${net}.x วงใหญ่เกินจะสแกนทั้งหมด`) : "";
   const key = `${net}|${n}|${first}|${scan.src}`;
-  if (!again && key === scan.key && scan.done) { scanTell(null); return; }
+  if (!again && key === scan.key && scan.done) { scanTell(); return; }
   // What this network showed before (its range and gateway): when each address last answered, and whether the router stands in.
   // Filled in once the gateway's MAC is known (the key includes it: 192.168.1.x at home and at work are different networks).
   let memKey = "", mem = { ips: {} };
@@ -3358,7 +3362,7 @@ function scanStart(again = false) {
     delete c.dataset.ip; delete c.dataset.tip; c.removeAttribute("aria-label");
     if (e && e !== "out") c.dataset.tip = `${numIp(first + i)} · ` + (e === "bc" ? L("Broadcast: reaches every device here, not one", "Broadcast: ส่งถึงทุกเครื่องในวง ใช้เป็น IP ไม่ได้") : L("Network: names the subnet itself", "Network: ชื่อของวงนี้ ใช้เป็น IP ไม่ได้"));
   });
-  scanTell(null);
+  scanTell();
   if (!live) return;
   const todo = [...Array(n * 256).keys()].filter(i => !scan.edge(i));
   scan.total = todo.length;
@@ -3389,8 +3393,6 @@ function scanStart(again = false) {
       c.dataset.tip = scanSays(ip, got, a); c.setAttribute("aria-label", c.dataset.tip);
       scan.done++;
       if (scan.follow && Math.floor(i / 256) > scan.at) scanGo(scan.at = Math.floor(i / 256));
-      scanState();
-      if (scan.tell === null || scan.tell === undefined) scanTell(null);
   };
   // The pace follows how fast answers have come in so far (an average, so bursts even out),
   // a bit slower while the queue is short so it never runs dry, faster when it piles up.
@@ -3402,7 +3404,8 @@ function scanStart(again = false) {
     const rate = got / Math.max(now - t0, 400), lean = fed ? 2 : q.length > 40 ? 1.4 : q.length < 10 ? 0.7 : 1;
     acc += dt * rate * lean;
     q.sort((x, y) => x[0] - y[0]);
-    while (acc >= 1 && q.length) { show(...q.shift()); acc--; }
+    // The tally counts every cell, so it's redone once a frame, not once per address.
+    if (acc >= 1 && q.length) { while (acc >= 1 && q.length) { show(...q.shift()); acc--; } scanTell(); }
     if (!q.length) acc = Math.min(acc, 1);
     if (q.length || !fed) requestAnimationFrame(drain); else done();
   };
@@ -3432,7 +3435,7 @@ function scanStart(again = false) {
   const done = () => {
     mem.proxy = scan.proxy; seenSave(memKey, mem);
     if (scan.follow) setTimeout(() => run === scan.run && scan.follow && scanGo(scan.own), 400);
-    scanTell(scan.tell ?? null);
+    scanTell();
   };
 }
 // The header map: one segment per /24 (none for a single one). Click one to go there.
@@ -3486,7 +3489,7 @@ function scanSays(ip, x, a) {
 }
 // Footer: the key and the tally.
 function scanTell() {
-  const f = $("scan-foot");
+  const f = $("scan-foot"), focus = f.contains(document.activeElement) && document.activeElement.dataset.k;
   const count = k => scan.cells.filter(c => c.classList.contains(k)).length, used = count("used"), free = count("free"), maybe = count("maybe");
   const key = (k, cls, label, n) => `<span data-k="${k}" role="button" tabindex="0"><i class="key" style="background:${cls}"></i>${label}${n !== undefined ? ` <b>${n}</b>` : ""}</span>`;
   f.innerHTML = !scan.net ? "" : (scan.note ? `<span class="snote">${scan.note}</span>` : "") + (scan.off ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway"))
@@ -3501,6 +3504,7 @@ function scanTell() {
     if (k.dataset.k === "gw" && gw && !scan.has(gw)) k.dataset.tip = L(`${gw}, outside this range`, `${gw} อยู่นอกช่วงที่แสดง`);
     if (k.dataset.k === "maybe") k.dataset.tip = L("The router answers for every address (proxy ARP); these answered nothing else", "Router ตอบแทนทุกเลข (proxy ARP) เลขเหล่านี้ไม่มีอะไรตอบนอกจากนั้น");
   });
+  if (focus) f.querySelector(`[data-k="${focus}"]`)?.focus();   // rebuilt: the key you were on keeps the focus
   scanState();
 }
 // Which cells stand out: the one held, or the one peeked at. A gateway off this /24 has nothing to show.
