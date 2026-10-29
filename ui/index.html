@@ -3503,7 +3503,9 @@ const seenLoad = k => ({ ips: {}, ...seenAll()[k] });
 function seenSave(k, m) {
   const all = seenAll(), now = Date.now();
   m.ips = Object.fromEntries(Object.entries(m.ips).filter(([, t]) => now - t < SEEN_MS));
-  all[k] = m; keep("octet-seen", JSON.stringify(all));
+  // This network and the 19 scanned last before it: a laptop that meets many networks doesn't keep every one forever.
+  const rest = Object.entries(all).filter(([x]) => x !== k).sort(([, x], [, y]) => (y.at ?? 0) - (x.at ?? 0)).slice(0, 19);
+  keep("octet-seen", JSON.stringify(Object.fromEntries([[k, { ...m, at: now }], ...rest])));
 }
 const scanTcp = (ip, port, source) => net("tcping", { address: ip, port, source, timeout: 400 }).catch(() => null);
 // What a cell's tooltip says.
