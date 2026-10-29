@@ -265,7 +265,11 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
             while !stop.load(Relaxed) {
                 match ping(&mut c) {
                     Ok(ms) => loaded.lock().unwrap().push(ms),
-                    Err(_) => if let Ok(n) = open(via) { c = n },   // dropped: the next reading comes on a new connection
+                    // Dropped: the next reading comes on a new connection, cut with the others when the leg ends.
+                    Err(_) => if let Ok(n) = open(via) {
+                        if let Ok(s) = n.get_ref().try_clone() { socks.lock().unwrap().push((s, 0)); }
+                        c = n;
+                    },
                 }
                 std::thread::sleep(TICK);
             }

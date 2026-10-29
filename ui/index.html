@@ -28,7 +28,7 @@
   --t-press: 100ms; --t-fast: 140ms; --t-base: 180ms; --t-slow: 240ms;
 
   --bg: oklch(0.965 0.002 250); --surface: oklch(0.99 0.001 250); --side: oklch(0.94 0.004 250);
-  --ink: oklch(0.24 0.01 250); --muted: oklch(0.47 0.012 250); --faint: oklch(0.52 0.01 250);   /* 4.6:1 or better on every background */
+  --ink: oklch(0.24 0.01 250); --muted: oklch(0.47 0.012 250); --faint: oklch(0.52 0.01 250);   /* 4.5:1 or better on the page and panels (about 4.3:1 on a hovered row) */
   --border: oklch(0.86 0.006 250); --border-strong: oklch(0.72 0.008 250);
   --hover: oklch(0.915 0.006 250); --select: oklch(0.895 0.008 250);
   --accent: oklch(0.5 0.15 255); --accent-ink: oklch(0.99 0 0); --accent-soft: oklch(0.93 0.035 255);
@@ -1308,7 +1308,7 @@ async function reload() {
 const change = request => net("change", { request });
 const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const keep = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
-let sel = 0, draft = null, lang = pref("octet-lang") || (navigator.language.startsWith("th") ? "th" : "en");
+let sel = 0, draft = null, applies = 0, lang =pref("octet-lang") || (navigator.language.startsWith("th") ? "th" : "en");
 
 const T = {
   en: { adapters: "Adapters", settings: "Settings", refresh: "Refresh", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
@@ -1598,7 +1598,7 @@ function problems() {
 const keys = ["ipAuto", "address", "subnet", "gateway", "extra", "gws", "gwMetric", "metric", "dnsAuto", "dns1", "dns2", "register"];
 const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
 const changed = () => !draft ? [] : keys.filter(k => {
-  const a = adapters[sel].cfg;
+  const a = cfgOf(adapters[sel]);   // a reloaded adapter has no Advanced values yet: without them every reload looks like an edit
   if (draft.ipAuto && ["address", "subnet", "gateway", "gwMetric"].includes(k)) return false;
   if (draft.dnsAuto && ["dns1", "dns2"].includes(k)) return false;
   return !same(a[k], draft[k]);
@@ -1615,9 +1615,9 @@ function say(text, kind = "", ic = "", quiet = false) {
   const st = $("status");
   const fresh = st.textContent !== text;
   // The same line again (a key typed while a field is still wrong): left as it is, so a screen reader doesn't repeat it.
-  if (!fresh && st.className.replace(" changed", "") === "status" + (kind ? " " + kind : "") && !!st.querySelector("i") === !!ic) return;
-  st.setAttribute("aria-live", quiet ? "off" : "polite");
   st.removeAttribute("title"); delete st.dataset.tip;
+  if (!fresh && st.className.replace(" changed", "") === "status" + (kind ? " " + kind : "") && (st.querySelector("i")?.className ?? "") === (ic ? "ph ph-" + ic : "")) return;
+  st.setAttribute("aria-live", quiet ? "off" : "polite");
   st.textContent = text;
   if (ic) st.insertAdjacentHTML("afterbegin", `<i class="ph ph-${ic}"></i>`);
   st.className = "status" + (kind ? " " + kind : "");
@@ -1908,7 +1908,7 @@ function renderList(enter = false) {
   }
   placeIndicator(animateNext || moved);   // the selection highlight travels with its row
   animateNext = false;
-  if (focus) [...ul.querySelectorAll("li[data-id]")].find(li => li.dataset.id === focus)?.querySelector("button").focus();
+  if (focus) { [...ul.querySelectorAll("li[data-id]")].find(li => li.dataset.id === focus)?.querySelector("button").focus(); hideTip(); }   // a quiet redraw, not a move: no tip
 }
 let animateNext = false;
 const seen = {};   // last state drawn per adapter, so a change can pulse its dot
@@ -1997,6 +1997,7 @@ $("apply").onclick = async () => {
       flag("address", L(`Not applied · ${sent.address} is in use by ${who}`, `ยังไม่ได้บันทึก · ${sent.address} มี ${who} ใช้อยู่`)); return;
     }
   }
+  const run = ++applies;   // a later Apply's line isn't overwritten by this one's slow test
   lock(true); btn.classList.add("spin"); iconNow("apply", "circle-notch");
   rows.forEach(el => el.classList.add("working"));
   say(L("Waiting for permission…", "รอสิทธิ์ Admin…"));
@@ -2031,9 +2032,9 @@ $("apply").onclick = async () => {
       await new Promise(res => setTimeout(res, 1000));   // let the new address settle
       // Back on DHCP, the leased DNS servers arrive a moment after Apply: test those, not the old ones.
       // The form is open again by now: what's being typed (here or on another adapter) stays, only the list updates.
-      if (tauri) { await reload().catch(() => {}); if (changed().length) renderList(); else renderAdapter(); }
+      if (tauri) { const open = adapters[sel]?.id; await reload().catch(() => {}); if (adapters[sel]?.id === open && changed().length) renderList(); else renderAdapter(); }
       // A reload makes new adapter objects: test what this one has now (a DHCP lease's), not what was sent.
-      const cfg = (adapters.find(x => x.id === a.id) ?? a).cfg, here = () => adapters[sel]?.id === a.id;   // the result is said only beside its adapter
+      const cfg = (adapters.find(x => x.id === a.id) ?? a).cfg, here = () => adapters[sel]?.id === a.id && run === applies;   // the result is said only beside its adapter
       if (!cfg.gateway && !cfg.dns1) { if (here()) say(t("applied")(a.name), "ok", "check"); return; }
       // macOS brings the routes up a moment after the address: there, a few tries before "not answering".
       const probe = async ip => {
@@ -2350,7 +2351,7 @@ function openSettings() {
 }
 function closeSettings() {
   const v = $("settings");
-  if (v.hidden) return;
+  if (!viewShown(v)) return;   // already fading: closing it again would un-inert the page under the other view
   cover(v, false);
   $("open-settings").classList.remove("on"); $("open-settings").removeAttribute("aria-current");
   placeIndicator();
@@ -2538,10 +2539,10 @@ document.addEventListener("keydown", e => {
   if (e.key.toLowerCase() === "b" && isMod(e)) { e.preventDefault(); $("collapse").click(); }
   if (e.key === "F5" || isMod(e) && e.key.toLowerCase() === "r") { e.preventDefault(); $("refresh").click(); }
   if (isMod(e) && e.key >= "1" && e.key <= String(ptabs.length) && !settingsOpen()) { e.preventDefault(); showPage(ptabs[e.key - 1].dataset.page); }
-  if (e.key === "Escape" && settingsOpen() && !document.querySelector("dialog[open]")) { closeSettings(); return; }
-  if (e.key === "Escape" && speedOpen() && !document.querySelector("dialog[open]")) { closeSpeed(); return; }
+  if (e.key === "Escape" && settingsOpen()) { closeSettings(); return; }
+  if (e.key === "Escape" && speedOpen()) { closeSpeed(); return; }
   if (e.key === "Escape" && tools.classList.contains("open")) { setTools(false); $("more").focus(); }
-  else if (e.key === "Escape" && !isRail() && !document.querySelector("dialog[open]")) setRail(true);
+  else if (e.key === "Escape" && !isRail()) setRail(true);
   if (e.key === "Enter" && isMod(e) && !$("apply").disabled && !settingsOpen()) $("apply").click();
 });
 
@@ -3322,7 +3323,7 @@ function speedRoad(now) {
   for (let j = 0; j < 10; j++) { const f = (j + road.off) / 10, y = mix(f * h, vy + (h - vy) * f * f, t); c.globalAlpha = mix(0.35, 0.5 * f, t); c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
   c.globalAlpha = t;   // the fog belongs to the road
   // Horizon fog: the lines thin out into nothing before they meet, so there's no bright knot where they converge.
-  const fog = c.createRadialGradient(vx, vy, 0, vx, vy, (h - vy) * 0.6);
+  const fog = c.createRadialGradient(vx, vy, 0, vx, vy, Math.max(0, (h - vy) * 0.6));   // a negative radius throws and ends the loop
   fog.addColorStop(0, "#000"); fog.addColorStop(0.35, "rgba(0,0,0,.85)"); fog.addColorStop(1, "rgba(0,0,0,0)");
   c.globalCompositeOperation = "destination-out"; c.fillStyle = fog; c.fillRect(0, 0, w, h); c.globalCompositeOperation = "source-over"; c.globalAlpha = 1;
   // The LED rings: pointing at a button spins its ring up over most of a second; leaving lets it coast to a stop.
@@ -3343,7 +3344,7 @@ function openSpeed() {
 }
 function closeSpeed() {
   const v = $("speed");
-  if (v.hidden) return;
+  if (!viewShown(v)) return;
   cover(v, false);
   if (speed.state === "run") speedEnd("stopped");   // no test runs where nobody can see it
   $("open-speed").classList.remove("on"); $("open-speed").removeAttribute("aria-current");

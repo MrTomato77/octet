@@ -392,10 +392,12 @@ fn write_out(out: &str, id: Option<&str>, msg: &str) -> std::io::Result<()> {
     #[cfg(windows)]
     std::os::windows::fs::OpenOptionsExt::custom_flags(&mut o, 0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT
     let mut f = o.open(out)?;
-    if !f.metadata()?.file_type().is_file() || file_id(&f).as_deref() != id {
+    // Only into an empty file (the one made for it is): a forged launch that names some other file by its id
+    // can't cut what's in it.
+    let m = f.metadata()?;
+    if !m.file_type().is_file() || m.len() != 0 || file_id(&f).as_deref() != id {
         return Err(std::io::ErrorKind::InvalidInput.into());
     }
-    f.set_len(0)?;   // emptied only once it's known to be the right file
     f.write_all(msg.as_bytes())
 }
 
@@ -476,9 +478,12 @@ mod tests {
         let _ = std::fs::remove_file(&p);
         let path = p.to_str().unwrap();
         assert!(super::write_out(path, None, "x").is_err() && !p.exists());
-        std::fs::write(&p, "old text").unwrap();
+        std::fs::write(&p, "").unwrap();
         let id = super::file_id(&std::fs::File::open(&p).unwrap());
         super::write_out(path, id.as_deref(), "new").unwrap();
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "new");
+        // The right file, but not empty (a forged launch naming some file by its id): left as it is.
+        assert!(super::write_out(path, id.as_deref(), "x").is_err());
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "new");
         // Another file at that path (a folder on the way swapped for a junction, say) is not the one made for it.
         std::fs::remove_file(&p).unwrap();
