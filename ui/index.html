@@ -1904,7 +1904,10 @@ function renderList(enter = false) {
 let animateNext = false;
 const seen = {};   // last state drawn per adapter, so a change can pulse its dot
 async function select(i) {
+  const id = adapters[i]?.id;
   if (i === sel || busyNow || !await discardOk()) return;
+  i = adapters.findIndex(a => a.id === id);   // a refresh while the question was up may have reordered the list
+  if (i < 0) return;
   // Only text moves: octets count to the new adapter's values, the header text rises in. The page itself stays.
   sel = i; animateNext = true; renderList(); renderAdapter(true);
   if (!calm.matches) $("a-icon").animate([{ opacity: 0 }, { opacity: 0, offset: 0.45 }, { opacity: 1 }], { duration: 420, easing: "ease-out" });

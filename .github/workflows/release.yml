@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v5
       - run: rustup show            # installs the toolchain pinned in rust-toolchain.toml
       # Compiled dependencies kept between runs (keyed on Cargo.lock): the slow part of every release.
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0   # v2.9.3, pinned: a third-party action in the job whose build gets signed
       # Tests in release too, so they and the build below share one compile of the dependencies.
       - run: cargo test --release -p octet
       - run: cargo build --release -p octet
@@ -46,7 +46,7 @@ jobs:
       - uses: actions/checkout@v5
       - run: rustup show
       - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0   # v2.9.3, pinned: a third-party action in the job whose build gets signed
       - run: cargo test --release -p octet
       # Universal Octet.app (Apple silicon and Intel), ad-hoc signed, in Octet.dmg.
       - run: crates/octet/macos/bundle.sh
