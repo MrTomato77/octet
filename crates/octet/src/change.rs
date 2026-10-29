@@ -7,7 +7,7 @@
 //! On macOS the second copy is started as root through the administrator prompt and runs
 //! networksetup, which only takes a service's name (see `networksetup`).
 
-use crate::adapters::Cfg;
+use crate::adapters::{Addr, Cfg, Gw};
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
 
@@ -27,9 +27,9 @@ pub enum Request {
         #[serde(default)]
         extra: bool,
         #[serde(default, rename = "wasExtra")]
-        was_extra: Vec<String>,
+        was_extra: Vec<Addr>,
         #[serde(default, rename = "wasGws")]
-        was_gws: Vec<String>,
+        was_gws: Vec<Gw>,
     },
     Release { index: u32, name: String },
     Renew { index: u32, name: String },
@@ -183,8 +183,20 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
             // Every value is checked before any command is built.
             let extras = cfg.extra.iter().map(|a| Ok((ipv4(&a.address, "Extra IP address")?, mask_of(&a.subnet)?))).collect::<Result<Vec<_>, String>>()?;
             let gws = cfg.gws.iter().map(|g| Ok((ipv4(&g.gateway, "Extra gateway")?, metric(&g.metric)?))).collect::<Result<Vec<_>, String>>()?;
-            let was_extra = was_extra.iter().map(|a| ipv4(a, "Current extra IP")).collect::<Result<Vec<_>, String>>()?;
-            let was_gws = was_gws.iter().map(|g| ipv4(g, "Current extra gateway")).collect::<Result<Vec<_>, String>>()?;
+            // What the adapter has now, whole: an entry whose mask or metric changed is taken off and put back.
+            let was_extra = was_extra.iter().map(|a| Ok((ipv4(&a.address, "Current extra IP")?, mask_of(&a.subnet)?))).collect::<Result<Vec<_>, String>>()?;
+            let was_gws = was_gws.iter().map(|g| Ok((ipv4(&g.gateway, "Current extra gateway")?, metric(&g.metric).unwrap_or(None)))).collect::<Result<Vec<_>, String>>()?;
+            // netsh answers a repeat with "object already exists" halfway through the run: caught here, before anything.
+            let mut seen: Vec<Ipv4Addr> = cfg.address.parse().ok().filter(|_| !cfg.ip_auto).into_iter().collect();
+            for (a, _) in &extras {
+                if seen.contains(a) { return Err(format!("{a} is listed twice")); }
+                seen.push(*a);
+            }
+            let mut seen: Vec<Ipv4Addr> = cfg.gateway.parse().ok().filter(|_| !cfg.ip_auto).into_iter().collect();
+            for (g, _) in &gws {
+                if seen.contains(g) { return Err(format!("Gateway {g} is listed twice")); }
+                seen.push(*g);
+            }
             let (gw_metric, if_metric) = (metric(&cfg.gw_metric)?, metric(&cfg.metric)?);
             // `set address` (static or DHCP) clears every typed-in address and gateway, so after
             // it the Advanced lists go back on in full; otherwise only the difference is applied.
@@ -212,15 +224,25 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                     out.push(c);
                 }
             }
+            // DNS goes on right after the address: if a later Advanced step fails, the adapter still has its DNS
+            // (a switch to static drops the DHCP-given servers, and a static IP without DNS reaches nothing by name).
+            if *dns {
+                // Done in-process with SetInterfaceDnsSettings (what Windows Settings uses): no netsh,
+                // well under 10 ms. No servers = take them from DHCP.
+                let servers = dns_servers(cfg)?;
+                out.push(cmd(&[DNS, &index.to_string(), &servers.join(","), if cfg.register { "register" } else { "noregister" }]));
+            }
             if *extra || replaced {
-                let keep = |a: &Ipv4Addr, list: &[Ipv4Addr]| replaced || !list.contains(a);
-                for a in was_extra.iter().filter(|a| !replaced && !extras.iter().any(|(x, _)| x == *a)) {
-                    out.push(cmd(&["netsh", "interface", "ipv4", "delete", "address", &iface, &format!("address={a}")]));
+                // Back to DHCP: the router hands out the gateway, and typed-in gateways from before (likely from the
+                // old subnet) don't go back on. New ones typed in the Advanced list still do.
+                let gws: Vec<_> = gws.iter().filter(|g| !(replaced && cfg.ip_auto && was_gws.contains(g))).collect();
+                for a in was_extra.iter().filter(|a| !replaced && !extras.contains(a)) {
+                    out.push(cmd(&["netsh", "interface", "ipv4", "delete", "address", &iface, &format!("address={}", a.0)]));
                 }
-                for g in was_gws.iter().filter(|g| !replaced && !gws.iter().any(|(x, _)| x == *g)) {
-                    out.push(cmd(&["netsh", "interface", "ipv4", "delete", "address", &iface, &format!("gateway={g}")]));
+                for g in was_gws.iter().filter(|g| !replaced && !gws.contains(g)) {
+                    out.push(cmd(&["netsh", "interface", "ipv4", "delete", "address", &iface, &format!("gateway={}", g.0)]));
                 }
-                let new_extra: Vec<_> = extras.iter().filter(|(a, _)| keep(a, &was_extra)).collect();
+                let new_extra: Vec<_> = extras.iter().filter(|a| replaced || !was_extra.contains(a)).collect();
                 // On DHCP, Windows keeps typed-in addresses beside the leased one only with coexistence on.
                 if cfg.ip_auto && !new_extra.is_empty() {
                     out.push(cmd(&["netsh", "interface", "ipv4", "set", "interface", &format!("interface={index}"), "dhcpstaticipcoexistence=enabled"]));
@@ -228,7 +250,7 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                 for (a, m) in new_extra {
                     out.push(cmd(&["netsh", "interface", "ipv4", "add", "address", &iface, &format!("address={a}"), &format!("mask={m}")]));
                 }
-                for (g, m) in gws.iter().filter(|(g, _)| keep(g, &was_gws)) {
+                for (g, m) in gws.into_iter().filter(|g| replaced || !was_gws.contains(g)) {
                     let mut c = cmd(&["netsh", "interface", "ipv4", "add", "address", &iface, &format!("gateway={g}")]);
                     c.push(format!("gwmetric={}", m.unwrap_or(0)));   // 0 = automatic
                     out.push(c);
@@ -236,12 +258,6 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                 if let Some(m) = if_metric {
                     out.push(cmd(&["netsh", "interface", "ipv4", "set", "interface", &format!("interface={index}"), &format!("metric={m}")]));
                 }
-            }
-            if *dns {
-                // Done in-process with SetInterfaceDnsSettings (what Windows Settings uses): no netsh,
-                // well under 10 ms. No servers = take them from DHCP.
-                let servers = dns_servers(cfg)?;
-                out.push(cmd(&[DNS, &index.to_string(), &servers.join(","), if cfg.register { "register" } else { "noregister" }]));
             }
             out
         }
@@ -482,7 +498,7 @@ mod tests {
         c.extra = vec![Addr { address: "192.168.1.60".into(), subnet: "24".into() }, Addr { address: "10.9.0.1".into(), subnet: "255.255.0.0".into() }];
         // Only the Advanced list changed, on DHCP: coexistence, then the new one; the kept one and the main address untouched.
         let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c.clone(), ip: false, dns: false, extra: true,
-            was_extra: vec!["192.168.1.60".into(), "172.16.0.9".into()], was_gws: vec![] };
+            was_extra: vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }, Addr { address: "172.16.0.9".into(), subnet: "255.255.0.0".into() }], was_gws: vec![] };
         let got: Vec<String> = commands(&r).unwrap().iter().map(|c| c.join(" ")).collect();
         // The elevated copy gets the request as JSON and must build the same commands.
         let sent: Request = serde_json::from_slice(&serde_json::to_vec(&r).unwrap()).unwrap();
@@ -497,7 +513,7 @@ mod tests {
         s.extra = vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }];
         s.gws = vec![Gw { gateway: "192.168.1.2".into(), metric: "20".into() }];
         s.gw_metric = "10".into();
-        let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: s, ip: true, dns: false, extra: true, was_extra: vec!["192.168.1.60".into()], was_gws: vec![] };
+        let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: s, ip: true, dns: false, extra: true, was_extra: vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }], was_gws: vec![] };
         let got: Vec<String> = commands(&r).unwrap().iter().map(|c| c.join(" ")).collect();
         assert_eq!(got, [
             "netsh interface ipv4 set address name=12 source=static address=192.168.1.50 mask=255.255.255.0 gateway=192.168.1.1 gwmetric=10",
@@ -510,6 +526,49 @@ mod tests {
         let mut m = cfg();
         m.metric = "0".into();
         assert!(commands(&Request::Apply { index: 1, name: "a".into(), cfg: m, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![] }).is_err());
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn advanced_edits_and_failures_land_right() {
+        use crate::adapters::{Addr, Gw};
+        let run = |cfg: Cfg, ip: bool, dns: bool, was_extra: Vec<Addr>, was_gws: Vec<Gw>| -> Result<Vec<String>, String> {
+            commands(&Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip, dns, extra: true, was_extra, was_gws }).map(|v| v.iter().map(|c| c.join(" ")).collect())
+        };
+        let addr = |a: &str, m: &str| Addr { address: a.into(), subnet: m.into() };
+        let gw = |g: &str, m: &str| Gw { gateway: g.into(), metric: m.into() };
+        // A mask or a metric changed on an entry that stays: it comes off and goes back on with the new value.
+        let mut c = cfg();
+        c.extra = vec![addr("192.168.1.60", "255.255.0.0")];
+        c.gws = vec![gw("192.168.1.2", "20")];
+        assert_eq!(run(c.clone(), false, false, vec![addr("192.168.1.60", "255.255.255.0")], vec![gw("192.168.1.2", "")]).unwrap(), [
+            "netsh interface ipv4 delete address name=12 address=192.168.1.60",
+            "netsh interface ipv4 delete address name=12 gateway=192.168.1.2",
+            "netsh interface ipv4 add address name=12 address=192.168.1.60 mask=255.255.0.0",
+            "netsh interface ipv4 add address name=12 gateway=192.168.1.2 gwmetric=20",
+        ]);
+        // Unchanged: nothing to do.
+        assert!(run(c.clone(), false, false, vec![addr("192.168.1.60", "16")], vec![gw("192.168.1.2", "20")]).unwrap().is_empty());
+        // DNS right after the address, before the Advanced steps that might fail.
+        let got = run(c.clone(), true, true, vec![], vec![]).unwrap();
+        assert!(got[0].contains("set address") && got[1].starts_with("octet:set-dns"), "{got:?}");
+        // A repeat would stop netsh halfway: refused before anything runs.
+        let mut d = c.clone();
+        d.extra.push(addr("192.168.1.60", "24"));
+        assert!(run(d, false, false, vec![], vec![]).is_err());
+        let mut d = c.clone();
+        d.extra = vec![addr("192.168.1.50", "24")];   // the main address
+        assert!(run(d, false, false, vec![], vec![]).is_err());
+        let mut d = c.clone();
+        d.gws = vec![gw("192.168.1.1", "")];   // the main gateway
+        assert!(run(d, false, false, vec![], vec![]).is_err());
+        // Back to DHCP: the old typed-in gateways stay off; a newly typed one goes on.
+        let mut d = c.clone();
+        (d.ip_auto, d.dns_auto) = (true, true);
+        d.extra = vec![];
+        d.gws = vec![gw("192.168.1.2", "20"), gw("192.168.1.3", "")];
+        let got = run(d, true, false, vec![], vec![gw("192.168.1.2", "20")]).unwrap();
+        assert_eq!(got, ["netsh interface ipv4 set address name=12 source=dhcp", "netsh interface ipv4 add address name=12 gateway=192.168.1.3 gwmetric=0"]);
     }
 
     #[test]
