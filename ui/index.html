@@ -1396,6 +1396,8 @@ function resolver(v, gw) {
   const hit = resolvers.find(([ips]) => ips.includes(v));
   if (hit) return { logo: hit[2], title: hit[1] };
   if (v === "100.100.100.100") return { logo: "tailscale", title: "Tailscale MagicDNS" };
+  if (v === "127.0.2.2" || v === "127.0.2.3") return { logo: "cloudflare", title: "Cloudflare WARP" };   // its local DNS proxy
+  if (inNet(v, "127.0.0.0", 8)) return { text: "This PC", title: "A DNS proxy on this computer (a VPN or filter)" };
   if (gw && v === gw) return { text: "Router", title: "Your gateway answers DNS" };
   const sc = scope(v)[0];
   if (sc !== "Public") return { text: "Local", title: `${sc} DNS server on your network` };
@@ -3720,7 +3722,7 @@ if (tauri) invoke("computer_name").then(n => { hostName = n; if (page === "info"
 const channelOf = f => !f ? 0 : f < 3000 ? (f === 2484 ? 14 : (f - 2407) / 5) : f < 5925 ? (f - 5000) / 5 : (f - 5950) / 5;
 function infoRows() {
   const a = adapters[sel], c = a.cfg, p = prefixOf(c.subnet), up = a.state === "up";
-  const dns = v => { const w = resolver(v, c.gateway); return w ? (w.logo ? w.title.replace(/ Public DNS| DNS| \(.*\)/g, "") : L(w.text, { Router: "Router", Local: "ในวง", Public: "Public" }[w.text] || w.text)) : ""; };
+  const dns = v => { const w = resolver(v, c.gateway); return w ? (w.logo ? w.title.replace(/ Public DNS| DNS| \(.*\)/g, "") : L(w.text, { Router: "Router", Local: "ในวง", Public: "Public", "This PC": "เครื่องนี้" }[w.text] || w.text)) : ""; };
   // A day-long lease starts and ends at the same clock time, so any day but today carries its date.
   const at = t => new Date(t).toLocaleString(lang === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit",
     ...(new Date(t).toDateString() !== new Date().toDateString() && { day: "numeric", month: "short" }) });
