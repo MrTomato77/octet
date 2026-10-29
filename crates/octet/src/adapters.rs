@@ -555,9 +555,12 @@ mod native {
     }
 
     pub fn read() -> Result<Vec<Raw>, String> {
-        let mut live = live()?;
-        let mut wlans = wlans();
-        let mut v6 = ipv6s();
+        // Each asks Windows something that takes some 20 ms: asked side by side, a read takes one of those, not three.
+        let (live, mut wlans, mut v6) = std::thread::scope(|s| {
+            let (w, v) = (s.spawn(wlans), s.spawn(ipv6s));
+            (live(), w.join().unwrap_or_default(), v.join().unwrap_or_default())
+        });
+        let mut live = live?;
         let mut out = vec![];
         // One entry per network adapter driver. Virtual ports of one card (Wi-Fi Direct)
         // have no driver entry of their own, and NCF_HIDDEN (0x8) marks WAN miniports and
