@@ -240,10 +240,8 @@ static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if let [_, flag, request, out] = args.as_slice() {
-        if flag == "--elevated" {
-            std::process::exit(change::run_elevated(request, out));
-        }
+    if let [_, flag, request, out] = args.as_slice() && flag == "--elevated" {
+        std::process::exit(change::run_elevated(request, out));
     }
     update::tidy();
     let restarted = args.iter().any(|a| a == "--restarted");
@@ -254,14 +252,12 @@ fn main() {
     if restarted {
         // Let the copy that started us close first, or single-instance would hand off to it.
         std::thread::sleep(std::time::Duration::from_millis(700));
-    } else if always_admin() && !args.iter().any(|a| a == "--admin") && !net::elevated() {
-        if let Ok(exe) = std::env::current_exe() {
-            // No window or single-instance lock exists yet, so the elevated copy needn't wait.
-            if change::run_as_admin(&exe, "--admin", false).is_ok() {
-                return;
-            }
-        } // UAC declined: carry on without admin rights.
-    }
+    } else if always_admin() && !args.iter().any(|a| a == "--admin") && !net::elevated() && let Ok(exe) = std::env::current_exe() {
+        // No window or single-instance lock exists yet, so the elevated copy needn't wait.
+        if change::run_as_admin(&exe, "--admin", false).is_ok() {
+            return;
+        }
+    } // UAC declined: carry on without admin rights.
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(w) = app.get_webview_window("main") {
@@ -279,9 +275,8 @@ fn main() {
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_secs(3));
-                if let Some(w) = handle.get_webview_window("main") {
-                    if !w.is_visible().unwrap_or(true) { let _ = w.show(); }
-                }
+                if let Some(w) = handle.get_webview_window("main")
+                    && !w.is_visible().unwrap_or(true) { let _ = w.show(); }
             });
             // Wi-Fi names are location data on macOS: ask once, so the header can show the network.
             #[cfg(target_os = "macos")]

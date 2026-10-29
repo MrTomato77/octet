@@ -534,7 +534,7 @@ mod native {
                     // The frequency is on the access point's entry in the scan list (the one with our BSSID).
                     let mut bss: *mut WLAN_BSS_LIST = std::ptr::null_mut();
                     if WlanGetNetworkBssList(h, &info.InterfaceGuid, ssid, dot11_BSS_type_infrastructure,
-                        conn.wlanSecurityAttributes.bSecurityEnabled.into(), std::ptr::null(), &mut bss) == 0 {
+                        conn.wlanSecurityAttributes.bSecurityEnabled, std::ptr::null(), &mut bss) == 0 {
                         let entries = std::slice::from_raw_parts((*bss).wlanBssEntries.as_ptr(), (*bss).dwNumberOfItems as usize);
                         if let Some(e) = entries.iter().find(|e| e.dot11Bssid == assoc.dot11Bssid) {
                             w.mhz = e.ulChCenterFrequency / 1000;   // kHz
