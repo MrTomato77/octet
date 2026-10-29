@@ -124,16 +124,25 @@ pub fn dhcp(index: u32, renew: bool) -> Result<(), String> {
         e => Err(format!("Windows could not {} the lease (error {e})", if renew { "renew" } else { "release" })),
     }
 }
-/// Who made the network card, from the first 3 bytes of its MAC ("00-11-32-.." -> "Synology").
-/// The IEEE list is built into the exe (data/oui.txt), so nothing is looked up online.
+/// Who made the network card, from the start of its MAC ("00-11-32-.." -> "Synology"). The IEEE lists
+/// (24-, 28- and 36-bit blocks) are built into the exe (data/oui.txt), so nothing is looked up online.
+/// Longest block first: a 24-bit block the IEEE split up names a reseller of addresses, not the maker.
+/// A made-up MAC (locally administered: phones and laptops on private Wi-Fi addresses) has no maker,
+/// whatever its first bytes happen to match, and neither does a multicast one.
 pub fn vendor(mac: &str) -> Option<&'static str> {
-    static OUI: &str = include_str!("../data/oui.txt");
-    let key: String = mac.chars().filter(char::is_ascii_hexdigit).take(6).collect::<String>().to_ascii_uppercase();
-    if key.len() < 6 {
+    static OUI: std::sync::OnceLock<Vec<(&'static str, &'static str)>> = std::sync::OnceLock::new();
+    let hex: String = mac.chars().filter(char::is_ascii_hexdigit).take(12).collect::<String>().to_ascii_uppercase();
+    let first = u8::from_str_radix(hex.get(..2)?, 16).ok()?;
+    if hex.len() < 12 || first & 0b11 != 0 {
         return None;
     }
-    // ponytail: linear scan of ~40k lines (about a millisecond); a sorted index if it ever runs in a loop.
-    OUI.lines().find_map(|l| l.strip_prefix(key.as_str())?.strip_prefix('\t'))
+    // Parsed once, a few ms; each lookup is then three binary searches instead of a scan of 50k lines.
+    let table = OUI.get_or_init(|| {
+        let mut t: Vec<_> = include_str!("../data/oui.txt").lines().filter_map(|l| l.split_once('\t')).collect();
+        t.sort_unstable_by_key(|r| r.0);
+        t
+    });
+    [9, 7, 6].into_iter().find_map(|n| table.binary_search_by_key(&&hex[..n], |r| r.0).ok().map(|i| table[i].1))
 }
 
 /// Sets an interface's IPv4 DNS servers ("1.1.1.1,8.8.8.8"; empty = from DHCP) and whether it
@@ -296,6 +305,45 @@ pub fn neighbour(ip: Ipv4Addr, index: u32) -> Option<String> {
     (mac != [0; 6]).then(|| mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
 }
 
+/// Whether the neighbour cache has just heard from `ip` (Reachable, or an entry set by hand), not
+/// merely remembers it (Stale, Delay, Probe: an answer from a while ago).
+#[cfg(windows)]
+fn fresh(ip: Ipv4Addr, index: u32) -> bool {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{GetIpNetEntry2, MIB_IPNET_ROW2};
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, NlnsPermanent, NlnsReachable};
+    let mut row = MIB_IPNET_ROW2::default();
+    row.Address.Ipv4.sin_family = AF_INET;
+    row.Address.Ipv4.sin_addr.S_un.S_addr = ip_u32(ip);
+    row.InterfaceIndex = index;
+    (unsafe { GetIpNetEntry2(&mut row) }) == 0 && [NlnsReachable, NlnsPermanent].contains(&row.State)
+}
+
+/// Throws away what the cache remembers about `ip` and asks ARP afresh: the MAC of what answers now, or None.
+#[cfg(windows)]
+fn resolve(ip: Ipv4Addr, index: u32) -> Option<String> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{MIB_IPNET_ROW2, ResolveIpNetEntry2};
+    use windows_sys::Win32::Networking::WinSock::AF_INET;
+    let mut row = MIB_IPNET_ROW2::default();
+    row.Address.Ipv4.sin_family = AF_INET;
+    row.Address.Ipv4.sin_addr.S_un.S_addr = ip_u32(ip);
+    row.InterfaceIndex = index;
+    if unsafe { ResolveIpNetEntry2(&mut row, std::ptr::null()) } != 0 || row.PhysicalAddressLength != 6 {
+        return None;
+    }
+    let mac = &row.PhysicalAddress[..6];
+    (mac != [0; 6]).then(|| mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
+}
+
+// ponytail: macOS reads the ARP table only; a stale entry there still counts.
+#[cfg(not(windows))]
+fn fresh(_: Ipv4Addr, _: u32) -> bool {
+    true
+}
+#[cfg(not(windows))]
+fn resolve(ip: Ipv4Addr, index: u32) -> Option<String> {
+    neighbour(ip, index)
+}
+
 /// Who holds an address, for the Scan grid.
 #[derive(serde::Serialize, Debug, PartialEq)]
 pub struct Host {
@@ -309,7 +357,12 @@ pub struct Host {
 /// ponytail: ~400 ms for an empty address; the UI runs many at once.
 pub fn scan_host(ip: Ipv4Addr, from: Option<Ipv4Addr>, index: u32) -> Option<Host> {
     let ms = ping(ip, from, 400);
-    let mac = neighbour(ip, index);
+    // No ping answer and only an old cache entry: the device may have left long ago (Windows keeps stale
+    // entries for a while), so ask again. Something still there answers ARP whether or not it answers ping.
+    let mac = match neighbour(ip, index) {
+        Some(_) if ms.is_none() && !fresh(ip, index) => resolve(ip, index),
+        m => m,
+    };
     (ms.is_some() || mac.is_some()).then(|| Host { vendor: mac.as_deref().and_then(vendor), mac, ms })
 }
 
@@ -381,12 +434,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn asks_ipinfo() {
-        println!("{:?}", super::public_ip());
-    }
-
-    #[test]
     #[cfg(windows)]
     fn flushes_dns_cache() {
         let t = std::time::Instant::now();
@@ -399,6 +446,12 @@ mod tests {
         assert_eq!(super::vendor("00-11-32-AB-CD-EF"), Some("Synology"));
         assert_eq!(super::vendor("b8:27:eb:00:00:01"), Some("Raspberry Pi Foundation"));
         assert_eq!(super::vendor("02-00-00-00-00-01"), None);
+        // A 28-bit block (MA-M) inside a 24-bit one the IEEE split up: the block's own maker, not the IEEE.
+        assert_eq!(super::vendor("C8-5C-E2-70-00-01").is_some_and(|v| !v.contains("IEEE")), true);
+        // Made-up (locally administered) and multicast MACs have no maker, even when the bytes match a block.
+        assert_eq!(super::vendor("02-60-8C-00-00-01"), None);
+        assert_eq!(super::vendor("01-00-5E-00-00-01"), None);
+        assert_eq!(super::vendor("00-11-32"), None, "too short to be a MAC");
         assert_eq!(super::vendor(""), None);
     }
 
