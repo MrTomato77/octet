@@ -3109,8 +3109,9 @@ function paintSpeed() {
     : s === "error" ? speed.error
     : s === "done" ? ""
     : s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`)
-    : warn ? L("Phone hotspot: uses about 250 MB of data", "ต่อผ่านมือถือ: ใช้ข้อมูลราว 250 MB")
-    : L("Cloudflare · about 250 MB · they see your IP", "Cloudflare · ราว 250 MB · Cloudflare เห็น IP ของคุณ");
+    // The test runs for a set time, so the data it moves grows with the line's speed (a gigabit line: about 1 GB).
+    : warn ? L("Phone hotspot: about 250 MB per 100 Mbps of speed", "ต่อผ่านมือถือ: ใช้ราว 250 MB ต่อความเร็ว 100 Mbps")
+    : L("Cloudflare · ~250 MB per 100 Mbps · they see your IP", "Cloudflare · ~250 MB ต่อ 100 Mbps · Cloudflare เห็น IP ของคุณ");
   $("speed-note").className = "sp-note " + (s === "error" ? "bad" : "") + ($("speed-note").textContent.startsWith("Cloudflare") ? " cf" : "");
   if (grade) {
     $("speed-grade-w").textContent = { good: L("Smooth", "ลื่น"), meh: L("Fair", "พอใช้"), bad: L("Laggy", "หน่วง") }[grade];
