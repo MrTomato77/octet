@@ -265,6 +265,8 @@ fn main() {
     // would hand off to it (and both would be gone). Then start as usual (elevated again if set to).
     if let Some(pid) = args.iter().find_map(|a| a.strip_prefix("--after=")?.parse().ok()) {
         wait_for(pid);
+    } else if args.iter().any(|a| a == "--updated" || a == "--restarted") {
+        std::thread::sleep(std::time::Duration::from_millis(700));   // started by 0.2.0 or older, which pass no pid
     }
     if !restarted && always_admin() && !args.iter().any(|a| a == "--admin") && !net::elevated() && let Ok(exe) = std::env::current_exe() {
         // No window or single-instance lock exists yet, so the elevated copy needn't wait.
