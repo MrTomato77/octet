@@ -2020,7 +2020,7 @@ $("apply").onclick = async () => {
       renderList();
       if (adapters[sel]?.id === a.id) { renderAdapterFacts(); renderForm(); } else renderAdapter();
       if (err === "Cancelled") say(L("Permission declined, nothing changed", "ไม่ได้ให้สิทธิ์ Admin จึงยังไม่ได้เปลี่ยนอะไร"), "", "shield-slash");
-      else { say(L("Not applied: ", "บันทึกไม่สำเร็จ: ") + err, "bad"); $("status").title = err; }
+      else { say((adapters[sel]?.id === a.id ? "" : a.name + ": ") + L("Not applied: ", "บันทึกไม่สำเร็จ: ") + err, "bad"); $("status").title = err; }
       return;
     }
     iconNow("apply", "check");
@@ -2037,15 +2037,13 @@ $("apply").onclick = async () => {
       say(testing);
       await new Promise(res => setTimeout(res, 1000));   // let the new address settle
       // Back on DHCP, the leased DNS servers arrive a moment after Apply: test those, not the old ones.
-      // The form is open again by now: what's being typed (here or on another adapter) stays. An untouched form shows
-      // the new values, without renderAdapter: a Scan started at Apply goes on rather than starting over.
+      // The form is open again by now: what's being typed (here or on another adapter) stays; an untouched form, Info
+      // and Scan show the new values (a Scan already under way on the same network goes on).
       if (tauri) {
         const open = adapters[sel]?.id;
         await reload().catch(() => {});
         renderList();
-        if (adapters[sel]?.id !== open) renderAdapter();
-        else if (!changed().length) { renderAdapterFacts(); draft = structuredClone(cfgOf(adapters[sel])); renderForm(); }
-        if (here()) say(testing);
+        if (adapters[sel]?.id !== open || !changed().length) { renderAdapter(); if (here()) say(testing, "", "", true); }
       }
       // A reload makes new adapter objects: test what this one has now (a DHCP lease's), not what was sent.
       const cfg = (adapters.find(x => x.id === a.id) ?? a).cfg;

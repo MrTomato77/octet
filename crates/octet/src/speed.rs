@@ -269,6 +269,7 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
                     Err(_) if stop.load(Relaxed) => break,
                     // Dropped: the next reading comes on a new connection, cut with the others when the leg ends.
                     Err(_) => if let Ok(n) = open(via) {
+                        if stop.load(Relaxed) { n.get_ref().shutdown(Shutdown::Both).ok(); break }   // the leg ended while it opened
                         if let Ok(s) = n.get_ref().try_clone() { socks.lock().unwrap().push((s, 0)); }
                         c = n;
                     },
