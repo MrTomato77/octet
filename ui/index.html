@@ -1020,7 +1020,6 @@ html.app, html.app body { overflow: hidden; }
           <label data-t="dns2" for="f-dns2-0">Alternate</label><div id="f-dns2"></div>
         </div>
         </div>
-        <!-- ponytail: placeholders until each page is built (docs/plan-0.2.md) -->
         <div class="page" id="page-adv" data-page="adv" role="tabpanel" hidden>
           <div class="ahead" aria-hidden="true"><span class="host">IP address</span><span class="slash"></span><span class="cidr">CIDR</span><span class="to"></span><span class="host">Gateway</span></div>
           <div class="alist" id="adv-list" role="list" aria-label="Addresses"></div>
@@ -2394,7 +2393,7 @@ document.querySelectorAll("input[name=stab]").forEach(x => x.onchange = () => {
   }
 });
 tauri?.app.getVersion().then(v => { $("s-version").textContent = v; updShow(); }).catch(() => {});
-// Updates: Check, then Update (the whole exe, signed), then Restart. ponytail: demo only, the updater plugin comes once the look is agreed.
+// Updates: Check, then Update (the whole exe, signature and version checked in update.rs), then Restart.
 const upd = { s: "idle", p: 0 };
 function updShow() {
   const el = $("s-upd"), v = $("s-version").textContent, was = el.dataset.s;
@@ -3709,7 +3708,7 @@ function scanShow(on) {
 }
 new ResizeObserver(() => centreUnder($("scan-foot"), $("scan-grid"), $("page-scan"))).observe($("scan-grid"));
 // ---------- Info: a summary to read, copy one value, or copy all as text ----------
-// ponytail: the public address is asked for only when you click it (it leaves this machine), and kept per adapter for the session.
+// The public address is asked for only when you click it (it leaves this machine) or comes with a speed test, and is kept for the session.
 const info = { pub: {} };
 // The public-IP answer is kept per adapter and address: a new address (Apply, a new lease) means asking again.
 const pubKey = a => `${a.id}|${a.cfg.address}`;
