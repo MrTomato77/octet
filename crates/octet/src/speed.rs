@@ -65,9 +65,26 @@ fn tcp(via: Via) -> Result<TcpStream, String> {
         if bind(s, (&from as *const SOCKADDR_IN).cast(), size_of::<SOCKADDR_IN>() as i32) != 0 {
             return fail("bind");
         }
-        if connect(s, (&to as *const SOCKADDR_IN).cast(), size_of::<SOCKADDR_IN>() as i32) != 0 {
+        // Connect with a deadline: a blocking one waits out every SYN retry (some 21 s) on a line that goes nowhere.
+        let mut nb = 1u32;
+        ioctlsocket(s, FIONBIO, &mut nb);
+        if connect(s, (&to as *const SOCKADDR_IN).cast(), size_of::<SOCKADDR_IN>() as i32) != 0 && WSAGetLastError() != WSAEWOULDBLOCK {
             return fail("connect");
         }
+        let mut p = WSAPOLLFD { fd: s, events: POLLWRNORM, revents: 0 };
+        match WSAPoll(&mut p, 1, 10_000) {
+            0 => { closesocket(s); return Err("connect: timed out".into()) }
+            n if n < 0 => return fail("connect"),
+            _ => {}
+        }
+        let (mut e, mut len) = (0i32, 4i32);
+        getsockopt(s, SOL_SOCKET, SO_ERROR, (&mut e as *mut i32).cast(), &mut len);
+        if e != 0 || p.revents & (POLLERR | POLLHUP) != 0 {
+            closesocket(s);
+            return Err(format!("connect: {e}"));
+        }
+        nb = 0;
+        ioctlsocket(s, FIONBIO, &mut nb);
         Ok(TcpStream::from_raw_socket(s as u64))
     }
 }
@@ -170,12 +187,13 @@ fn brand(asn: u64) -> Option<&'static str> {
 fn acked(socks: &[TcpStream]) -> Option<u64> {
     use std::os::windows::io::AsRawSocket;
     use windows_sys::Win32::Networking::WinSock::{SIO_TCP_INFO, TCP_INFO_v0, WSAIoctl};
-    socks.iter().map(|s| {
+    // A socket that can't say (closing) is left out rather than turning the whole count into writes for a tick.
+    Some(socks.iter().filter_map(|s| {
         let (ver, mut info, mut got) = (0u32, TCP_INFO_v0::default(), 0u32);
         let ok = unsafe { WSAIoctl(s.as_raw_socket() as usize, SIO_TCP_INFO, (&ver as *const u32).cast(), 4,
             (&mut info as *mut TCP_INFO_v0).cast(), size_of::<TCP_INFO_v0>() as u32, &mut got, std::ptr::null_mut(), None) } == 0;
         ok.then(|| info.BytesOut.saturating_sub(info.BytesInFlight as u64 + info.BytesRetrans as u64))
-    }).sum()
+    }).sum())
 }
 
 #[cfg(not(windows))]
@@ -202,13 +220,20 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
         std::thread::spawn(move || {
             let count = |n: u64| { used.fetch_add(n, Relaxed); };
             let run = || -> Result<(), String> {
-                let mut c = open(via)?;
-                socks.lock().unwrap().push(c.get_ref().try_clone().map_err(|e| e.to_string())?);
-                while !stop.load(Relaxed) {
-                    let s = if up { post(&mut c, &body, &count)? } else { get(&mut c, &format!("/__down?bytes={CHUNK}"), false, &count)?.0 };
-                    if s != 200 {
-                        return Err(format!("Cloudflare answered HTTP {s}"));
+                // A connection the far end drops (keep-alive ends) is opened again, twice at most, rather than failing the test.
+                for again in 0.. {
+                    let mut c = open(via)?;
+                    socks.lock().unwrap().push(c.get_ref().try_clone().map_err(|e| e.to_string())?);
+                    while !stop.load(Relaxed) {
+                        let s = match if up { post(&mut c, &body, &count) } else { get(&mut c, &format!("/__down?bytes={CHUNK}"), false, &count).map(|r| r.0) } {
+                            Err(_) if again < 2 && !stop.load(Relaxed) => break,
+                            r => r?,
+                        };
+                        if s != 200 {
+                            return Err(format!("Cloudflare answered HTTP {s}"));
+                        }
                     }
+                    if stop.load(Relaxed) { break }
                 }
                 Ok(())
             };
@@ -320,4 +345,25 @@ pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String
     }
     send(json!({ "kind": "done", "bytes": used.load(Relaxed) }));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    // Real traffic (~200 MB): OCTET_IF=<adapter index> OCTET_SRC=<its IPv4> cargo test -p octet speed -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn runs_a_whole_test() {
+        let (Ok(i), Ok(src)) = (std::env::var("OCTET_IF"), std::env::var("OCTET_SRC")) else { return };
+        let t0 = std::time::Instant::now();
+        let last = std::cell::RefCell::new(String::new());
+        super::run(i.parse().unwrap(), src.parse().unwrap(), |v| {
+            let k = v["kind"].as_str().unwrap_or("").to_string();
+            if *last.borrow() != k || k == "done" { println!("{:5.1}s {v}", t0.elapsed().as_secs_f64()); *last.borrow_mut() = k; }
+        }).unwrap();
+        // A line that goes nowhere fails within the connect deadline, not after every SYN retry.
+        let t = std::time::Instant::now();
+        assert!(super::open(super::Via { index: i.parse().unwrap(), src: src.parse().unwrap(), to: "10.255.255.1:443".parse().unwrap() }).is_err());
+        println!("dead end: {:?}", t.elapsed());
+        assert!(t.elapsed() < std::time::Duration::from_secs(12));
+    }
 }
