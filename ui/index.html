@@ -2050,7 +2050,7 @@ function refresh(quiet) {
   lastRead = Date.now();
   btn.classList.add("spin");
   if (!quiet) {
-    // A read takes ~16 ms: the rows stay put (no skeleton) and only what changed moves.
+    // A read takes ~40 ms: the rows stay put (no skeleton) and only what changed moves.
     iconNow("refresh", "circle-notch");
     say(L("Reading adapters…", "กำลังอ่านอะแดปเตอร์…"));
   }
