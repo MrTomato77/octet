@@ -289,6 +289,8 @@ pub fn elevate(r: &Request) -> Result<(), String> {
     #[allow(unreachable_code)]
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let out = std::env::temp_dir().join(format!("octet-{}-{nanos}.out", std::process::id()));
+    // Made here, by this (unelevated) copy: the elevated one only writes into it (`write_out`).
+    std::fs::OpenOptions::new().write(true).create_new(true).open(&out).map_err(|e| format!("Could not prepare the change: {e}"))?;
     // The request travels on the command line, so nothing can swap it between the
     // UAC prompt and the elevated copy reading it. The .out file only carries error text.
     let params = format!("--elevated {} \"{}\"", hex(&serde_json::to_vec(r).map_err(|e| e.to_string())?), out.display());
@@ -346,13 +348,28 @@ pub fn run_as_admin(_: &std::path::Path, _: &str, _: bool) -> Result<Option<u32>
 
 /// Elevated side: run the request, write any failure to `out`. Out "-" (macOS): print it and
 /// exit 0, so the administrator prompt's caller gets the text as the command's output.
+/// The elevated copy writes its error text only into the file the unelevated side made for it: never
+/// creating one, and never through a link, so the path on its command line can't aim an admin write elsewhere.
+fn write_out(out: &str, msg: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).truncate(true);
+    #[cfg(windows)]
+    std::os::windows::fs::OpenOptionsExt::custom_flags(&mut o, 0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT
+    let mut f = o.open(out)?;
+    if !f.metadata()?.file_type().is_file() {
+        return Err(std::io::ErrorKind::InvalidInput.into());
+    }
+    f.write_all(msg.as_bytes())
+}
+
 pub fn run_elevated(request_hex: &str, out: &str) -> i32 {
     let fail = |msg: String| {
         if out == "-" {
             print!("{msg}");
             return 0;
         }
-        let _ = std::fs::write(out, msg);
+        let _ = write_out(out, &msg);
         1
     };
     let req: Request = match unhex(request_hex).and_then(|b| serde_json::from_slice(&b).ok()) {
@@ -415,6 +432,18 @@ mod tests {
 
     fn apply(cfg: Cfg, ip: bool, dns: bool) -> Request {
         Request::Apply { index: 12, name: "vEthernet (WSL)".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![] }
+    }
+
+    #[test]
+    fn writes_errors_only_into_a_file_made_for_them() {
+        let p = std::env::temp_dir().join(format!("octet-test-{}.out", std::process::id()));
+        let _ = std::fs::remove_file(&p);
+        assert!(super::write_out(p.to_str().unwrap(), "x").is_err() && !p.exists());
+        std::fs::write(&p, "old text").unwrap();
+        super::write_out(p.to_str().unwrap(), "new").unwrap();
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "new");
+        std::fs::remove_file(&p).unwrap();
+        assert!(super::write_out(std::env::temp_dir().to_str().unwrap(), "x").is_err());
     }
 
     #[test]

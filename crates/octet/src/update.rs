@@ -38,6 +38,11 @@ fn verify(exe: &[u8], sig: &[u8]) -> bool {
 /// Downloads `version`, checks its signature, and puts it in this copy's place. The new one runs
 /// from the next start on.
 pub fn install(version: &str, progress: impl FnMut(f32)) -> Result<(), String> {
+    // Only a newer release, named as releases are: an older one is signed too, and installing it on request
+    // would bring its old bugs back; and nothing but digits and dots goes into the download's path.
+    if version.is_empty() || !version.chars().all(|c| c.is_ascii_digit() || c == '.') || !newer(version, env!("CARGO_PKG_VERSION")) {
+        return Err("Not a newer version of Octet".into());
+    }
     let path = format!("/{REPO}/releases/download/v{version}/{ASSET}");
     let sig = https_get("github.com", &format!("{path}.sig")).ok_or("Could not download the signature")?;
     let file = crate::net::https_get_with("github.com", &path, progress).ok_or("Could not download the update")?;
@@ -136,6 +141,14 @@ mod tests {
         assert!(newer("0.2.0", "0.1.99"));
         assert!(!newer("v0.1.7", "0.1.7"));
         assert!(!newer("0.1.6", "0.1.7"));
+    }
+
+    /// Nothing is downloaded: each is refused before any request.
+    #[test]
+    fn installs_only_newer_releases() {
+        for v in ["0.1.0", env!("CARGO_PKG_VERSION"), "", "9.9.9/../../x", "1.0.0-rc"] {
+            assert_eq!(install(v, |_| {}), Err("Not a newer version of Octet".into()), "{v:?}");
+        }
     }
 
     /// Copies the app out of a built disk image: `crates/octet/macos/bundle.sh --native`, then
