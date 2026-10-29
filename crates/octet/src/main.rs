@@ -238,12 +238,15 @@ fn set_always_admin(on: bool) -> Result<(), String> {
 }
 
 /// Start an elevated copy now and close this one. Err if UAC was declined.
+/// Off the main thread: ShellExecuteEx waits for the UAC answer, and the window would hang meanwhile.
 #[tauri::command]
-fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    change::run_as_admin(&exe, &format!("--restarted --after={}", std::process::id()), false)?;
-    app.exit(0);
-    Ok(())
+async fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
+    blocking(move || {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        change::run_as_admin(&exe, &format!("--restarted --after={}", std::process::id()), false)?;
+        app.exit(0);
+        Ok(())
+    }).await
 }
 
 /// The page has painted its first frame: show the window now, so it never opens white.

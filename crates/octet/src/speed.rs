@@ -263,7 +263,10 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
             let Ok(mut c) = open(via) else { return };
             if let Ok(s) = c.get_ref().try_clone() { socks.lock().unwrap().push((s, 0)); }
             while !stop.load(Relaxed) {
-                if let Ok(ms) = ping(&mut c) { loaded.lock().unwrap().push(ms); }
+                match ping(&mut c) {
+                    Ok(ms) => loaded.lock().unwrap().push(ms),
+                    Err(_) => if let Ok(n) = open(via) { c = n },   // dropped: the next reading comes on a new connection
+                }
                 std::thread::sleep(TICK);
             }
         });
@@ -344,11 +347,23 @@ pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String
         send(m);
     }
     ping(&mut c)?; // warms the connection; the first is slow
+    let mut fails = 0;
     for _ in 0..20 {
         if !live() {
             return Ok(());
         }
-        send(json!({ "kind": "latency", "ms": ping(&mut c)?.round() }));
+        match ping(&mut c) {
+            Ok(ms) => send(json!({ "kind": "latency", "ms": ms.round() })),
+            // A connection the far end dropped: a new one (warmed again), as the legs do, rather than failing the test.
+            Err(e) => {
+                fails += 1;
+                if fails > 2 {
+                    return Err(e);
+                }
+                c = open(via)?;
+                ping(&mut c)?;
+            }
+        }
     }
     drop(c);
     for up in [false, true] {
