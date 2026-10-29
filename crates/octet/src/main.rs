@@ -34,10 +34,11 @@ fn tool(name: &str) -> std::path::PathBuf {
     let name = if name.ends_with(".exe") { name.to_string() } else { format!("{name}.exe") };
     let (mut sys, mut win) = ([0u16; 260], [0u16; 260]);
     let (s, w) = unsafe { (GetSystemDirectoryW(sys.as_mut_ptr(), 260) as usize, GetWindowsDirectoryW(win.as_mut_ptr(), 260) as usize) };
-    // A failed call (0, or a folder too long for the buffer) gives the usual folder, never a bare name that gets searched.
-    let at = |b: &[u16], n: usize, usual: &str| std::path::PathBuf::from(if n > 0 && n < 260 { String::from_utf16_lossy(&b[..n]) } else { usual.into() }).join(&name);
-    let sys = at(&sys, s, r"C:\Windows\System32");
-    if sys.exists() { sys } else { at(&win, w, r"C:\Windows") }
+    // A failed call (0, or a folder too long for the buffer) gives a path no file can have ('<' is not allowed), so
+    // nothing starts: never a bare name that gets searched, nor a guessed C:\Windows a user could make on another drive.
+    let at = |b: &[u16], n: usize| std::path::PathBuf::from(if n > 0 && n < 260 { String::from_utf16_lossy(&b[..n]) } else { "<no Windows folder>".into() }).join(&name);
+    let sys = at(&sys, s);
+    if sys.exists() { sys } else { at(&win, w) }
 }
 
 #[cfg(not(windows))]
@@ -352,6 +353,8 @@ mod tests {
             let p = super::tool(t);
             assert!(p.is_absolute() && p.exists(), "{t}: {p:?}");
         }
+        // What a failed folder lookup gives: nothing starts, not even a netsh.exe in the current folder.
+        assert!(std::process::Command::new(r"<no Windows folder>\netsh.exe").spawn().is_err());
     }
 
     #[test]

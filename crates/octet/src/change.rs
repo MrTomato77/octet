@@ -390,7 +390,10 @@ fn write_out(out: &str, id: Option<&str>, msg: &str) -> std::io::Result<()> {
     let mut o = std::fs::OpenOptions::new();
     o.write(true);
     #[cfg(windows)]
-    std::os::windows::fs::OpenOptionsExt::custom_flags(&mut o, 0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        o.share_mode(0).custom_flags(0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT; held alone: nothing writes between check and write
+    }
     let mut f = o.open(out)?;
     // Only into an empty file (the one made for it is): a forged launch that names some other file by its id
     // can't cut what's in it.
