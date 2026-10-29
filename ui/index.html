@@ -28,7 +28,7 @@
   --t-press: 100ms; --t-fast: 140ms; --t-base: 180ms; --t-slow: 240ms;
 
   --bg: oklch(0.965 0.002 250); --surface: oklch(0.99 0.001 250); --side: oklch(0.94 0.004 250);
-  --ink: oklch(0.24 0.01 250); --muted: oklch(0.47 0.012 250); --faint: oklch(0.62 0.01 250);
+  --ink: oklch(0.24 0.01 250); --muted: oklch(0.47 0.012 250); --faint: oklch(0.52 0.01 250);   /* 4.6:1 or better on every background */
   --border: oklch(0.86 0.006 250); --border-strong: oklch(0.72 0.008 250);
   --hover: oklch(0.915 0.006 250); --select: oklch(0.895 0.008 250);
   --accent: oklch(0.5 0.15 255); --accent-ink: oklch(0.99 0 0); --accent-soft: oklch(0.93 0.035 255);
@@ -39,7 +39,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: oklch(0.215 0.006 250); --surface: oklch(0.245 0.006 250); --side: oklch(0.19 0.006 250);
-    --ink: oklch(0.94 0.004 250); --muted: oklch(0.72 0.01 250); --faint: oklch(0.56 0.01 250);
+    --ink: oklch(0.94 0.004 250); --muted: oklch(0.72 0.01 250); --faint: oklch(0.64 0.01 250);
     --border: oklch(0.35 0.008 250); --border-strong: oklch(0.48 0.01 250);
     --hover: oklch(0.27 0.008 250); --select: oklch(0.3 0.01 250);
     --accent: oklch(0.74 0.12 255); --accent-ink: oklch(0.17 0.02 255); --accent-soft: oklch(0.32 0.05 255);
@@ -50,7 +50,7 @@
 }
 :root[data-theme="dark"] {
   --bg: oklch(0.215 0.006 250); --surface: oklch(0.245 0.006 250); --side: oklch(0.19 0.006 250);
-  --ink: oklch(0.94 0.004 250); --muted: oklch(0.72 0.01 250); --faint: oklch(0.56 0.01 250);
+  --ink: oklch(0.94 0.004 250); --muted: oklch(0.72 0.01 250); --faint: oklch(0.64 0.01 250);
   --border: oklch(0.35 0.008 250); --border-strong: oklch(0.48 0.01 250);
   --hover: oklch(0.27 0.008 250); --select: oklch(0.3 0.01 250);
   --accent: oklch(0.74 0.12 255); --accent-ink: oklch(0.17 0.02 255); --accent-soft: oklch(0.32 0.05 255);
@@ -1613,9 +1613,11 @@ const okMetric = v => v === "" || (/^\d{1,4}$/.test(v) && +v >= 1);
 
 function say(text, kind = "", ic = "", quiet = false) {
   const st = $("status");
+  const fresh = st.textContent !== text;
+  // The same line again (a key typed while a field is still wrong): left as it is, so a screen reader doesn't repeat it.
+  if (!fresh && st.className.replace(" changed", "") === "status" + (kind ? " " + kind : "") && !!st.querySelector("i") === !!ic) return;
   st.setAttribute("aria-live", quiet ? "off" : "polite");
   st.removeAttribute("title"); delete st.dataset.tip;
-  const fresh = st.textContent !== text;
   st.textContent = text;
   if (ic) st.insertAdjacentHTML("afterbegin", `<i class="ph ph-${ic}"></i>`);
   st.className = "status" + (kind ? " " + kind : "");
@@ -1872,6 +1874,7 @@ function renderList(enter = false) {
   const ul = $("list");
   // FLIP: remember where each adapter sat, so a re-sort (turned on or off) slides rows to their new place.
   const was = new Map([...ul.querySelectorAll("li[data-id]")].map(li => [li.dataset.id, li.offsetTop]));
+  const focus = ul.contains(document.activeElement) && document.activeElement.closest("li")?.dataset.id;   // kept across the rebuild
   ul.innerHTML = ""; ul.append(indicator);
   ul.classList.toggle("enter", enter);
   let n = 0;
@@ -1905,6 +1908,7 @@ function renderList(enter = false) {
   }
   placeIndicator(animateNext || moved);   // the selection highlight travels with its row
   animateNext = false;
+  if (focus) [...ul.querySelectorAll("li[data-id]")].find(li => li.dataset.id === focus)?.querySelector("button").focus();
 }
 let animateNext = false;
 const seen = {};   // last state drawn per adapter, so a change can pulse its dot
@@ -1999,7 +2003,7 @@ $("apply").onclick = async () => {
   const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway", "gwMetric"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]),
     // The first gateway's metric only goes on with `set address`, so a change to it counts as an IP change (static only:
     // on DHCP it isn't counted as a change at all).
-    extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: a.extraIps || [], wasGws: a.extraGws || [] })
+    extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: cfgOf(a).extra, wasGws: cfgOf(a).gws })   // whole entries: a changed mask or metric is re-applied
     .then(() => null, e => String(e));
   work.then(async err => {
     rows.forEach(el => el.classList.remove("working"));
@@ -2026,10 +2030,11 @@ $("apply").onclick = async () => {
       say(t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…"));
       await new Promise(res => setTimeout(res, 1000));   // let the new address settle
       // Back on DHCP, the leased DNS servers arrive a moment after Apply: test those, not the old ones.
-      if (tauri) { await reload().catch(() => {}); renderAdapter(); }
+      // The form is open again by now: what's being typed (here or on another adapter) stays, only the list updates.
+      if (tauri) { await reload().catch(() => {}); if (changed().length) renderList(); else renderAdapter(); }
       // A reload makes new adapter objects: test what this one has now (a DHCP lease's), not what was sent.
-      const cfg = (adapters.find(x => x.id === a.id) ?? a).cfg;
-      if (!cfg.gateway && !cfg.dns1) { say(t("applied")(a.name), "ok", "check"); return; }
+      const cfg = (adapters.find(x => x.id === a.id) ?? a).cfg, here = () => adapters[sel]?.id === a.id;   // the result is said only beside its adapter
+      if (!cfg.gateway && !cfg.dns1) { if (here()) say(t("applied")(a.name), "ok", "check"); return; }
       // macOS brings the routes up a moment after the address: there, a few tries before "not answering".
       const probe = async ip => {
         if (!ip) return undefined;
@@ -2042,7 +2047,7 @@ $("apply").onclick = async () => {
       const [gw, dns] = await Promise.all([probe(cfg.gateway), probe(cfg.dns1 === cfg.gateway ? "" : cfg.dns1)]);
       const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${msOf(ms)}`;
       const fail = gw === null || dns === null;
-      say([part("Gateway", gw), part(`DNS ${cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? "wifi-x" : "check-circle");
+      if (here()) say([part("Gateway", gw), part(`DNS ${cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? "wifi-x" : "check-circle");
     }, calm.matches ? 0 : 180 + marks.length * 60);
   });
 };
@@ -2324,13 +2329,21 @@ function renderHidden() {
   box.querySelectorAll(":scope > *").forEach((el, i) => el.style.setProperty("--i", i + 6));
 }
 document.querySelectorAll(".set > *").forEach((el, i) => el.style.setProperty("--i", i));
+// Speed or Settings over the page: what's under it is out of reach (Tab, screen readers) and focus moves in, to the
+// view's title; closing gives focus back to the button that opened it, if it was in the view (or nowhere).
+function cover(v, on) {
+  for (const el of document.querySelectorAll(".scroll, .actions")) el.inert = on;
+  if (on) { const h = $(v.getAttribute("aria-labelledby")); h.tabIndex = -1; h.focus({ preventScroll: true }); return; }
+  const at = document.activeElement;
+  if (v.contains(at) || at === document.body) $(v.id === "speed" ? "open-speed" : "open-settings").focus({ preventScroll: true });
+}
 const viewShown = v => !v.hidden && !v.classList.contains("out");   // fading out counts as closed: a click then reopens it
 const settingsOpen = () => viewShown($("settings"));
 function openSettings() {
   if (settingsOpen()) return closeSettings();
   closeSpeed(); renderHidden(); hideTip(); setTools(false);
   const v = $("settings");
-  v.classList.remove("out"); v.hidden = false; replay(v, "in");
+  v.classList.remove("out"); v.hidden = false; replay(v, "in"); cover(v, true);
   $("open-settings").classList.add("on"); $("open-settings").setAttribute("aria-current", "page");
   indicator.style.opacity = 0;
   if (!isRail()) setRail(true);
@@ -2338,6 +2351,7 @@ function openSettings() {
 function closeSettings() {
   const v = $("settings");
   if (v.hidden) return;
+  cover(v, false);
   $("open-settings").classList.remove("on"); $("open-settings").removeAttribute("aria-current");
   placeIndicator();
   let done = false;
@@ -2517,10 +2531,12 @@ document.querySelector(".side").addEventListener("transitionend", placeIndicator
 // No browser menu (Back, Refresh, Save as, Print) in the app; text fields keep cut, copy and paste.
 document.addEventListener("contextmenu", e => { if (document.documentElement.classList.contains("app") && !e.target.closest("input, textarea")) e.preventDefault(); });
 document.addEventListener("keydown", e => {
-  if (e.key.toLowerCase() === "b" && isMod(e)) { e.preventDefault(); $("collapse").click(); }
-  if (e.key === "F5" || isMod(e) && e.key.toLowerCase() === "r") { e.preventDefault(); $("refresh").click(); }
   // The browser's own keys (print, save page, find, zoom, devtools…) have no place in the app. ⌘H stays macOS' Hide.
   if (document.documentElement.classList.contains("app") && (isMod(e) && (mac ? /^[psfgjuo+=\-0]$/i : /^[psfgjhuo+=\-0]$/i).test(e.key) || e.key === "F3" || e.key === "F7" || e.key === "F12")) e.preventDefault();
+  // A question is up: only its own keys. Nothing behind it changes, and Ctrl+Enter can't start a second Apply under it.
+  if (document.querySelector("dialog[open]")) { if (e.key === "F5" || isMod(e) && e.key.toLowerCase() === "r") e.preventDefault(); return; }
+  if (e.key.toLowerCase() === "b" && isMod(e)) { e.preventDefault(); $("collapse").click(); }
+  if (e.key === "F5" || isMod(e) && e.key.toLowerCase() === "r") { e.preventDefault(); $("refresh").click(); }
   if (isMod(e) && e.key >= "1" && e.key <= String(ptabs.length) && !settingsOpen()) { e.preventDefault(); showPage(ptabs[e.key - 1].dataset.page); }
   if (e.key === "Escape" && settingsOpen() && !document.querySelector("dialog[open]")) { closeSettings(); return; }
   if (e.key === "Escape" && speedOpen() && !document.querySelector("dialog[open]")) { closeSpeed(); return; }
@@ -2941,17 +2957,40 @@ function count(el, to, fmt = x => String(Math.round(x))) {
 const SPAN = 60000, DELAY = 1500, RISE = 600;
 let graphRaf = 0, ceil = 20;
 const ease = k => 1 - (1 - k) ** 3;
+// The graph's SVG elements are kept, layer by layer (back to front), and each frame changes only the attributes
+// that moved: rebuilding the markup every frame cost a re-parse and a fresh layout of every node.
+const gfx = { w: 0, h: 0 };
+function gput(layer, i, tag, attrs, text) {
+  const list = gfx[layer]._els ??= [];
+  let el = list[i];
+  if (!el) { el = list[i] = document.createElementNS("http://www.w3.org/2000/svg", tag); el.setAttribute("class", gfx[layer]._cls); el._a = {}; gfx[layer].append(el); }
+  for (const k in attrs) if (el._a[k] !== attrs[k]) el.setAttribute(k, el._a[k] = attrs[k]);
+  if (text !== undefined && el.textContent !== text) el.textContent = text;
+}
+function gcut(layer, n) { const list = gfx[layer]._els ?? []; while (list.length > n) list.pop().remove(); }
 function drawGraph() {
   const now = clock();
-  const svg = $("probe-svg"), w = svg.clientWidth || 1, h = svg.clientHeight || 1;
+  const svg = $("probe-svg");
+  if (!gfx.rows) {
+    for (const [k, cls] of [["rows", "grid"], ["ticks", "tick"], ["cols", "grid"], ["areas", "area"], ["lines", "line"], ["lost", "lost"], ["cursor", "cursor"], ["knob", "knob"]]) {
+      gfx[k] = svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "g")); gfx[k]._cls = cls;
+    }
+    // Its size, kept: reading it each frame would force a layout.
+    new ResizeObserver(() => { gfx.w = svg.clientWidth; gfx.h = svg.clientHeight; }).observe(svg);
+  }
+  const w = gfx.w || svg.clientWidth || 1, h = gfx.h || svg.clientHeight || 1;
   const pick = probe.rows[probe.pick], pts = pick?.pts ?? [], all = pts.filter(q => q.v !== null).map(q => q.v);
   const want = Math.max(10, ...all) * 1.6;
   ceil = calm.matches ? want : ceil + (want - ceil) * 0.06;
   const x = t => w - (now - DELAY - t) / SPAN * w, y = v => h - 1 - (h - 2) * Math.min(v, ceil) / ceil;
   const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].find(v => ceil / v <= 4) ?? 1000;
-  let out = "";
-  for (let v = step; v < ceil; v += step) out += `<line class="grid" x1="0" x2="${w}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="4" y="${y(v) - 3}">${v} ms</text>`;
-  for (let k = 1; k < 12; k++) out += `<line class="grid" x1="${w * k / 12}" x2="${w * k / 12}" y1="0" y2="${h}"/>`;   // fixed columns, 5 s each
+  let n = 0;
+  for (let v = step; v < ceil; v += step, n++) {
+    gput("rows", n, "line", { x1: 0, x2: w, y1: y(v), y2: y(v) });
+    gput("ticks", n, "text", { x: 4, y: y(v) - 3 }, `${v} ms`);
+  }
+  gcut("rows", n); gcut("ticks", n);
+  for (let k = 1; k < 12; k++) gput("cols", k - 1, "line", { x1: w * k / 12, x2: w * k / 12, y1: 0, y2: h });   // fixed columns, 5 s each
   const shown = pts.filter(q => q.v !== null).map(q => {
     const k = calm.matches ? 1 : ease(Math.min(1, (now - q.t) / RISE));
     return { q, x: x(q.t), y: y(q.from + (q.v - q.from) * k) };
@@ -2959,28 +2998,33 @@ function drawGraph() {
   // A lost ping is no value, not zero: the line breaks there, and a small red mark sits under the gap.
   const runs = [[]];
   for (const q of pts) if (q.v === null) { if (runs.at(-1).length) runs.push([]); } else runs.at(-1).push(shown.find(p => p.q === q));
+  n = 0;
   for (const run of runs) {
     if (!run.length) continue;
     let d = `M${run[0].x},${run[0].y}`;
     for (let i = 1; i < run.length; i++) { const a = run[i - 1], b = run[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
     if (run.length === 1) d += `h1`;   // a lone reply between losses still shows as a dot of line
-    out += `<path class="area" d="${d}L${run.at(-1).x + (run.length === 1 ? 1 : 0)},${h}L${run[0].x},${h}Z"/><path class="line" d="${d}"/>`;
+    gput("areas", n, "path", { d: `${d}L${run.at(-1).x + (run.length === 1 ? 1 : 0)},${h}L${run[0].x},${h}Z` });
+    gput("lines", n++, "path", { d });
   }
-  for (const q of pts) if (q.v === null) out += `<rect class="lost" x="${x(q.t) - 1.5}" y="${h - 5}" width="3" height="5" rx="1"/>`;
+  gcut("areas", n); gcut("lines", n);
+  n = 0;
+  for (const q of pts) if (q.v === null) gput("lost", n++, "rect", { x: x(q.t) - 1.5, y: h - 5, width: 3, height: 5, rx: 1 });
+  gcut("lost", n);
   // Hover reading: fades in and out; the line glides after the pointer.
   probe.show += ((probe.hx !== null && shown.length ? 1 : 0) - probe.show) * (calm.matches ? 1 : 0.2);
   if (probe.hx !== null) probe.cx = calm.matches || probe.show < 0.05 ? probe.hx : probe.cx + (probe.hx - probe.cx) * 0.3;
   const tip = $("probe-tip");
   if (probe.show > 0.01 && shown.length) {
     const near = shown.reduce((a, b) => Math.abs(b.x - probe.cx) < Math.abs(a.x - probe.cx) ? b : a);
-    out += `<line class="cursor" x1="${probe.cx}" x2="${probe.cx}" y1="0" y2="${h}" opacity="${0.6 * probe.show}"/><circle class="knob" cx="${near.x}" cy="${near.y}" r="4" opacity="${probe.show}"/>`;
+    gput("cursor", 0, "line", { x1: probe.cx, x2: probe.cx, y1: 0, y2: h, opacity: 0.6 * probe.show });
+    gput("knob", 0, "circle", { cx: near.x, cy: near.y, r: 4, opacity: probe.show });
     const ago = Math.max(0, Math.round((now - near.q.t) / 1000));
     tip.innerHTML = `${msOf(near.q.v)}<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
     tip.style.transform = `translateX(${Math.min(Math.max(probe.cx + 10, 4), w - tip.offsetWidth - 4)}px)`;
-  }
+  } else { gcut("cursor", 0); gcut("knob", 0); }
   tip.style.opacity = probe.show > 0.01 ? probe.show : 0;
-  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-  svg.innerHTML = out;
+  if (svg._vb !== `${w} ${h}`) svg.setAttribute("viewBox", `0 0 ${svg._vb = `${w} ${h}`}`);
   graphRaf = page === "probe" && !covered() ? requestAnimationFrame(drawGraph) : 0;
 }
 // Speed and Settings cover the whole page: under them the graph isn't drawn, and it picks up again as they close.
@@ -3080,7 +3124,7 @@ function speedEnd(state) {
   Object.assign(speed, { state, leg: state === "done" ? "" : speed.leg, t1: performance.now() });
   // The result lives in the dial's drawing, which a screen reader can't follow: say it once, when it's in.
   const r = speed.res, f = v => v === undefined ? "-" : (+v).toFixed(1);
-  $("speed-said").textContent = state !== "done" ? "" : L(`Download ${f(r.down)} Mbps, upload ${f(r.up)} Mbps, ping ${r.ms === undefined ? "-" : msOf(r.ms)}`, `ดาวน์โหลด ${f(r.down)} Mbps อัปโหลด ${f(r.up)} Mbps ping ${r.ms === undefined ? "-" : msOf(r.ms)}`);
+  $("speed-said").textContent = state === "error" ? speed.error || "" : state !== "done" ? "" : L(`Download ${f(r.down)} Mbps, upload ${f(r.up)} Mbps, ping ${r.ms === undefined ? "-" : msOf(r.ms)}`, `ดาวน์โหลด ${f(r.down)} Mbps อัปโหลด ${f(r.up)} Mbps ping ${r.ms === undefined ? "-" : msOf(r.ms)}`);
   paintSpeed(); speedDraw();
 }
 // Start is the button in the middle; once it opens into the dial, the key at the bottom stops it (or, when done, runs it again).
@@ -3291,7 +3335,7 @@ function openSpeed() {
   if (speedOpen()) return closeSpeed();
   closeSettings(); hideTip(); setTools(false);
   const v = $("speed");
-  v.classList.remove("out"); v.hidden = false; replay(v, "in");
+  v.classList.remove("out"); v.hidden = false; replay(v, "in"); cover(v, true);
   $("open-speed").classList.add("on"); $("open-speed").setAttribute("aria-current", "page");
   indicator.style.opacity = 0;
   paintSpeed(); speedDraw();
@@ -3300,6 +3344,7 @@ function openSpeed() {
 function closeSpeed() {
   const v = $("speed");
   if (v.hidden) return;
+  cover(v, false);
   if (speed.state === "run") speedEnd("stopped");   // no test runs where nobody can see it
   $("open-speed").classList.remove("on"); $("open-speed").removeAttribute("aria-current");
   placeIndicator();
@@ -3770,6 +3815,7 @@ function infoRows() {
   ].map(g => ({ ...g, rows: g.rows.filter(r => r[1]) })).filter(g => g.rows.length);
 }
 function renderInfo() {
+  if (!adapters[sel]) { $("info-list").replaceChildren(); info.shape = ""; return; }   // none to show (all hidden, or the read failed)
   const groups = infoRows(), list = $("info-list");
   // Same rows as on screen (only values differ): roll the values that changed and keep the rest still.
   const shape = JSON.stringify(groups.map(g => [g.head, g.tag, g.rows.map(r => [r[0], r[4] || ""])]));
