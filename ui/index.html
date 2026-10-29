@@ -717,6 +717,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-again.stop:hover, .sp-again.stop:focus-visible { border-color: var(--bad); }
 .sp-note { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-note.bad { color: var(--bad); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }   /* read aloud, not shown */
 /* Cloudflare's mark, the one the DNS templates use, in the text's own colour */
 .cf-logo, .sp-note.cf::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 5px; vertical-align: -2px; background: currentColor;
   -webkit-mask: url(vendor/logos/cloudflare.svg) center / contain no-repeat; mask: url(vendor/logos/cloudflare.svg) center / contain no-repeat; }
@@ -1051,6 +1052,7 @@ html.app, html.app body { overflow: hidden; }
       </div>
       <section class="settings-view speed-view" id="speed" aria-labelledby="sp-title" hidden>
         <canvas class="sp-road" id="speed-road" aria-hidden="true"></canvas>
+        <span class="sr" id="speed-said" aria-live="polite"></span>
         <div class="dlg-body">
           <div class="dlg-head">
             <h3 id="sp-title"><span data-t="speedTest">Speed test</span> <span class="via" id="speed-via"></span></h3>
@@ -3074,6 +3076,9 @@ function speedStart() {
 function speedEnd(state) {
   speed.stop?.(); speed.stop = null; speed.run++;
   Object.assign(speed, { state, leg: state === "done" ? "" : speed.leg, t1: performance.now() });
+  // The result lives in the dial's drawing, which a screen reader can't follow: say it once, when it's in.
+  const r = speed.res, f = v => v === undefined ? "-" : (+v).toFixed(1);
+  $("speed-said").textContent = state !== "done" ? "" : L(`Download ${f(r.down)} Mbps, upload ${f(r.up)} Mbps, ping ${r.ms ?? "-"} ms`, `ดาวน์โหลด ${f(r.down)} Mbps อัปโหลด ${f(r.up)} Mbps ping ${r.ms ?? "-"} ms`);
   paintSpeed(); speedDraw();
 }
 // Start is the button in the middle; once it opens into the dial, the key at the bottom stops it (or, when done, runs it again).
