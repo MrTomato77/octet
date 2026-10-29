@@ -184,20 +184,21 @@ fn brand(asn: u64) -> Option<&'static str> {
 
 /// Bytes the far end has acknowledged on these sockets (SIO_TCP_INFO): sent, less what's still in flight or was sent again.
 #[cfg(windows)]
-fn acked(socks: &[TcpStream]) -> Option<u64> {
+/// Each socket keeps the last count it gave: one that can no longer say (dropped and opened again) still counts what it had.
+fn acked(socks: &mut [(TcpStream, u64)]) -> Option<u64> {
     use std::os::windows::io::AsRawSocket;
     use windows_sys::Win32::Networking::WinSock::{SIO_TCP_INFO, TCP_INFO_v0, WSAIoctl};
-    // A socket that can't say (closing) is left out rather than turning the whole count into writes for a tick.
-    Some(socks.iter().filter_map(|s| {
+    Some(socks.iter_mut().map(|(s, last)| {
         let (ver, mut info, mut got) = (0u32, TCP_INFO_v0::default(), 0u32);
         let ok = unsafe { WSAIoctl(s.as_raw_socket() as usize, SIO_TCP_INFO, (&ver as *const u32).cast(), 4,
             (&mut info as *mut TCP_INFO_v0).cast(), size_of::<TCP_INFO_v0>() as u32, &mut got, std::ptr::null_mut(), None) } == 0;
-        ok.then(|| info.BytesOut.saturating_sub(info.BytesInFlight as u64 + info.BytesRetrans as u64))
+        if ok { *last = (*last).max(info.BytesOut.saturating_sub(info.BytesInFlight as u64 + info.BytesRetrans as u64)); }
+        *last
     }).sum())
 }
 
 #[cfg(not(windows))]
-fn acked(_: &[TcpStream]) -> Option<u64> {
+fn acked(_: &mut [(TcpStream, u64)]) -> Option<u64> {
     None
 }
 
@@ -212,7 +213,7 @@ fn median(v: &[f64]) -> Option<u32> {
 fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send: &dyn Fn(Value)) -> Result<(), String> {
     let stop = Arc::new(AtomicBool::new(false));
     let err = Arc::new(Mutex::new(None::<String>));
-    let socks = Arc::new(Mutex::new(Vec::<TcpStream>::new()));
+    let socks = Arc::new(Mutex::new(Vec::<(TcpStream, u64)>::new()));
     let loaded = Arc::new(Mutex::new(Vec::<f64>::new()));
     let body = Arc::new(vec![0u8; if up { UP_CHUNK } else { 0 }]);
     for _ in 0..STREAMS {
@@ -223,7 +224,7 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
                 // A connection the far end drops (keep-alive ends) is opened again, twice at most, rather than failing the test.
                 for again in 0.. {
                     let mut c = open(via)?;
-                    socks.lock().unwrap().push(c.get_ref().try_clone().map_err(|e| e.to_string())?);
+                    socks.lock().unwrap().push((c.get_ref().try_clone().map_err(|e| e.to_string())?, 0));
                     while !stop.load(Relaxed) {
                         let s = match if up { post(&mut c, &body, &count) } else { get(&mut c, &format!("/__down?bytes={CHUNK}"), false, &count).map(|r| r.0) } {
                             Err(_) if again < 2 && !stop.load(Relaxed) => break,
@@ -247,7 +248,7 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
         let (stop, loaded, socks) = (stop.clone(), loaded.clone(), socks.clone());
         std::thread::spawn(move || {
             let Ok(mut c) = open(via) else { return };
-            if let Ok(s) = c.get_ref().try_clone() { socks.lock().unwrap().push(s); }
+            if let Ok(s) = c.get_ref().try_clone() { socks.lock().unwrap().push((s, 0)); }
             while !stop.load(Relaxed) {
                 if let Ok(ms) = ping(&mut c) { loaded.lock().unwrap().push(ms); }
                 std::thread::sleep(TICK);
@@ -258,7 +259,7 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
     // end acknowledges them: counting writes would count what only reached the socket's send buffer, megabytes a
     // stream in the first moments, and the dial would shoot up as upload starts.
     let base = used.load(Relaxed);   // used runs over the whole test
-    let moved = || if up { acked(&socks.lock().unwrap()) } else { None }.unwrap_or_else(|| used.load(Relaxed) - base);
+    let moved = || if up { acked(&mut socks.lock().unwrap()) } else { None }.unwrap_or_else(|| used.load(Relaxed) - base);
     let t0 = Instant::now();
     let mut warm_at = None;
     let result = loop {
@@ -287,7 +288,7 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
     // and waiting on it held the next leg up for its whole timeout (15-21 s, the dial frozen meanwhile).
     // Each sees the stop once its call returns and ends on its own, its socket closed as it goes.
     stop.store(true, Relaxed);
-    for s in socks.lock().unwrap().iter() {
+    for (s, _) in socks.lock().unwrap().iter() {
         s.shutdown(Shutdown::Both).ok();
     }
     result

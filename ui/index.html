@@ -2017,14 +2017,14 @@ $("apply").onclick = async () => {
       if (tauri) await reload().catch(() => {});   // show what Windows actually took
       lock(false); renderAdapter();
       iconLater("apply", "shield-check", 1200);
-      // A reload makes new adapter objects: test what this one has now, not what was sent.
-      const fresh = () => (adapters.find(x => x.id === a.id) ?? a).cfg;
-      if (!fresh().gateway && !fresh().dns1) { say(t("applied")(a.name), "ok", "check"); return; }
+      if (!sent.ipAuto && !sent.gateway && !sent.dns1) { say(t("applied")(a.name), "ok", "check"); return; }   // nothing to test
       say(t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…"));
       await new Promise(res => setTimeout(res, 1000));   // let the new address settle
       // Back on DHCP, the leased DNS servers arrive a moment after Apply: test those, not the old ones.
       if (tauri) { await reload().catch(() => {}); renderAdapter(); }
-      const cfg = fresh();
+      // A reload makes new adapter objects: test what this one has now (a DHCP lease's), not what was sent.
+      const cfg = (adapters.find(x => x.id === a.id) ?? a).cfg;
+      if (!cfg.gateway && !cfg.dns1) { say(t("applied")(a.name), "ok", "check"); return; }
       // macOS brings the routes up a moment after the address: there, a few tries before "not answering".
       const probe = async ip => {
         if (!ip) return undefined;
@@ -2297,7 +2297,7 @@ document.addEventListener("copy", e => {
 });
 document.addEventListener("paste", e => {
   // A text box keeps its own paste (an IP field takes a whole config itself); elsewhere it fills the IP page only.
-  if (document.activeElement?.matches("input, textarea") || page !== "ip") return;
+  if (document.activeElement?.matches("input:not([type=radio]):not([type=checkbox]), textarea") || page !== "ip") return;
   if (pasteConfig(e.clipboardData.getData("text"))) e.preventDefault();
 });
 
@@ -2339,7 +2339,7 @@ function closeSettings() {
   const end = () => { if (done || !v.classList.contains("out")) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };   // reopened meanwhile: stays open
   v.classList.add("out"); wakeGraph();
   v.addEventListener("animationend", end, { once: true });
-  setTimeout(end, 200);   // a hidden window may never run the animation
+  clearTimeout(v._end); v._end = setTimeout(end, 200);   // an earlier close's timer would cut this fade short   // a hidden window may never run the animation
 }
 $("open-settings").onclick = openSettings;
 $("s-close").onclick = closeSettings;
@@ -2362,7 +2362,8 @@ document.querySelectorAll("input[name=lang]").forEach(x => x.onchange = () => {
   crossfade(() => {
     lang = x.value; document.documentElement.lang = lang; translate(); renderList(); renderHidden();
     if (draft) { renderAdapterFacts(); renderForm(); } else renderAdapter();
-    renderInfo(); scanTell(); paintProbe();   // the pages drawn by script, so they don't wait for new data to change language
+    if (adapters[sel]) renderInfo();
+    scanTell(); paintProbe();   // the pages drawn by script, so they don't wait for new data to change language
   });
 });
 // Always run as administrator: saved now, and Octet restarts elevated if it isn't already.
@@ -3295,7 +3296,7 @@ function closeSpeed() {
   const end = () => { if (done || !v.classList.contains("out")) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };   // reopened meanwhile: stays open
   v.classList.add("out"); wakeGraph();
   v.addEventListener("animationend", end, { once: true });
-  setTimeout(end, 200);
+  clearTimeout(v._end); v._end = setTimeout(end, 200);   // an earlier close's timer would cut this fade short
 }
 $("open-speed").onclick = openSpeed;
 

@@ -294,9 +294,10 @@ pub fn elevate(r: &Request) -> Result<(), String> {
     // The request travels on the command line, so nothing can swap it between the
     // UAC prompt and the elevated copy reading it. The .out file only carries error text.
     let params = format!("--elevated {} \"{}\"", hex(&serde_json::to_vec(r).map_err(|e| e.to_string())?), out.display());
-    let code = run_as_admin(&exe, &params, true)?.unwrap_or(1);
+    let code = run_as_admin(&exe, &params, true);
     let detail = std::fs::read_to_string(&out).unwrap_or_default();
-    let _ = std::fs::remove_file(&out);
+    let _ = std::fs::remove_file(&out);   // also when UAC was declined
+    let code = code?.unwrap_or(1);
     match code {
         0 => Ok(()),
         _ if detail.trim().is_empty() => Err(format!("The change failed (exit code {code})")),
