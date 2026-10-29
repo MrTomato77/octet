@@ -3744,7 +3744,7 @@ function infoRows() {
     ] : [] },
     { icon: "map-pin", head: L("Address", "ที่อยู่"), tag: c.ipAuto ? "DHCP" : "Manual", rows: [
       ["IP", c.address, "", validIp(c.address) && p >= 0 ? `/${p}` : ""],
-      ...(a.extraIps || []).map((x, i) => [L(`IP ${i + 2}`, `IP ${i + 2}`), x, ""]),
+      ...(a.extraIps || []).map((x, i) => { const q = prefixOf(a.extraSubnets?.[i] || ""); return [L(`IP ${i + 2}`, `IP ${i + 2}`), x, "", q >= 0 ? `/${q}` : ""]; }),
       ["Subnet", c.subnet, ""],
       ["Gateway", c.gateway, ""],
       ...(a.ipv6 || []).map(x => ["IPv6", x, x.startsWith("fe80") ? "link-local" : ""]),
