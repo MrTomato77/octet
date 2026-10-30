@@ -2687,7 +2687,12 @@ function routes(c) {
     return { ...a, gi, gw: gi < 0 ? "" : gs[gi], shared: gi >= 0 && owner !== i };
   });
 }
-function setGws(gs) { draft.gateway = gs[0] || ""; draft.gws = gs.slice(1).map(g => ({ gateway: g, metric: "" })); }
+// A gateway keeps its metric wherever it moves in the list; a new one starts automatic.
+function setGws(gs) {
+  const m = new Map([[draft.gateway, draft.gwMetric], ...draft.gws.map(g => [g.gateway, g.metric])]);
+  draft.gateway = gs[0] || ""; draft.gwMetric = m.get(draft.gateway) ?? "";
+  draft.gws = gs.slice(1).map(g => ({ gateway: g, metric: m.get(g) ?? "" }));
+}
 const addrAt = n => n ? draft.extra[n - 1] : { address: draft.address, subnet: draft.subnet };
 function putAddr(n, v) { if (n) draft.extra[n - 1] = v; else { draft.address = v.address; draft.subnet = v.subnet; } }
 function advRow() {

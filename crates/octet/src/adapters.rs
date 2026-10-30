@@ -13,6 +13,8 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8   # names are not ASCII on Thai Windows
 $cfg = @{}
 Get-CimInstance Win32_NetworkAdapterConfiguration | ForEach-Object { if ($_.SettingID) { $cfg[$_.SettingID] = $_ } }
+$ipif = @{}
+Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $ipif[[int]$_.ifIndex] = $_ }
 $out = foreach ($a in Get-NetAdapter) {
   if ($a.Status -eq 'Not Present') { continue }
   $c = $cfg[$a.InterfaceGuid]
@@ -24,7 +26,8 @@ $out = foreach ($a in Get-NetAdapter) {
     mac = [string]$a.MacAddress; status = [string]$a.Status
     dhcp = [bool]$c.DHCPEnabled; dhcpServer = [string]$c.DHCPServer; register = [bool]$c.FullDNSRegistrationEnabled
     ip = @($c.IPAddress | Where-Object { $_ }); subnet = @($c.IPSubnet | Where-Object { $_ })
-    gateway = @($c.DefaultIPGateway | Where-Object { $_ })
+    gateway = @($c.DefaultIPGateway | Where-Object { $_ }); gwMetric = @($c.GatewayCostMetric | Where-Object { $null -ne $_ })
+    ifMetric = $(if ($ipif[[int]$a.ifIndex].AutomaticMetric -eq 'Disabled') { [int]$ipif[[int]$a.ifIndex].InterfaceMetric } else { 0 })
     dns = @($c.DNSServerSearchOrder | Where-Object { $_ }); staticDns = [bool]$ns
   }
 }
@@ -48,6 +51,11 @@ struct Raw {
     gateway: Vec<String>,
     dns: Vec<String>,
     static_dns: bool,
+    /// Each gateway's metric (same order) and the interface metric; 0 = automatic.
+    #[serde(default)]
+    gw_metric: Vec<u32>,
+    #[serde(default)]
+    if_metric: u32,
     #[serde(default)]
     ssid: String,
     #[serde(default)]
@@ -95,7 +103,7 @@ pub struct Cfg {
     pub dns1: String,
     pub dns2: String,
     pub register: bool,
-    /// Advanced, sent by the UI only (the reader leaves them empty; the UI fills them from `extra_ips`).
+    /// Advanced. The reader fills `gws` (with their metrics) and leaves `extra` empty; the UI fills it from `extra_ips`.
     /// Kept when not empty: the request travels to the elevated copy as JSON.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extra: Vec<Addr>,
@@ -197,6 +205,11 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 .map(|(ip, s)| (ip.clone(), s.cloned().unwrap_or_default()))
                 .unwrap_or_default();
             let dns = v4(&r.dns);
+            // Gateways with their metrics (both lists mix IPv4 and IPv6 in the PowerShell reader). A route metric of 0
+            // is automatic (netsh's gwmetric=0, the Automatic metric box): the route then costs the interface metric alone.
+            let num = |m: u32| if m == 0 { String::new() } else { m.to_string() };
+            let gws: Vec<Gw> = r.gateway.iter().zip(r.gw_metric.iter().copied().map(Some).chain(std::iter::repeat(None)))
+                .filter(|(g, _)| g.parse::<Ipv4Addr>().is_ok()).map(|(g, m)| Gw { gateway: g.clone(), metric: num(m.unwrap_or(0)) }).collect();
             let pairs: Vec<(String, String)> = r.ip.iter().zip(r.subnet.iter().map(Some).chain(std::iter::repeat(None)))
                 .filter(|(ip, _)| ip.parse::<Ipv4Addr>().is_ok()).map(|(ip, s)| (ip.clone(), s.cloned().unwrap_or_default())).skip(1).collect();
             let (extra_ips, extra_subnets) = pairs.into_iter().unzip();
@@ -226,7 +239,7 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 dhcp_server,
                 extra_ips,
                 extra_subnets,
-                extra_gws: v4(&r.gateway).into_iter().skip(1).collect(),
+                extra_gws: gws.iter().skip(1).map(|g| g.gateway.clone()).collect(),
                 suffix: r.suffix,
                 ipv6: r.ipv6,
                 lease_got: r.lease_got,
@@ -236,7 +249,10 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                     ip_auto: r.dhcp,
                     address,
                     subnet,
-                    gateway: v4(&r.gateway).into_iter().next().unwrap_or_default(),
+                    gateway: gws.first().map(|g| g.gateway.clone()).unwrap_or_default(),
+                    gw_metric: gws.first().map(|g| g.metric.clone()).unwrap_or_default(),
+                    gws: gws.into_iter().skip(1).collect(),
+                    metric: num(r.if_metric),
                     dns_auto: !r.static_dns,
                     dns1: dns.first().cloned().unwrap_or_default(),
                     dns2: dns.get(1).cloned().unwrap_or_default(),
@@ -481,6 +497,33 @@ mod native {
         Ok(out)
     }
 
+    /// Metrics: of each default route by (interface index, gateway), and of each interface whose metric
+    /// was set by hand (automatic ones are left out), by interface index.
+    fn metrics() -> (HashMap<(u32, Ipv4Addr), u32>, HashMap<u32, u32>) {
+        let (mut routes, mut ifs) = (HashMap::new(), HashMap::new());
+        unsafe {
+            let mut t: *mut MIB_IPFORWARD_TABLE2 = std::ptr::null_mut();
+            if GetIpForwardTable2(AF_INET, &mut t) == 0 {
+                for r in std::slice::from_raw_parts((*t).Table.as_ptr(), (*t).NumEntries as usize) {
+                    if r.DestinationPrefix.PrefixLength == 0 {   // 0.0.0.0/0
+                        routes.insert((r.InterfaceIndex, Ipv4Addr::from(r.NextHop.Ipv4.sin_addr.S_un.S_addr.to_ne_bytes())), r.Metric);
+                    }
+                }
+                FreeMibTable(t.cast());
+            }
+            let mut t: *mut MIB_IPINTERFACE_TABLE = std::ptr::null_mut();
+            if GetIpInterfaceTable(AF_INET, &mut t) == 0 {
+                for r in std::slice::from_raw_parts((*t).Table.as_ptr(), (*t).NumEntries as usize) {
+                    if !r.UseAutomaticMetric {
+                        ifs.insert(r.InterfaceIndex, r.Metric);
+                    }
+                }
+                FreeMibTable(t.cast());
+            }
+        }
+        (routes, ifs)
+    }
+
     /// What a joined Wi-Fi card is on: network name, 802.11 standard, channel frequency.
     #[derive(Default)]
     pub(super) struct Wlan {
@@ -640,9 +683,9 @@ mod native {
 
     pub fn read() -> Result<Vec<Raw>, String> {
         // Each asks Windows something that takes some 20 ms: asked side by side, a read takes one of those, not three.
-        let (lean, mut wlans, mut v6, metered) = std::thread::scope(|s| {
-            let (w, v, m) = (s.spawn(wlans), s.spawn(|| ipv6s(V6_FLAGS)), s.spawn(crate::net::metered));
-            (live(V4_LEAN), w.join().unwrap_or_default(), v.join().unwrap_or_default(), m.join().unwrap_or_default())
+        let (lean, mut wlans, mut v6, metered, (routes, if_metrics)) = std::thread::scope(|s| {
+            let (w, v, m, r) = (s.spawn(wlans), s.spawn(|| ipv6s(V6_FLAGS)), s.spawn(crate::net::metered), s.spawn(metrics));
+            (live(V4_LEAN), w.join().unwrap_or_default(), v.join().unwrap_or_default(), m.join().unwrap_or_default(), r.join().unwrap_or_default())
         });
         #[cfg(test)]
         let lean = if FULL_ONLY.get() { Err(String::new()) } else { lean };
@@ -698,6 +741,8 @@ mod native {
                             raw.dns.clear();
                         }
                     }
+                    raw.gw_metric = raw.gateway.iter().map(|g| g.parse().ok().and_then(|g| routes.get(&(raw.index, g))).copied().unwrap_or(0)).collect();
+                    raw.if_metric = if_metrics.get(&raw.index).copied().unwrap_or(0);
                     out.push(raw);
                 }
                 Device::Disabled(description) => {
@@ -718,6 +763,7 @@ mod native {
                         register: reg_dword(&tcp, "RegistrationEnabled").is_none_or(|d| d != 0),
                         ip,
                         subnet,
+                        gw_metric: list("DefaultGatewayMetric").iter().map(|m| m.parse().unwrap_or(0)).collect(),
                         gateway,
                         dns: if static_dns { list("NameServer") } else { vec![] },
                         ..Default::default()
@@ -759,6 +805,8 @@ mod native {
                     gateway: s.gateway,
                     dns: s.dns,
                     static_dns: s.static_dns,
+                    gw_metric: vec![],   // ponytail: macOS gateway and interface metrics not read; Apply there sends none
+                    if_metric: 0,
                     ssid: w.as_ref().map(|w| w.ssid.clone()).unwrap_or_default(),
                     speed: w.as_ref().map(|w| w.rate).or(link.map(|l| l.speed)).filter(|_| up).unwrap_or(0),
                     phy: w.as_ref().map(|w| w.phy.clone()).unwrap_or_default(),
@@ -810,6 +858,18 @@ mod tests {
         assert_eq!((bt.state, bt.dhcp_server.as_str(), bt.cfg.address.as_str()), ("disabled", "", ""));
         assert!(!lab.cfg.ip_auto && !lab.cfg.dns_auto);
         assert_eq!((lab.cfg.dns1.as_str(), lab.cfg.dns2.as_str()), ("1.1.1.1", "8.8.8.8"));
+    }
+
+    #[test]
+    fn gateway_and_interface_metrics_keep_their_place() {
+        // As CIM lists them: IPv4 and IPv6 gateways mixed, a metric for each; 0 = automatic.
+        let json = br#"[{"id":"{1}","index":4,"name":"LAN","description":"","mac":"","status":"Up","dhcp":false,"dhcpServer":"","register":false,
+          "ip":["10.0.0.5"],"subnet":["255.255.255.0"],"gateway":["10.0.0.1","fe80::1","10.0.0.2","10.0.0.3"],"gwMetric":[0,256,25,0],"ifMetric":15,
+          "dns":[],"staticDns":true}]"#;
+        let a = &parse(json).unwrap()[0];
+        assert_eq!((a.cfg.gateway.as_str(), a.cfg.gw_metric.as_str(), a.cfg.metric.as_str()), ("10.0.0.1", "", "15"));
+        assert_eq!(a.cfg.gws, [Gw { gateway: "10.0.0.2".into(), metric: "25".into() }, Gw { gateway: "10.0.0.3".into(), metric: String::new() }]);
+        assert_eq!(a.extra_gws, ["10.0.0.2", "10.0.0.3"]);
     }
 
     /// The native reader must agree with the PowerShell one on this machine, field by field,
