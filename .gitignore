@@ -9,3 +9,6 @@
 *.log
 .vs/
 .idea/
+
+# Agent tool state (oh-my-claudecode); under ui/ it would also be packed into the exe
+.omc/

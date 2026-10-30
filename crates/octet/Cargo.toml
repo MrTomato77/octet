@@ -8,6 +8,7 @@ license = "MIT"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+brotli = { version = "9", default-features = false, features = ["std"] }   # already in the build through Tauri; compresses the maker list
 
 [dependencies]
 tauri = { version = "2", features = ["image-png"] }
@@ -16,6 +17,7 @@ serde.workspace = true
 serde_json.workspace = true
 ed25519-compact = { version = "2", default-features = false }
 native-tls = "0.2"   # the speed test's TLS: the system's own (SChannel on Windows)
+brotli = { version = "9", default-features = false, features = ["std"] }   # already in the exe through Tauri; unpacks the maker list
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Win32_Networking_NetworkListManager", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant"] }   # already in the build through Tauri; COM for the metered flag

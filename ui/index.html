@@ -289,6 +289,8 @@ button, input, select { font: inherit; color: inherit; }
 .pchip.own.port .pport { width: 42px; padding: 0 6px 0 2px; }
 .pgraph { flex: 1; position: relative; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: crosshair; }
 .pgraph svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* The line's own layer: it slides left by transform, which the compositor moves without repainting. */
+#probe-run { overflow: visible; will-change: transform; }
 .pgraph .grid { stroke: color-mix(in oklch, var(--border) 45%, transparent); stroke-width: 1; }
 .pgraph .tick { fill: var(--faint); font-size: 11px; }
 .pgraph .line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; }
@@ -612,7 +614,8 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .dlg-body { padding: var(--s6); display: grid; gap: var(--s4); }
 .dlg-body h3 { margin: 0; font-size: 16px; font-weight: 600; }
 /* Settings take the place of the form; the adapter and its edits wait underneath */
-.settings-view { position: absolute; inset: 0; z-index: 4; background: var(--surface); overflow: hidden; align-content: start; }
+/* Scrolls only when it must (several hidden adapters and an update's notes at once); nothing is cut off. */
+.settings-view { position: absolute; inset: 0; z-index: 4; background: var(--surface); overflow: hidden auto; scrollbar-width: thin; align-content: start; }
 .settings-view[hidden] { display: none; }
 .settings-view.in { animation: rise var(--t-base) var(--ease-out); }
 .settings-view.out { animation: fade-out var(--t-fast) ease-in forwards; }
@@ -627,10 +630,9 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-dial .track, .sp-dial .arc { fill: none; stroke-linecap: round; }
 .sp-dial .track { stroke: var(--border); }
 .sp-dial .bezel { fill: none; stroke: var(--border-strong); stroke-width: 2; }
-.sp-dial .led { fill: none; stroke: var(--accent); stroke-width: 4; stroke-dasharray: 8 5; transform-box: view-box; transform-origin: 120px 100px; animation: led-breathe 2.4s ease-in-out infinite; }
+.sp-dial .led { fill: none; stroke: var(--accent); stroke-width: 4; stroke-dasharray: 8 5; transform-box: view-box; transform-origin: 120px 100px; }   /* breathes from speedRoad */
 #speed-dial:has(#sp-go:active) #sp-disc, #speed-dial:has(#sp-go:active) #sp-face { transform: scale(0.96); }
 #sp-disc, #sp-face { transform-box: view-box; transform-origin: 120px 100px; transition: transform 120ms; }
-@keyframes led-breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 .sp-dial .eng { fill: var(--muted); font: 600 9px var(--mono); letter-spacing: 3px; text-anchor: middle; }
 .sp-dial .pw { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
 .sp-dial .start { fill: var(--ink); font: 700 12px var(--mono); letter-spacing: 1px; text-anchor: middle; }
@@ -653,7 +655,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 /* A phone hotspot paints the button amber; a disconnected adapter greys it out */
 #speed-dial.warn .led, #speed-dial.warn .pw { stroke: oklch(0.78 0.13 75); }
 #speed-dial.warn .needle.on-disc { fill: oklch(0.78 0.13 75); }
-#speed-dial.off .led, #speed-dial.off .pw { stroke: var(--border-strong); animation: none; }
+#speed-dial.off .led, #speed-dial.off .pw { stroke: var(--border-strong); }
 #speed-dial.off .needle.on-disc { fill: var(--border-strong); }
 #speed-dial.off .start { fill: var(--faint); }
 #speed-dial.off #sp-go { cursor: default; }
@@ -667,6 +669,8 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity 600ms var(--ease-out); }
 /* Before Start the floor waits, a flat grid and dimmer */
 .speed-view[data-phase="idle"] .sp-road { opacity: 0.55; }
+.sp-flat { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }   /* clips the flat grid as it slides: past the bottom it would scroll */
+.sp-road.flat { will-change: transform; }
 .speed-view .dlg-body { position: relative; }
 .sp-lap { margin-left: auto; font-family: var(--mono); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .speed-view[data-phase="idle"] .sp-lap { color: var(--faint); }
@@ -709,7 +713,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-again { display: inline-flex; align-items: center; gap: 10px; overflow: hidden; white-space: nowrap; height: 40px; padding: 0 18px 0 5px; border-radius: 20px; border: 1.5px solid var(--border-strong);
   background: var(--bg); color: var(--ink); font: 700 12px var(--mono); letter-spacing: 1.5px; cursor: pointer; transition: border-color 200ms, transform 120ms; }
 .sp-again .key { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--accent); font-size: 15px; }
-.sp-again .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px dashed var(--accent); animation: led-breathe 2.4s ease-in-out infinite; }
+.sp-again .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px dashed var(--accent); }   /* breathes from speedRoad */
 .sp-again:hover, .sp-again:focus-visible { border-color: var(--accent); outline: none; }
 .sp-again:active { transform: scale(0.97); }
 .sp-again .key i, .sp-again .ring { transition: color 300ms, border-color 300ms; }
@@ -768,8 +772,13 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .pane.in { animation: rise var(--t-base) var(--ease-out); }
 .keys { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: center; align-content: start; font-size: 13px; }
 .keys > span { color: var(--muted); padding-left: var(--s2); }
-.keys h4 { grid-column: 1 / -1; margin: var(--s2) 0 0; font-size: 12px; font-weight: 600; color: var(--faint); }
-.keys h4:first-child { margin-top: 0; }
+/* Group headings, on General and Shortcuts alike: an icon, the name, and a hairline to the edge. */
+.keys h4, .set h4 { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin: var(--s2) 0 0;
+  font-size: 13px; line-height: 18px; font-weight: 600; color: var(--ink); }
+.keys h4 i, .set h4 i { font-size: 15px; color: var(--muted); }
+.keys h4::after, .set h4::after { content: ""; flex: 1; height: 1px; margin-left: 4px; background: var(--border); }
+.keys h4:first-child, .set h4:first-child { margin-top: 0; }
+.set h4 { margin-bottom: -2px; }   /* close to its rows: a heading, not one more row */
 /* Under Updates, once a newer version is found: the first points of its release notes. */
 .upd-notes, .news ul { margin: 0; padding-left: 16px; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
 .upd-notes { color: var(--ink); margin-top: -2px; }
@@ -872,10 +881,12 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 
 /* Apply in progress and refresh changes: a highlight runs across the row */
 .working { position: relative; overflow: hidden; }
-.working::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
-  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--accent) 24%, transparent), transparent) 0 0 / 50% 100% no-repeat; }
+.working::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 50%; pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--accent) 24%, transparent), transparent); }
 .working::after { animation: sweep-row 900ms var(--ease-out) infinite; }
-@keyframes sweep-row { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+/* Moved by transform, not background-position: the compositor slides it, nothing is repainted each frame.
+   The row's own overflow and corners clip it. */
+@keyframes sweep-row { from { transform: translateX(-100%); } to { transform: translateX(200%); } }
 /* Apply success: changed-marks fold away one after another */
 .ip.settle .diff { animation: fold 180ms ease-in forwards; animation-delay: calc(var(--i) * 60ms); }
 @keyframes fold { to { transform: rotate(45deg) scale(0); } }
@@ -1034,7 +1045,7 @@ html.app, html.app body { overflow: hidden; }
         </div>
         <div class="page" id="page-probe" data-page="probe" role="tabpanel" hidden>
           <div class="pchips" id="probe-list" role="tablist" aria-label="Targets"><span class="thumb" id="probe-thumb"></span></div>
-          <div class="pgraph" id="probe-graph" role="img" aria-label="Round trips in ms, last 60 seconds"><svg id="probe-svg" preserveAspectRatio="none"></svg><div class="ptip" id="probe-tip"></div></div>
+          <div class="pgraph" id="probe-graph" role="img" aria-label="Round trips in ms, last 60 seconds"><svg id="probe-svg" preserveAspectRatio="none"></svg><svg id="probe-run" preserveAspectRatio="none"></svg><div class="ptip" id="probe-tip"></div></div>
         </div>
         <div class="page" id="page-scan" data-page="scan" role="tabpanel" hidden>
           <div class="shead">
@@ -1058,7 +1069,7 @@ html.app, html.app body { overflow: hidden; }
         <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
       </div>
       <section class="settings-view speed-view" id="speed" aria-labelledby="sp-title" hidden>
-        <canvas class="sp-road" id="speed-road" aria-hidden="true"></canvas>
+        <canvas class="sp-road" id="speed-road" aria-hidden="true"></canvas><div class="sp-flat" hidden><canvas class="sp-road flat" id="speed-flat" aria-hidden="true"></canvas></div>
         <span class="sr" id="speed-said" aria-live="polite"></span>
         <div class="dlg-body">
           <div class="dlg-head">
@@ -1136,6 +1147,7 @@ html.app, html.app body { overflow: hidden; }
             </div>
             <div class="panes">
               <div class="pane set" data-pane="general">
+                <h4><i class="ph ph-palette" aria-hidden="true"></i><span data-t="sgLook">Appearance</span></h4>
                 <span class="lbl" data-t="theme">Theme</span>
                 <div class="seg opt" role="radiogroup" aria-label="Theme" style="--n: 3">
                   <span class="thumb"></span>
@@ -1149,6 +1161,7 @@ html.app, html.app body { overflow: hidden; }
                   <label class="choice"><input type="radio" name="lang" value="en" checked><span>English</span></label>
                   <label class="choice"><input type="radio" name="lang" value="th"><span>ไทย</span></label>
                 </div>
+                <h4><i class="ph ph-shield-check" aria-hidden="true"></i><span data-t="sgAccess">Access and memory</span></h4>
                 <span class="lbl" data-t="admin" data-win>Run as admin</span>
                 <div class="seg opt" role="radiogroup" aria-label="Run as administrator" data-win style="--n: 2">
                   <span class="thumb"></span>
@@ -1157,7 +1170,10 @@ html.app, html.app body { overflow: hidden; }
                 </div>
                 <span class="lbl" data-t="hidden" id="s-hidden-lbl">Hidden</span>
                 <div class="stack" id="s-hidden"></div>
-                <span class="lbl" data-t="updates">Updates</span>
+                <span class="lbl" data-t="scanMem">Scan memory</span>
+                <div class="upd mem"><span class="upd-say"><i class="ph ph-clock-counter-clockwise"></i><span class="t" id="s-mem" tabindex="-1" aria-live="polite"></span></span><button type="button" id="s-mem-clear"><span data-t="clear">Clear</span></button></div>
+                <h4><i class="ph ph-arrow-circle-up" aria-hidden="true"></i><span data-t="sgUpd">Updates</span></h4>
+                <span class="lbl" data-t="version">Version</span>
                 <div class="upd" id="s-upd"><span class="upd-say"><i class="ph"></i><span class="t"></span><span class="pct"></span></span><button type="button" id="s-upd-go"><span></span></button><span class="upd-bar"></span></div>
                 <span id="s-upd-notes-gap" hidden></span>
                 <ul class="upd-notes" id="s-upd-notes" hidden></ul>
@@ -1167,21 +1183,19 @@ html.app, html.app body { overflow: hidden; }
                   <label class="choice"><input type="radio" name="updauto" value="0" checked><span data-t="off">Off</span></label>
                   <label class="choice"><input type="radio" name="updauto" value="1"><span data-t="atStart">When Octet starts</span></label>
                 </div>
-                <span class="lbl" data-t="scanMem">Scan memory</span>
-                <div class="upd mem"><span class="upd-say"><i class="ph ph-clock-counter-clockwise"></i><span class="t" id="s-mem" tabindex="-1" aria-live="polite"></span></span><button type="button" id="s-mem-clear"><span data-t="clear">Clear</span></button></div>
               </div>
               <div class="pane keys" data-pane="keys" hidden>
-                <h4 data-t="kgAll">Anywhere</h4>
+                <h4><i class="ph ph-app-window" aria-hidden="true"></i><span data-t="kgAll">Anywhere</span></h4>
                 <kbd>Ctrl</kbd><kbd>Enter</kbd><span data-t="kApply">Apply changes</span>
                 <kbd>F5</kbd><span></span><span data-t="kRefresh">Read adapters again</span>
                 <kbd>Ctrl</kbd><kbd>1-5</kbd><span data-t="kPages">Go to a page</span>
                 <kbd>Ctrl</kbd><kbd>T</kbd><span data-t="kSpeed">Open or close the speed test</span>
                 <kbd>Ctrl</kbd><kbd>B</kbd><span data-t="kSide">Expand or collapse the sidebar</span>
                 <kbd>Esc</kbd><span></span><span data-t="kEsc">Close a menu or the sidebar</span>
-                <h4 data-t="kgCfg">The whole configuration</h4>
+                <h4><i class="ph ph-clipboard-text" aria-hidden="true"></i><span data-t="kgCfg">The whole configuration</span></h4>
                 <kbd>Ctrl</kbd><kbd>C</kbd><span data-t="kCopy">Copy the whole configuration</span>
                 <kbd>Ctrl</kbd><kbd>V</kbd><span data-t="kPaste">Paste a whole configuration</span>
-                <h4 data-t="kgType">Typing an address</h4>
+                <h4><i class="ph ph-cursor-text" aria-hidden="true"></i><span data-t="kgType">Typing an address</span></h4>
                 <kbd>.</kbd><kbd>&larr; &rarr;</kbd><span data-t="kOctet">Move between octets</span>
                 <kbd>:</kbd><span></span><span data-t="kPort">Add a port (Ping)</span>
               </div>
@@ -1348,7 +1362,7 @@ const T = {
     general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: mac ? "Read adapters again" : "Read adapters again (or Ctrl R)",
     kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
     kOctet: "Move between octets", kEsc: "Close a menu, a view or the sidebar", kSpeed: "Open or close the speed test", kPort: "Add a port (Ping)",
-    kgAll: "Anywhere", kgCfg: "The whole configuration", kgType: "Typing an address", updAuto: "Auto-check", off: "Off", atStart: "When Octet starts", relNotes: "Release notes", scanMem: "Scan memory", clear: "Clear",
+    kgAll: "Anywhere", kgCfg: "The whole configuration", kgType: "Typing an address", updAuto: "Auto-check", sgLook: "Appearance", sgAccess: "Access and memory", sgUpd: "Updates", version: "Version", off: "Off", atStart: "When Octet starts", relNotes: "Release notes", scanMem: "Scan memory", clear: "Clear",
     report: "Report a problem", sysInfo: "System", copy: "Copy", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
@@ -1366,7 +1380,7 @@ const T = {
     general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "บันทึก", kRefresh: mac ? "รีเฟรชรายการ" : "รีเฟรชรายการ (หรือ Ctrl R)",
     kSide: "ย่อ/ขยายแถบซ้าย", kCopy: "คัดลอกค่าทั้งหมด", kPaste: "วางค่าทั้งหมด",
     kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนู หน้าที่เปิดอยู่ หรือแถบซ้าย", kSpeed: "เปิด/ปิด Speed Test", kPort: "ใส่พอร์ต (หน้า Ping)",
-    kgAll: "ใช้ได้ทุกหน้า", kgCfg: "ค่าทั้งหมด", kgType: "ตอนพิมพ์ IP", updAuto: "ตรวจอัตโนมัติ", off: "ปิด", atStart: "ตอนเปิด Octet", relNotes: "บันทึกการเปลี่ยนแปลง", scanMem: "ความจำ Scan", clear: "ล้าง",
+    kgAll: "ใช้ได้ทุกหน้า", kgCfg: "ค่าทั้งหมด", kgType: "ตอนพิมพ์ IP", updAuto: "ตรวจอัตโนมัติ", sgLook: "การแสดงผล", sgAccess: "สิทธิ์และความจำ", sgUpd: "อัปเดต", version: "เวอร์ชัน", off: "ปิด", atStart: "ตอนเปิด Octet", relNotes: "บันทึกการเปลี่ยนแปลง", scanMem: "ความจำ Scan", clear: "ล้าง",
     report: "แจ้งปัญหา", sysInfo: "ระบบ", copy: "คัดลอก", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
@@ -2565,9 +2579,9 @@ const links = {
   issue: "https://github.com/MrTomato77/octet/issues/new",   // the app adds the version and system (Rust, main.rs)
 };
 // About: what this version brought, and the system in one line for a ticket or an issue.
-const NEWS = { v: "0.2.1",
-  en: ["Public IP and the speed test work with a VPN on", "Scan sweeps a /24 in about 2 s, and flows to 100%", "Gateway metrics are read, so Apply keeps them"],
-  th: ["Public IP และ Speed Test ใช้ได้ตอนเปิด VPN", "Scan สแกน /24 เสร็จในราว 2 วินาที ลื่นจนถึง 100%", "อ่าน metric ของ Gateway แล้ว กดบันทึกค่าไม่หาย"] };
+const NEWS = { v: "0.2.2",
+  en: ["Settings, General: rows grouped under headings", "Octet.exe is about 1 MB smaller", "Smoother speed test, scan and ping graph"],
+  th: ["การตั้งค่า หน้าทั่วไป: จัดเป็นหมวดมีหัวข้อ", "Octet.exe เล็กลงราว 1 MB", "Speed Test, Scan และกราฟ Ping ลื่นขึ้น"] };
 // The app asks Tauri for its version (above); the demo, here and on the website, shows the version these notes are for.
 if (!tauri) { $("s-version").textContent = NEWS.v; updShow(); }
 function renderAbout() {
@@ -3014,6 +3028,7 @@ function placeThumb(move = true) {
   th.style.opacity = probe.live ? 1 : 0;   // nothing to pick on an adapter that isn't connected
 }
 function paintProbe() {
+  gfx.wait = 0;   // another row, or a new reading: the graph catches up on the next frame
   probe.rows.forEach((r, i) => {
     const down = r.got.length > 0 && r.got.at(-1) === null;
     r.el.classList.toggle("on", i === probe.pick); r.el.setAttribute("aria-selected", i === probe.pick);
@@ -3066,7 +3081,7 @@ let graphRaf = 0, ceil = 20;
 const ease = k => 1 - (1 - k) ** 3;
 // The graph's SVG elements are kept, layer by layer (back to front), and each frame changes only the attributes
 // that moved: rebuilding the markup every frame cost a re-parse and a fresh layout of every node.
-const gfx = { w: 0, h: 0 };
+const gfx = { w: 0, h: 0, drawn: 0, wait: 0 };
 function gput(layer, i, tag, attrs, text) {
   const list = gfx[layer]._els ??= [];
   let el = list[i];
@@ -3075,20 +3090,25 @@ function gput(layer, i, tag, attrs, text) {
   if (text !== undefined && el.textContent !== text) el.textContent = text;
 }
 function gcut(layer, n) { const list = gfx[layer]._els ?? []; while (list.length > n) list.pop().remove(); }
-function drawGraph() {
+function drawGraph(frameAt) {
+  // Each frame WebView2 composites and presents costs about the same however little moved, so a slow drift skips
+  // the frames where it would move less than half a pixel. Anything quicker (pointer, scale, a rise) gets all 60.
+  if (frameAt - gfx.drawn < gfx.wait) { graphRaf = page === "probe" && !covered() ? requestAnimationFrame(drawGraph) : 0; return; }
+  gfx.drawn = frameAt;
   const now = clock();
-  const svg = $("probe-svg");
+  const svg = $("probe-svg"), run = $("probe-run");
   if (!gfx.rows) {
     for (const [k, cls] of [["rows", "grid"], ["ticks", "tick"], ["cols", "grid"], ["areas", "area"], ["lines", "line"], ["lost", "lost"], ["cursor", "cursor"], ["knob", "knob"]]) {
-      gfx[k] = svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "g")); gfx[k]._cls = cls;
+      gfx[k] = (["rows", "ticks", "cols"].includes(k) ? svg : run).appendChild(document.createElementNS("http://www.w3.org/2000/svg", "g")); gfx[k]._cls = cls;
     }
     // Its size, kept: reading it each frame would force a layout.
-    new ResizeObserver(() => { gfx.w = svg.clientWidth; gfx.h = svg.clientHeight; }).observe(svg);
+    new ResizeObserver(() => { gfx.w = svg.clientWidth; gfx.h = svg.clientHeight; gfx.wait = 0; }).observe(svg);
   }
   const w = gfx.w || svg.clientWidth || 1, h = gfx.h || svg.clientHeight || 1;
   const pick = probe.rows[probe.pick], pts = pick?.pts ?? [], all = pts.filter(q => q.v !== null).map(q => q.v);
   const want = Math.max(10, ...all) * 1.6;
-  ceil = calm.matches ? want : ceil + (want - ceil) * 0.06;
+  // Settled once within 0.1% (a fraction of a pixel): an ease that never quite arrives would redraw every frame.
+  ceil = calm.matches || Math.abs(want - ceil) < want * 0.001 ? want : ceil + (want - ceil) * 0.06;
   const x = t => w - (now - DELAY - t) / SPAN * w, y = v => h - 1 - (h - 2) * Math.min(v, ceil) / ceil;
   const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].find(v => ceil / v <= 4) ?? 1000;
   let n = 0;
@@ -3102,43 +3122,59 @@ function drawGraph() {
     const k = calm.matches ? 1 : ease(Math.min(1, (now - q.t) / RISE));
     return { q, x: x(q.t), y: y(q.from + (q.v - q.from) * k) };
   });
-  // A lost ping is no value, not zero: the line breaks there, and a small red mark sits under the gap.
-  const runs = [[]];
-  for (const q of pts) if (q.v === null) { if (runs.at(-1).length) runs.push([]); } else runs.at(-1).push(shown.find(p => p.q === q));
-  n = 0;
-  for (const run of runs) {
-    if (!run.length) continue;
-    let d = `M${run[0].x},${run[0].y}`;
-    for (let i = 1; i < run.length; i++) { const a = run[i - 1], b = run[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
-    if (run.length === 1) d += `h1`;   // a lone reply between losses still shows as a dot of line
-    gput("areas", n, "path", { d: `${d}L${run.at(-1).x + (run.length === 1 ? 1 : 0)},${h}L${run[0].x},${h}Z` });
-    gput("lines", n++, "path", { d });
+  // The line, its fill and the lost marks are drawn as of `gfx.at`, then their layer slides left by the time since.
+  // Redrawn when a ping lands or the scale moves, and once more when a reply drawn mid-rise comes 1 px into view:
+  // a new one is born past the right edge, so by then it has risen (about one redraw a second, not sixty).
+  const key = `${w} ${h} ${ceil} ${probe.pick} ${pts.length} ${pts[0]?.t} ${pts.at(-1)?.t}`;
+  const stale = !calm.matches && shown.some((p, i) => gfx.at - p.q.t < RISE && Math.min(p.x, shown[i - 1]?.x ?? w) < w - 1);
+  if (key !== gfx.key || stale) {
+    gfx.key = key; gfx.at = now;
+    // A lost ping is no value, not zero: the line breaks there, and a small red mark sits under the gap.
+    const runs = [[]];
+    for (const q of pts) if (q.v === null) { if (runs.at(-1).length) runs.push([]); } else runs.at(-1).push(shown.find(p => p.q === q));
+    n = 0;
+    for (const seg of runs) {
+      if (!seg.length) continue;
+      let d = `M${seg[0].x},${seg[0].y}`;
+      for (let i = 1; i < seg.length; i++) { const a = seg[i - 1], b = seg[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
+      if (seg.length === 1) d += `h1`;   // a lone reply between losses still shows as a dot of line
+      gput("areas", n, "path", { d: `${d}L${seg.at(-1).x + (seg.length === 1 ? 1 : 0)},${h}L${seg[0].x},${h}Z` });
+      gput("lines", n++, "path", { d });
+    }
+    gcut("areas", n); gcut("lines", n);
+    n = 0;
+    for (const q of pts) if (q.v === null) gput("lost", n++, "rect", { x: x(q.t) - 1.5, y: h - 5, width: 3, height: 5, rx: 1 });
+    gcut("lost", n);
   }
-  gcut("areas", n); gcut("lines", n);
-  n = 0;
-  for (const q of pts) if (q.v === null) gput("lost", n++, "rect", { x: x(q.t) - 1.5, y: h - 5, width: 3, height: 5, rx: 1 });
-  gcut("lost", n);
+  const off = (gfx.at - now) / SPAN * w;
+  run.style.transform = `translateX(${off}px)`;
   // Hover reading: fades in and out; the line glides after the pointer.
   probe.show += ((probe.hx !== null && shown.length ? 1 : 0) - probe.show) * (calm.matches ? 1 : 0.2);
   if (probe.hx !== null) probe.cx = calm.matches || probe.show < 0.05 ? probe.hx : probe.cx + (probe.hx - probe.cx) * 0.3;
   const tip = $("probe-tip");
   if (probe.show > 0.01 && shown.length) {
     const near = shown.reduce((a, b) => Math.abs(b.x - probe.cx) < Math.abs(a.x - probe.cx) ? b : a);
-    gput("cursor", 0, "line", { x1: probe.cx, x2: probe.cx, y1: 0, y2: h, opacity: 0.6 * probe.show });
-    gput("knob", 0, "circle", { cx: near.x, cy: near.y, r: 4, opacity: probe.show });
+    gput("cursor", 0, "line", { x1: probe.cx - off, x2: probe.cx - off, y1: 0, y2: h, opacity: 0.6 * probe.show });   // on the sliding layer
+    gput("knob", 0, "circle", { cx: near.x - off, cy: near.y, r: 4, opacity: probe.show });
     const ago = Math.max(0, Math.round((now - near.q.t) / 1000));
-    tip.innerHTML = `${msOf(near.q.v)}<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
-    tip.style.transform = `translateX(${Math.min(Math.max(probe.cx + 10, 4), w - tip.offsetWidth - 4)}px)`;
+    // Rewritten and measured only when its text changes: a rewrite then a width read is a layout, every frame.
+    const html = `${msOf(near.q.v)}<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
+    if (tip._html !== html) { tip.innerHTML = tip._html = html; tip._w = 0; }
+    tip._w ||= tip.offsetWidth;   // again while it reads 0 (written while the page was hidden)
+    tip.style.transform = `translateX(${Math.min(Math.max(probe.cx + 10, 4), w - tip._w - 4)}px)`;
   } else { gcut("cursor", 0); gcut("knob", 0); }
-  tip.style.opacity = probe.show > 0.01 ? probe.show : 0;
-  if (svg._vb !== `${w} ${h}`) svg.setAttribute("viewBox", `0 0 ${svg._vb = `${w} ${h}`}`);
+  const op = probe.show > 0.01 ? probe.show : 0;
+  if (tip._op !== op) tip.style.opacity = tip._op = op;
+  if (svg._vb !== `${w} ${h}`) for (const el of [svg, run]) el.setAttribute("viewBox", `0 0 ${svg._vb = `${w} ${h}`}`);
+  const settling = probe.hx !== null ? Math.abs(probe.hx - probe.cx) > 0.25 || probe.show < 0.99 : probe.show > 0.01;
+  gfx.wait = settling || ceil !== want || stale ? 0 : Math.min(66, 500 / (w / SPAN * 1000)) - 4;   // the line slides w px a minute
   graphRaf = page === "probe" && !covered() ? requestAnimationFrame(drawGraph) : 0;
 }
 // Speed and Settings cover the whole page: under them the graph isn't drawn, and it picks up again as they close.
 function covered() { return settingsOpen() || speedOpen(); }
 function wakeGraph() { if (page === "probe" && !graphRaf) graphRaf = requestAnimationFrame(drawGraph); }
-$("probe-graph").addEventListener("pointermove", e => { probe.hx = e.clientX - e.currentTarget.getBoundingClientRect().left; });
-$("probe-graph").addEventListener("pointerleave", () => { probe.hx = null; });
+$("probe-graph").addEventListener("pointermove", e => { probe.hx = e.clientX - e.currentTarget.getBoundingClientRect().left; gfx.wait = 0; });
+$("probe-graph").addEventListener("pointerleave", () => { probe.hx = null; gfx.wait = 0; });
 function probeShow(on) {
   if (!on) return;
   if (adapters[sel]) probeBuild();
@@ -3191,15 +3227,15 @@ function speedRun(a, on) {
   const timers = [], at = (ms, f) => timers.push(setTimeout(f, ms));
   let bytes = 0;
   at(80, () => on({ kind: "meta", ...demoWho }));
-  for (let i = 0; i < 6; i++) at(150 + i * 120, () => on({ kind: "latency", ms: 19 + Math.round(Math.random() * 5) }));
+  for (let i = 0; i < 5; i++) at(150 + i * 100, () => on({ kind: "latency", ms: 19 + Math.round(Math.random() * 5) }));
   const leg = (kind, t0, top) => { for (let i = 1; i <= 32; i++) at(t0 + i * 250, () => {
     const mbps = +(top * Math.min(1, i / 5) * (0.94 + Math.random() * 0.08)).toFixed(1);
     bytes += mbps * 1e6 / 8 / 4;
     on({ kind, mbps, loaded: Math.round((kind === "down" ? 45 : 140) + Math.random() * 30), bytes });
   }); };
-  leg("down", 1000, 88); leg("up", 9300, 93);
+  leg("down", 650, 88); leg("up", 8950, 93);   // as Rust: the first reading as the dial finishes opening
   if (demo.speedFail) at(4000, () => on({ kind: "error", message: L("Can't get out through this adapter", "ออกเน็ตทาง adapter นี้ไม่ได้") }));
-  else at(17600, () => on({ kind: "done", bytes }));
+  else at(17250, () => on({ kind: "done", bytes }));
   return () => timers.forEach(clearTimeout);
 }
 function speedStart() {
@@ -3311,9 +3347,9 @@ function paintSpeed() {
 // turns to STOP. Stopping plays that backwards. A finished test splits the dial in two: download slides left,
 // upload comes out of it to the right, and the key turns to TEST AGAIN.
 // Each piece runs on its own slice of one timeline, so the parts overlap instead of popping one after another.
-let speedRaf = 0, speedN = 0, speedV = 0, speedAt = 0;
+let speedRaf = 0, speedN = 0, speedV = 0, speedG = 0, speedAt = 0;
 const SC = 120, SY = 100, SR = 80, VY = 6, VH = 188, LEG_MS = 8000;
-const mix = (a, b, t) => a + (b - a) * t, clamp01 = x => Math.min(1, Math.max(0, x));
+const mix = (a, b, t) => a + (b - a) * t, clamp01 = x => Math.min(1, Math.max(0, x)), smooth = t => t * t * (3 - 2 * t);   // smooth: about CSS ease-in-out
 const inOut = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 const over = t => 1 + 2.4 * (t - 1) ** 3 + 1.4 * (t - 1) ** 2;   // a little past 1, then back
 const slice = (t, a, b, f = inOut) => f(clamp01((t - a) / (b - a)));
@@ -3332,9 +3368,15 @@ function speedDraw() {
   const v = s === "run" ? speed.res[speed.leg] ?? 0 : s === "done" ? speed.res.down ?? 0 : 0, to = open ? Math.min(1, Math.log10(1 + v) / 3) : 0;
   // The needle hangs on a spring: it swings toward each new reading, runs a touch past and settles back, like a real gauge.
   const dt = Math.min(48, at - (speedAt || at)) / 1000; speedAt = at;
-  speedV += ((to - speedN) * 90 - speedV * 12) * dt; speedN += speedV * dt;
-  if (calm.matches || (Math.abs(to - speedN) < 0.0005 && Math.abs(speedV) < 0.002)) { speedN = to; speedV = 0; }
-  const set = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
+  // It chases an eased copy of the reading (about 0.12 s behind), not the reading itself: a jump then sets the needle
+  // off gently and gathering pace, instead of kicking it at full force on the first frame.
+  speedG += (to - speedG) * (1 - Math.exp(-dt / 0.12));
+  speedV += ((speedG - speedN) * 90 - speedV * 12) * dt; speedN += speedV * dt;
+  if (calm.matches || (Math.abs(to - speedN) < 0.0005 && Math.abs(speedV) < 0.002)) { speedN = speedG = to; speedV = 0; }
+  // Positions are read before anything is written: a read after a write forces a fresh layout, each frame.
+  const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / VH) || 1;
+  const head = svg.closest(".dlg-body").querySelector(".dlg-head").getBoundingClientRect(), foot = $("speed-note").getBoundingClientRect();
+  const set = (id, o) => { const el = $(id), was = el._a ??= {}; for (const k in o) if (was[k] !== o[k]) el.setAttribute(k, was[k] = o[k]); };
   // Opening: face 0-.3, power stem to needle .1-.75, LED ring to track 0-.8 (overshoots a little), hub .3-.8, scale and reading .55-1, stop .7-1.
   const grow = slice(m, 0, 0.8, open ? over : inOut), turn = slice(m, 0.1, 0.75), late = slice(m, 0.55, 1);
   const r = mix(63, SR, grow), sweep = mix(360, 270, slice(m, 0, 0.8)), c = 2 * Math.PI * r, rot = `rotate(${90 + (360 - sweep) / 2} ${SC} ${SY})`;
@@ -3368,7 +3410,6 @@ function speedDraw() {
   set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
   // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
   // The two result dials use the whole width, not just the 240 units of the view box: each takes half, with room between.
-  const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / VH) || 1;
   const X2 = Math.max(62, bx.width / k / 4), S2 = Math.min(1.05, (X2 - 14) / SR);
   const zs = slice(z, 0, 0.75), sc = mix(1, S2, zs), tx = mix(0, -X2, zs), ty = 0;
   const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
@@ -3385,7 +3426,6 @@ function speedDraw() {
   set("sp-cap1", { x: SC - X2, y: capY, opacity: tw }); set("sp-cap2", { x: SC + X2, y: capY, opacity: tw });
   $("sp-go").style.display = open ? "none" : "";
   // Before Start the rows under the dial are empty, so the button sits in the middle of the view instead; it rises into place as it opens.
-  const head = svg.closest(".dlg-body").querySelector(".dlg-head").getBoundingClientRect(), foot = $("speed-note").getBoundingClientRect();
   const centre = (head.bottom + foot.top) / 2 - (bx.top - (speed.lift ?? 0) + (bx.height - VH * k) / 2 + (SY - VY) * k);
   speed.lift = centre * (1 - slice(m, 0, 0.8));
   svg.style.transform = `translateY(${speed.lift + 12 * slice(m, 0, 0.8) * (1 - zs)}px)`;
@@ -3407,7 +3447,7 @@ function speedDraw() {
 }
 // The road: a floor grid running toward you at the line's speed (log scale), eased like a car gathering pace.
 // Download runs it toward you, upload away from you; between the two it slows through a standstill.
-const road = { off: 0, v: 0, at: 0, p: 0 }, led = { a: 0, w: 0, hot: false };
+const road = { off: 0, v: 0, at: 0, p: 0, wait: 0 }, led = { a: 0, w: 0, hot: false };
 for (const id of ["sp-go", "speed-again"]) {
   const b = $(id), on = () => led.hot = true, off = () => led.hot = false;
   b.addEventListener("pointerenter", on); b.addEventListener("pointerleave", off); b.addEventListener("focus", on); b.addEventListener("blur", off);
@@ -3415,9 +3455,13 @@ for (const id of ["sp-go", "speed-again"]) {
 let roadRaf = 0;
 function speedRoad(now) {
   if (!speedOpen()) return;
-  const cv = $("speed-road"), w = cv.clientWidth, h = cv.clientHeight, dpr = devicePixelRatio || 1;
-  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-  const dt = Math.min(64, now - (road.at || now)); road.at = now;
+  // Slow drifts skip the frames where nothing would move half a pixel (see drawGraph), down to 30 a second for the
+  // breathing LEDs. road.at stays at the last drawn frame, so dt covers the skipped ones.
+  if (now - road.at < road.wait) { roadRaf = requestAnimationFrame(speedRoad); return; }
+  const cv = $("speed-road"), flat = $("speed-flat"), w = cv.clientWidth, h = cv.clientHeight, dpr = devicePixelRatio || 1;
+  const fit = (el, eh) => { if (el.width !== Math.round(w * dpr) || el.height !== Math.round(eh * dpr)) { el.width = Math.round(w * dpr); el.height = Math.round(eh * dpr); } };
+  fit(cv, h);
+  const dt = Math.min(64, Math.max(0, now - (road.at || now))); road.at = now;
   const mbps = speed.state === "run" ? speed.res[speed.leg] ?? 0 : 0;
   const parked = speed.state !== "run" && speed.state !== "done";   // before Start (or after a stop): the flat grid
   // The flat grid drifts toward you, so the page never looks frozen. Not slower than this: a 1 px line creeping a
@@ -3426,15 +3470,50 @@ function speedRoad(now) {
     (speed.leg === "up" && speed.state === "run" ? -1 : 1) * (0.15 + 2.6 * Math.min(1, Math.log10(1 + mbps) / 3));
   road.v += (want - road.v) * Math.min(1, dt / 700);
   if (!calm.matches) road.off = ((road.off + road.v * dt / 1000) % 1 + 1) % 1;
-  const c = cv.getContext("2d"), css = getComputedStyle(cv);
-  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
-  c.strokeStyle = css.getPropertyValue("--border-strong").trim() || "#555"; c.lineWidth = 1;
+  const c = cv.getContext("2d"), ink = getComputedStyle(cv).getPropertyValue("--border-strong").trim() || "#555";
   // The lines meet behind the needle's hub (on the summary, midway between the two dials), so the hub caps the vanishing point.
   const cb = cv.getBoundingClientRect(), hub = new DOMPoint(SC, SY).matrixTransform($("speed-dial").getScreenCTM());
   const vx = hub.x - cb.left, vy = hub.y - cb.top;
   // Before Start the floor lies flat, a plain square grid; Start tips it back into the road, and a stop lays it flat again.
   road.p = clamp01(road.p + (parked ? -1 : 1) * dt / 900);
   const t = calm.matches ? +!parked : inOut(road.p), cell = h / 10;
+  // Lying flat it only drifts toward you, and its rows repeat: it is drawn once, a row taller, on a canvas of its own
+  // that slides down (a transform, nothing redrawn) and steps back a row, unseen, each time it has moved one.
+  if (t === 0) {
+    const key = `${w} ${h} ${dpr} ${vx} ${ink}`;
+    if (flat.parentElement.hidden || flat._key !== key) {
+      flat._key = key; flat._off = road.off; flat.parentElement.hidden = false;
+      flat.style.height = `${h + cell}px`; fit(flat, h + cell);
+      const f = flat.getContext("2d");
+      f.setTransform(dpr, 0, 0, dpr, 0, 0); f.clearRect(0, 0, w, h + cell);
+      f.strokeStyle = ink; f.lineWidth = 1; f.globalAlpha = 0.35;
+      for (let i = -9; i <= 9; i++) { f.beginPath(); f.moveTo(vx + i * cell, 0); f.lineTo(vx + i * cell, h + cell); f.stroke(); }
+      for (let j = 0; j <= 10; j++) { f.beginPath(); f.moveTo(0, (j + road.off) * cell); f.lineTo(w, (j + road.off) * cell); f.stroke(); }
+      c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    }
+    flat.style.transform = `translateY(${((road.off - flat._off + 1) % 1 - 1) * cell}px)`;
+  } else {
+    flat.parentElement.hidden = true;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    c.strokeStyle = ink; c.lineWidth = 1;
+    roadLines(c, w, h, vx, vy, t, cell);
+  }
+  // The LED rings: pointing at a button spins its ring up over most of a second; leaving lets it coast to a stop.
+  led.w += ((led.hot ? 200 : 0) - led.w) * Math.min(1, dt / (led.hot ? 650 : 900));
+  if (!led.hot && led.w < 0.1) led.w = 0;   // stopped: no more rewrites
+  if (!calm.matches) led.a = (led.a + led.w * dt / 1000) % 360;
+  if (led.s !== led.a) $("sp-ledc").style.transform = $("speed-again").querySelector(".ring").style.transform = `rotate(${led.s = led.a}deg)`;
+  // Both LED rings breathe (0.35 to 1 and back, 2.4 s). Driven from here, not by a CSS animation, which would ask
+  // for all 60 frames a second; an ignition that is off stays lit flat, as does everything under reduced motion.
+  const k = now / 1200 % 2, glow = calm.matches ? "" : String(0.35 + 0.65 * smooth(k < 1 ? k : 2 - k));
+  $("sp-ledc").style.opacity = $("speed-dial").classList.contains("off") ? "" : glow;
+  $("speed-again").querySelector(".ring").style.opacity = glow;
+  // The fastest line, in px a second: flat, every row drifts alike; on the road the nearest row moves most.
+  const px = Math.abs(road.v) * (t === 0 ? cell : 2 * (h - vy) / 10);
+  road.wait = speed.state === "run" || led.w || (t > 0 && t < 1) ? 0 : Math.min(33, 500 / px) - 4;
+  roadRaf = requestAnimationFrame(speedRoad);
+}
+function roadLines(c, w, h, vx, vy, t, cell) {
   c.globalAlpha = 0.35;
   for (let i = -9; i <= 9; i++) { c.beginPath(); c.moveTo(mix(vx + i * cell, vx, t), mix(0, vy, t)); c.lineTo(mix(vx + i * cell, vx + i * w / 6, t), h); c.stroke(); }
   for (let j = 0; j < 10; j++) { const f = (j + road.off) / 10, y = mix(f * h, vy + (h - vy) * f * f, t); c.globalAlpha = mix(0.35, 0.5 * f, t); c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
@@ -3443,11 +3522,6 @@ function speedRoad(now) {
   const fog = c.createRadialGradient(vx, vy, 0, vx, vy, Math.max(0, (h - vy) * 0.6));   // a negative radius throws and ends the loop
   fog.addColorStop(0, "#000"); fog.addColorStop(0.35, "rgba(0,0,0,.85)"); fog.addColorStop(1, "rgba(0,0,0,0)");
   c.globalCompositeOperation = "destination-out"; c.fillStyle = fog; c.fillRect(0, 0, w, h); c.globalCompositeOperation = "source-over"; c.globalAlpha = 1;
-  // The LED rings: pointing at a button spins its ring up over most of a second; leaving lets it coast to a stop.
-  led.w += ((led.hot ? 200 : 0) - led.w) * Math.min(1, dt / (led.hot ? 650 : 900));
-  if (!calm.matches) led.a = (led.a + led.w * dt / 1000) % 360;
-  $("sp-ledc").style.transform = $("speed-again").querySelector(".ring").style.transform = `rotate(${led.a}deg)`;
-  roadRaf = requestAnimationFrame(speedRoad);
 }
 function openSpeed() {
   if (speedOpen()) return closeSpeed();
@@ -3702,9 +3776,13 @@ function scanTell() {
   const f = $("scan-foot"), focus = f.contains(document.activeElement) && document.activeElement.dataset.k;
   const count = k => scan.cells.filter(c => c.classList.contains(k)).length, used = count("used"), free = count("free"), maybe = count("maybe");
   const key = (k, cls, label, n) => `<span data-k="${k}" role="button" tabindex="0"><i class="key" style="background:${cls}"></i>${label}${n !== undefined ? ` <b>${n}</b>` : ""}</span>`;
-  f.innerHTML = !scan.net ? "" : (scan.note ? `<span class="snote">${scan.note}</span>` : "") + (scan.off ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway"))
+  const html = !scan.net ? "" : (scan.note ? `<span class="snote">${scan.note}</span>` : "") + (scan.off ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway"))
     + key("used", "color-mix(in oklch, var(--accent) 70%, transparent)", L("In use", "ใช้อยู่"), used) + key("free", "color-mix(in oklch, var(--faint) 40%, transparent)", scan.off ? L("No answer", "ไม่ตอบ") : L("Free", "ว่าง"), free).repeat(maybe && !free ? 0 : 1)
     + (maybe ? key("maybe", "color-mix(in oklch, var(--faint) 40%, transparent)", L("Likely free", "น่าจะว่าง"), maybe) : "");
+  // Called every frame of a scan: when only the counts moved, only they are written, not the whole footer.
+  const shape = html.replace(/<b>\d+<\/b>/g, "<b></b>"), rebuilt = f._shape !== shape;
+  if (rebuilt) { f.innerHTML = html; f._shape = shape; }
+  else { const n = [...html.matchAll(/<b>(\d+)<\/b>/g)]; f.querySelectorAll("b").forEach((b, i) => { if (b.textContent !== n[i][1]) b.textContent = n[i][1]; }); }
   const gw = adapters[sel]?.cfg.gateway, busy = scan.done < scan.total;
   f.classList.toggle("busy", busy);
   if (busy) { scan.hold = null; scanOnly(null); }
@@ -3712,9 +3790,10 @@ function scanTell() {
   f.querySelectorAll("[data-k]").forEach(k => {
     k.classList.toggle("on", k.dataset.k === scan.hold);
     if (k.dataset.k === "gw" && gw && !scan.has(gw)) k.dataset.tip = L(`${gw}, outside this range`, `${gw} อยู่นอกช่วงที่แสดง`);
+    else if (k.dataset.k === "gw") delete k.dataset.tip;   // the key outlives a gateway change now that it isn't rebuilt each call
     if (k.dataset.k === "maybe") k.dataset.tip = L("The router answers for every address (proxy ARP); these answered nothing else", "Router ตอบแทนทุกเลข (proxy ARP) เลขเหล่านี้ไม่มีอะไรตอบนอกจากนั้น");
   });
-  if (focus) f.querySelector(`[data-k="${focus}"]`)?.focus();   // rebuilt: the key you were on keeps the focus
+  if (focus && rebuilt) f.querySelector(`[data-k="${focus}"]`)?.focus();   // rebuilt: the key you were on keeps the focus
   scanState();
 }
 // Which cells stand out: the one held, or the one peeked at. A gateway off this /24 has nothing to show.

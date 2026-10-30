@@ -113,7 +113,7 @@ async fn tcping(address: String, port: u16, source: Option<String>, timeout: Opt
 
 /// Opens a device's web page (Scan, Check ports) in the default browser. Only an IPv4 address and a port
 /// go into the URL, so nothing else can be opened through it.
-#[tauri::command]
+#[tauri::command(async)]
 fn open_device(address: String, port: u16, tls: bool) -> Result<(), String> {
     let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
     open_url(&format!("{}://{ip}:{port}/", if tls { "https" } else { "http" }))
@@ -180,14 +180,15 @@ async fn public_ip(index: u32, source: String) -> Result<serde_json::Value, Stri
     blocking(move || speed::whois(index, src)).await
 }
 
-/// Who made the card behind a MAC, from the built-in IEEE list.
-#[tauri::command]
+/// Who made the card behind a MAC, from the built-in IEEE list. Off the main thread, like the
+/// other quick commands marked async: the first call unpacks the list, a few ms, during first paint.
+#[tauri::command(async)]
 fn vendor(mac: String) -> Option<&'static str> {
     net::vendor(&mac)
 }
 
 /// Network Connections on Windows, System Settings' Network pane on macOS.
-#[tauri::command]
+#[tauri::command(async)]
 fn open_ncpa() -> Result<(), String> {
     if cfg!(target_os = "macos") {
         return open_url("x-apple.systempreferences:com.apple.Network-Settings.extension");
@@ -197,7 +198,7 @@ fn open_ncpa() -> Result<(), String> {
 
 /// Opens one of Octet's own pages in the default browser. A fixed list, so the
 /// page can't be made to launch anything else.
-#[tauri::command]
+#[tauri::command(async)]
 fn open_link(which: String) -> Result<(), String> {
     let url = match which.as_str() {
         "repo" => "https://github.com/MrTomato77/octet",
@@ -216,7 +217,7 @@ fn open_link(which: String) -> Result<(), String> {
 }
 
 /// About: the version, the OS and the WebView, to paste into a ticket or an issue.
-#[tauri::command]
+#[tauri::command(async)]
 fn system_info() -> String {
     let web = tauri::webview_version().unwrap_or_else(|_| "?".into());
     // The chip as each OS names it: x64 and ARM64 on Windows, Intel and Apple silicon on a Mac.
