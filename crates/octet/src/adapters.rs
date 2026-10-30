@@ -387,6 +387,13 @@ mod native {
     pub(super) const V6_FLAGS: GET_ADAPTERS_ADDRESSES_FLAGS = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST
         | GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_SKIP_DNS_INFO | GAA_FLAG_SKIP_FRIENDLY_NAME;
 
+    const V4_FULL: GET_ADAPTERS_ADDRESSES_FLAGS = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST;
+    // Without ALL_INTERFACES Windows lists only interfaces bound to IPv4 (no NDIS filter modules, WAN miniports, tunnels, unplugged cards).
+    const V4_LEAN: GET_ADAPTERS_ADDRESSES_FLAGS = V4_FULL & !GAA_FLAG_INCLUDE_ALL_INTERFACES;
+    // Tests set this to make read() take the full IPv4 list, as it did before V4_LEAN.
+    #[cfg(test)]
+    thread_local! { pub(super) static FULL_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
     /// IPv6 addresses by adapter GUID (Info shows them; nothing edits them).
     pub(super) fn ipv6s(flags: GET_ADAPTERS_ADDRESSES_FLAGS) -> HashMap<String, Vec<String>> {
         let mut out: HashMap<String, Vec<String>> = HashMap::new();
@@ -411,8 +418,8 @@ mod native {
     }
 
     /// Live IPv4 settings of every interface the IP stack knows, by adapter GUID.
-    fn live() -> Result<HashMap<String, Raw>, String> {
-        let buf = gaa(AF_INET, GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST)?;
+    fn live(flags: GET_ADAPTERS_ADDRESSES_FLAGS) -> Result<HashMap<String, Raw>, String> {
+        let buf = gaa(AF_INET, flags)?;
         let mut out = HashMap::new();
         let mut p = buf.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
         while !p.is_null() {
@@ -565,12 +572,13 @@ mod native {
 
     pub fn read() -> Result<Vec<Raw>, String> {
         // Each asks Windows something that takes some 20 ms: asked side by side, a read takes one of those, not three.
-        let (live, mut wlans, mut v6, metered) = std::thread::scope(|s| {
+        let (lean, mut wlans, mut v6, metered) = std::thread::scope(|s| {
             let (w, v, m) = (s.spawn(wlans), s.spawn(|| ipv6s(V6_FLAGS)), s.spawn(crate::net::metered));
-            (live(), w.join().unwrap_or_default(), v.join().unwrap_or_default(), m.join().unwrap_or_default())
+            (live(V4_LEAN), w.join().unwrap_or_default(), v.join().unwrap_or_default(), m.join().unwrap_or_default())
         });
-        let mut live = live?;
-        let mut out = vec![];
+        #[cfg(test)]
+        let lean = if FULL_ONLY.get() { Err(String::new()) } else { lean };
+        let mut entries = vec![];
         // One entry per network adapter driver. Virtual ports of one card (Wi-Fi Direct)
         // have no driver entry of their own, and NCF_HIDDEN (0x8) marks WAN miniports and
         // the kernel debugger: both are left out, as Get-NetAdapter does.
@@ -586,7 +594,18 @@ mod native {
             let tcp = format!(r"{TCPIP}\{id}");
             // Typed-in DNS servers are kept here; DHCP-given ones are not.
             let static_dns = reg_text(&tcp, "NameServer").is_some_and(|s| !s.is_empty());
-            match device(&instance) {
+            entries.push((id, name, tcp, static_dns, device(&instance)));
+        }
+        // ALL_INTERFACES only adds interfaces with no IPv4 binding: if a present adapter is one of them
+        // (e.g. a Hyper-V external-switch card) or the lean call failed, ask again exactly as before.
+        // ponytail: on a machine with a present IPv4-unbound adapter every read pays both calls (lean + full, the full one serial after the join); remember which GUIDs need it if that hurts.
+        let mut live = match lean {
+            Ok(m) if entries.iter().all(|(id, .., d)| !matches!(d, Device::Present) || m.contains_key(id)) => m,
+            _ => live(V4_FULL)?,
+        };
+        let mut out = vec![];
+        for (id, name, tcp, static_dns, device) in entries {
+            match device {
                 Device::Missing => {}
                 Device::Present => {
                     // No IPv4 binding means nothing for Octet to edit.
@@ -780,6 +799,19 @@ mod tests {
         use windows_sys::Win32::NetworkManagement::IpHelper::*;
         let full = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST;
         assert_eq!(native::ipv6s(full), native::ipv6s(native::V6_FLAGS));
+    }
+
+    /// The lean IPv4 list must read the same as the full one it stands in for:
+    /// `cargo test --release -p octet lean_ipv4_table_reads_the_same -- --ignored`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn lean_ipv4_table_reads_the_same() {
+        let lean = format!("{:?}", read());
+        native::FULL_ONLY.set(true);
+        let full = format!("{:?}", read());
+        native::FULL_ONLY.set(false);
+        assert_eq!(lean, full);
     }
 
     /// Reads this machine: `cargo test -p octet reads_this_machine -- --ignored --nocapture`.
