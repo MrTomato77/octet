@@ -387,7 +387,14 @@ pub fn scan_host(ip: Ipv4Addr, from: Option<Ipv4Addr>, index: u32) -> Option<Hos
     // No ping answer and only an old cache entry: the device may have left long ago (Windows keeps stale
     // entries for a while), so ask again. Something still there answers ARP whether or not it answers ping.
     let mac = match neighbour(ip, index) {
-        Some(_) if ms.is_none() && !fresh(ip, index) => resolve(ip, index),
+        // For a device that left, Windows retries ARP ~3 times a second apart (up to ~4 s), and about one address in
+        // twelve held the whole sweep that long at 97%. Something there answers within tens of ms (a dozing phone, a
+        // few hundred), so 800 ms decides; the ask carries on alone on its thread and refreshes the cache.
+        Some(_) if ms.is_none() && !fresh(ip, index) => {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || { let _ = tx.send(resolve(ip, index)); });
+            rx.recv_timeout(std::time::Duration::from_millis(800)).ok().flatten()
+        }
         m => m,
     };
     (ms.is_some() || mac.is_some()).then(|| Host { vendor: mac.as_deref().and_then(vendor), mac, ms })

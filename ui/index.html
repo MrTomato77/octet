@@ -3497,12 +3497,16 @@ function scanStart(again = false) {
   // The pace (cells a ms) aims at how fast answers come in on average, plus enough to clear what waits in ~0.4 s,
   // and eases toward that aim: free addresses answer in waves (~96 every half second), and a pace that jumped
   // with them made the ring and grid crawl, then sprint.
-  let fed = false, got = 0, acc = 0, pace = 0;
+  // Once every address is asked, the last answer is at most ~1.6 s away (a 400 ms ping, then an 800 ms ARP re-check
+  // in Rust, and some margin): what's left is spread over that, so the end slows down instead of halting at 97%.
+  let fed = false, got = 0, acc = 0, pace = 0, sent = 0;
   const t0 = performance.now(); let last = t0;
   const drain = now => {
     if (run !== scan.run) return;
     const dt = Math.min(now - last, 50); last = now;
-    pace += ((fed ? 0 : got / Math.max(now - t0, 400)) + q.length / (fed ? 250 : 400) - pace) * (1 - Math.exp(-dt / 320));   // by time, so a 144 Hz screen eases alike
+    let aim = (fed ? 0 : got / Math.max(now - t0, 400)) + q.length / (fed ? 250 : 400);
+    if (sent && !fed) aim = Math.min(aim, (scan.total - scan.done) / Math.max(250, sent + 1600 - now));
+    pace += (aim - pace) * (1 - Math.exp(-dt / 320));   // by time, so a 144 Hz screen eases alike
     acc += dt * pace;
     q.sort((x, y) => x[0] - y[0]);
     // The tally counts every cell, so it's redone once a frame, not once per address.
@@ -3524,7 +3528,9 @@ function scanStart(again = false) {
   const worker = async (_, w) => {
     await ready;
     while (todo.length && run === scan.run && !(scan.proxy && w >= 16)) {
-      const i = todo.shift(), ip = numIp(first + i), res = await confirm(ip, await scanAsk(ip, a, scan.src));
+      const i = todo.shift(), ip = numIp(first + i);
+      if (!todo.length) sent = performance.now();
+      const res = await confirm(ip, await scanAsk(ip, a, scan.src));
       if (run !== scan.run) return;
       q.push([i, res]); got++;
     }
