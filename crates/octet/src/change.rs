@@ -249,6 +249,10 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                 for g in was_gws.iter().filter(|g| !replaced && !gws.contains(g)) {
                     out.push(cmd(&["netsh", "interface", "ipv4", "delete", "address", &iface, &format!("gateway={}", g.0)]));
                 }
+                // The last typed-in address gone from a DHCP adapter: coexistence goes off again.
+                if cfg.ip_auto && extras.is_empty() && !was_extra.is_empty() {
+                    out.push(cmd(&["netsh", "interface", "ipv4", "set", "interface", &format!("interface={index}"), "dhcpstaticipcoexistence=disabled"]));
+                }
                 let new_extra: Vec<_> = extras.iter().filter(|a| replaced || !was_extra.contains(a)).collect();
                 // On DHCP, Windows keeps typed-in addresses beside the leased one only with coexistence on.
                 if cfg.ip_auto && !new_extra.is_empty() {
@@ -605,6 +609,27 @@ mod tests {
         assert!(run("15", "15").is_empty(), "unchanged: nothing sent");
         assert_eq!(run("", "15"), [r"WindowsPowerShell\v1.0\powershell -NoProfile -NonInteractive -Command Set-NetIPInterface -InterfaceIndex 12 -AddressFamily IPv4 -AutomaticMetric Enabled -ErrorAction Stop"]);
         assert!(run("", "").is_empty());
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn coexistence_off_after_the_last_extra_on_dhcp() {
+        use crate::adapters::Addr;
+        let run = |ip_auto: bool, extra: Vec<Addr>, was: Vec<Addr>| -> Vec<String> {
+            let mut c = cfg();
+            (c.ip_auto, c.extra) = (ip_auto, extra);
+            let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: was, was_gws: vec![], was_metric: String::new() };
+            commands(&r).unwrap().iter().map(|c| c.join(" ")).collect()
+        };
+        let a = |s: &str| Addr { address: s.into(), subnet: "24".into() };
+        assert_eq!(run(true, vec![], vec![a("192.168.1.60")]), [
+            "netsh interface ipv4 delete address name=12 address=192.168.1.60",
+            "netsh interface ipv4 set interface interface=12 dhcpstaticipcoexistence=disabled",
+        ]);
+        assert_eq!(run(true, vec![a("192.168.1.61")], vec![a("192.168.1.60"), a("192.168.1.61")]),
+            ["netsh interface ipv4 delete address name=12 address=192.168.1.60"], "one still there: left on");
+        assert_eq!(run(false, vec![], vec![a("192.168.1.60")]),
+            ["netsh interface ipv4 delete address name=12 address=192.168.1.60"], "static: not touched");
     }
 
     #[test]
