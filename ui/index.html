@@ -3494,15 +3494,16 @@ function scanStart(again = false) {
       scan.done++;
       if (scan.follow && Math.floor(i / 256) > scan.at) scanGo(scan.at = Math.floor(i / 256));
   };
-  // The pace follows how fast answers have come in so far (an average, so bursts even out),
-  // a bit slower while the queue is short so it never runs dry, faster when it piles up.
-  let fed = false, got = 0, acc = 0;
+  // The pace (cells a ms) aims at how fast answers come in on average, plus enough to clear what waits in ~0.4 s,
+  // and eases toward that aim: free addresses answer in waves (~96 every half second), and a pace that jumped
+  // with them made the ring and grid crawl, then sprint.
+  let fed = false, got = 0, acc = 0, pace = 0;
   const t0 = performance.now(); let last = t0;
   const drain = now => {
     if (run !== scan.run) return;
     const dt = Math.min(now - last, 50); last = now;
-    const rate = got / Math.max(now - t0, 400), lean = fed ? 2 : q.length > 40 ? 1.4 : q.length < 10 ? 0.7 : 1;
-    acc += dt * rate * lean;
+    pace += ((fed ? 0 : got / Math.max(now - t0, 400)) + q.length / (fed ? 250 : 400) - pace) * (1 - Math.exp(-dt / 320));   // by time, so a 144 Hz screen eases alike
+    acc += dt * pace;
     q.sort((x, y) => x[0] - y[0]);
     // The tally counts every cell, so it's redone once a frame, not once per address.
     if (acc >= 1 && q.length) { while (acc >= 1 && q.length) { show(...q.shift()); acc--; } scanTell(); }
