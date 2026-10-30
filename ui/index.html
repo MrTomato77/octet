@@ -3227,15 +3227,15 @@ function speedRun(a, on) {
   const timers = [], at = (ms, f) => timers.push(setTimeout(f, ms));
   let bytes = 0;
   at(80, () => on({ kind: "meta", ...demoWho }));
-  for (let i = 0; i < 6; i++) at(150 + i * 120, () => on({ kind: "latency", ms: 19 + Math.round(Math.random() * 5) }));
+  for (let i = 0; i < 5; i++) at(150 + i * 100, () => on({ kind: "latency", ms: 19 + Math.round(Math.random() * 5) }));
   const leg = (kind, t0, top) => { for (let i = 1; i <= 32; i++) at(t0 + i * 250, () => {
     const mbps = +(top * Math.min(1, i / 5) * (0.94 + Math.random() * 0.08)).toFixed(1);
     bytes += mbps * 1e6 / 8 / 4;
     on({ kind, mbps, loaded: Math.round((kind === "down" ? 45 : 140) + Math.random() * 30), bytes });
   }); };
-  leg("down", 1000, 88); leg("up", 9300, 93);
+  leg("down", 650, 88); leg("up", 8950, 93);   // as Rust: the first reading as the dial finishes opening
   if (demo.speedFail) at(4000, () => on({ kind: "error", message: L("Can't get out through this adapter", "ออกเน็ตทาง adapter นี้ไม่ได้") }));
-  else at(17600, () => on({ kind: "done", bytes }));
+  else at(17250, () => on({ kind: "done", bytes }));
   return () => timers.forEach(clearTimeout);
 }
 function speedStart() {

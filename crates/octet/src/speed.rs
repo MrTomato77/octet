@@ -19,6 +19,9 @@ const STREAMS: usize = 6;
 const LEG: Duration = Duration::from_secs(8); // the view's progress ring assumes this (LEG_MS)
 const WARM: Duration = Duration::from_secs(1); // TCP slow start: not counted in the speed
 const TICK: Duration = Duration::from_millis(250);
+// Unloaded latency is timed until this long after Start (5 readings at least, 20 at most), so the download's first
+// reading lands as the view's 900 ms opening ends and the needle sets off at once, with no wait at zero.
+const IDLE: Duration = Duration::from_millis(600);
 
 /// Each test takes the next number; stopping (or a newer test) moves it on, and a test whose number
 /// is no longer current winds down without another word to the view.
@@ -296,9 +299,10 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
         if !live() {
             break Ok(());
         }
-        // The speed counts from the end of the warm-up; before that, a rough figure so the dial moves.
+        // The speed counts from the end of the warm-up; until then, a rough figure so the dial moves. The tick the
+        // warm-up ends on still sends one: skipping it left the needle still for half a second.
         let (since, bits) = match warm_at {
-            None if t0.elapsed() >= WARM => { warm_at = Some((Instant::now(), moved())); continue }
+            None if t0.elapsed() >= WARM => { let b = moved(); warm_at = Some((Instant::now(), b)); (t0.elapsed(), b) }
             None => (t0.elapsed(), moved()),
             Some((w, at)) => (w.elapsed(), moved().saturating_sub(at)),
         };
@@ -365,6 +369,7 @@ pub fn whois(index: u32, src: Ipv4Addr) -> Result<Value, String> {
 
 /// The whole test. Returns once it's over, stopped or failed; a stopped test sends nothing more.
 pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String> {
+    let start = Instant::now();
     let me = RUN.fetch_add(1, Relaxed) + 1;
     let live = || RUN.load(Relaxed) == me;
     let send = |v: Value| if live() { send(v) };
@@ -376,9 +381,12 @@ pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String
     }
     ping(&mut c)?; // warms the connection; the first is slow
     let mut fails = 0;
-    for _ in 0..20 {
+    for n in 0..20 {
         if !live() {
             return Ok(());
+        }
+        if n >= 5 && start.elapsed() >= IDLE {
+            break;
         }
         match ping(&mut c) {
             Ok(ms) => send(json!({ "kind": "latency", "ms": ms.round() })),
