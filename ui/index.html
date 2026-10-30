@@ -289,6 +289,8 @@ button, input, select { font: inherit; color: inherit; }
 .pchip.own.port .pport { width: 42px; padding: 0 6px 0 2px; }
 .pgraph { flex: 1; position: relative; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: crosshair; }
 .pgraph svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* The line's own layer: it slides left by transform, which the compositor moves without repainting. */
+#probe-run { overflow: visible; will-change: transform; }
 .pgraph .grid { stroke: color-mix(in oklch, var(--border) 45%, transparent); stroke-width: 1; }
 .pgraph .tick { fill: var(--faint); font-size: 11px; }
 .pgraph .line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; }
@@ -628,10 +630,9 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-dial .track, .sp-dial .arc { fill: none; stroke-linecap: round; }
 .sp-dial .track { stroke: var(--border); }
 .sp-dial .bezel { fill: none; stroke: var(--border-strong); stroke-width: 2; }
-.sp-dial .led { fill: none; stroke: var(--accent); stroke-width: 4; stroke-dasharray: 8 5; transform-box: view-box; transform-origin: 120px 100px; animation: led-breathe 2.4s ease-in-out infinite; }
+.sp-dial .led { fill: none; stroke: var(--accent); stroke-width: 4; stroke-dasharray: 8 5; transform-box: view-box; transform-origin: 120px 100px; }   /* breathes from speedRoad */
 #speed-dial:has(#sp-go:active) #sp-disc, #speed-dial:has(#sp-go:active) #sp-face { transform: scale(0.96); }
 #sp-disc, #sp-face { transform-box: view-box; transform-origin: 120px 100px; transition: transform 120ms; }
-@keyframes led-breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 .sp-dial .eng { fill: var(--muted); font: 600 9px var(--mono); letter-spacing: 3px; text-anchor: middle; }
 .sp-dial .pw { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
 .sp-dial .start { fill: var(--ink); font: 700 12px var(--mono); letter-spacing: 1px; text-anchor: middle; }
@@ -654,7 +655,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 /* A phone hotspot paints the button amber; a disconnected adapter greys it out */
 #speed-dial.warn .led, #speed-dial.warn .pw { stroke: oklch(0.78 0.13 75); }
 #speed-dial.warn .needle.on-disc { fill: oklch(0.78 0.13 75); }
-#speed-dial.off .led, #speed-dial.off .pw { stroke: var(--border-strong); animation: none; }
+#speed-dial.off .led, #speed-dial.off .pw { stroke: var(--border-strong); }
 #speed-dial.off .needle.on-disc { fill: var(--border-strong); }
 #speed-dial.off .start { fill: var(--faint); }
 #speed-dial.off #sp-go { cursor: default; }
@@ -668,6 +669,8 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity 600ms var(--ease-out); }
 /* Before Start the floor waits, a flat grid and dimmer */
 .speed-view[data-phase="idle"] .sp-road { opacity: 0.55; }
+.sp-flat { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }   /* clips the flat grid as it slides: past the bottom it would scroll */
+.sp-road.flat { will-change: transform; }
 .speed-view .dlg-body { position: relative; }
 .sp-lap { margin-left: auto; font-family: var(--mono); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .speed-view[data-phase="idle"] .sp-lap { color: var(--faint); }
@@ -710,7 +713,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-again { display: inline-flex; align-items: center; gap: 10px; overflow: hidden; white-space: nowrap; height: 40px; padding: 0 18px 0 5px; border-radius: 20px; border: 1.5px solid var(--border-strong);
   background: var(--bg); color: var(--ink); font: 700 12px var(--mono); letter-spacing: 1.5px; cursor: pointer; transition: border-color 200ms, transform 120ms; }
 .sp-again .key { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--accent); font-size: 15px; }
-.sp-again .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px dashed var(--accent); animation: led-breathe 2.4s ease-in-out infinite; }
+.sp-again .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px dashed var(--accent); }   /* breathes from speedRoad */
 .sp-again:hover, .sp-again:focus-visible { border-color: var(--accent); outline: none; }
 .sp-again:active { transform: scale(0.97); }
 .sp-again .key i, .sp-again .ring { transition: color 300ms, border-color 300ms; }
@@ -1042,7 +1045,7 @@ html.app, html.app body { overflow: hidden; }
         </div>
         <div class="page" id="page-probe" data-page="probe" role="tabpanel" hidden>
           <div class="pchips" id="probe-list" role="tablist" aria-label="Targets"><span class="thumb" id="probe-thumb"></span></div>
-          <div class="pgraph" id="probe-graph" role="img" aria-label="Round trips in ms, last 60 seconds"><svg id="probe-svg" preserveAspectRatio="none"></svg><div class="ptip" id="probe-tip"></div></div>
+          <div class="pgraph" id="probe-graph" role="img" aria-label="Round trips in ms, last 60 seconds"><svg id="probe-svg" preserveAspectRatio="none"></svg><svg id="probe-run" preserveAspectRatio="none"></svg><div class="ptip" id="probe-tip"></div></div>
         </div>
         <div class="page" id="page-scan" data-page="scan" role="tabpanel" hidden>
           <div class="shead">
@@ -1066,7 +1069,7 @@ html.app, html.app body { overflow: hidden; }
         <button class="btn primary" id="apply" disabled><i class="ph ph-shield-check"></i><span data-t="apply">Apply</span></button>
       </div>
       <section class="settings-view speed-view" id="speed" aria-labelledby="sp-title" hidden>
-        <canvas class="sp-road" id="speed-road" aria-hidden="true"></canvas>
+        <canvas class="sp-road" id="speed-road" aria-hidden="true"></canvas><div class="sp-flat" hidden><canvas class="sp-road flat" id="speed-flat" aria-hidden="true"></canvas></div>
         <span class="sr" id="speed-said" aria-live="polite"></span>
         <div class="dlg-body">
           <div class="dlg-head">
@@ -3025,6 +3028,7 @@ function placeThumb(move = true) {
   th.style.opacity = probe.live ? 1 : 0;   // nothing to pick on an adapter that isn't connected
 }
 function paintProbe() {
+  gfx.wait = 0;   // another row, or a new reading: the graph catches up on the next frame
   probe.rows.forEach((r, i) => {
     const down = r.got.length > 0 && r.got.at(-1) === null;
     r.el.classList.toggle("on", i === probe.pick); r.el.setAttribute("aria-selected", i === probe.pick);
@@ -3077,7 +3081,7 @@ let graphRaf = 0, ceil = 20;
 const ease = k => 1 - (1 - k) ** 3;
 // The graph's SVG elements are kept, layer by layer (back to front), and each frame changes only the attributes
 // that moved: rebuilding the markup every frame cost a re-parse and a fresh layout of every node.
-const gfx = { w: 0, h: 0 };
+const gfx = { w: 0, h: 0, drawn: 0, wait: 0 };
 function gput(layer, i, tag, attrs, text) {
   const list = gfx[layer]._els ??= [];
   let el = list[i];
@@ -3086,20 +3090,25 @@ function gput(layer, i, tag, attrs, text) {
   if (text !== undefined && el.textContent !== text) el.textContent = text;
 }
 function gcut(layer, n) { const list = gfx[layer]._els ?? []; while (list.length > n) list.pop().remove(); }
-function drawGraph() {
+function drawGraph(stamp) {
+  // Each frame WebView2 composites and presents costs about the same however little moved, so a slow drift skips
+  // the frames where it would move less than half a pixel. Anything quicker (pointer, scale, a rise) gets all 60.
+  if (stamp - gfx.drawn < gfx.wait) { graphRaf = page === "probe" && !covered() ? requestAnimationFrame(drawGraph) : 0; return; }
+  gfx.drawn = stamp;
   const now = clock();
-  const svg = $("probe-svg");
+  const svg = $("probe-svg"), run = $("probe-run");
   if (!gfx.rows) {
     for (const [k, cls] of [["rows", "grid"], ["ticks", "tick"], ["cols", "grid"], ["areas", "area"], ["lines", "line"], ["lost", "lost"], ["cursor", "cursor"], ["knob", "knob"]]) {
-      gfx[k] = svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "g")); gfx[k]._cls = cls;
+      gfx[k] = (["rows", "ticks", "cols"].includes(k) ? svg : run).appendChild(document.createElementNS("http://www.w3.org/2000/svg", "g")); gfx[k]._cls = cls;
     }
     // Its size, kept: reading it each frame would force a layout.
-    new ResizeObserver(() => { gfx.w = svg.clientWidth; gfx.h = svg.clientHeight; }).observe(svg);
+    new ResizeObserver(() => { gfx.w = svg.clientWidth; gfx.h = svg.clientHeight; gfx.wait = 0; }).observe(svg);
   }
   const w = gfx.w || svg.clientWidth || 1, h = gfx.h || svg.clientHeight || 1;
   const pick = probe.rows[probe.pick], pts = pick?.pts ?? [], all = pts.filter(q => q.v !== null).map(q => q.v);
   const want = Math.max(10, ...all) * 1.6;
-  ceil = calm.matches ? want : ceil + (want - ceil) * 0.06;
+  // Settled once within 0.1% (a fraction of a pixel): an ease that never quite arrives would redraw every frame.
+  ceil = calm.matches || Math.abs(want - ceil) < want * 0.001 ? want : ceil + (want - ceil) * 0.06;
   const x = t => w - (now - DELAY - t) / SPAN * w, y = v => h - 1 - (h - 2) * Math.min(v, ceil) / ceil;
   const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].find(v => ceil / v <= 4) ?? 1000;
   let n = 0;
@@ -3113,30 +3122,40 @@ function drawGraph() {
     const k = calm.matches ? 1 : ease(Math.min(1, (now - q.t) / RISE));
     return { q, x: x(q.t), y: y(q.from + (q.v - q.from) * k) };
   });
-  // A lost ping is no value, not zero: the line breaks there, and a small red mark sits under the gap.
-  const runs = [[]];
-  for (const q of pts) if (q.v === null) { if (runs.at(-1).length) runs.push([]); } else runs.at(-1).push(shown.find(p => p.q === q));
-  n = 0;
-  for (const run of runs) {
-    if (!run.length) continue;
-    let d = `M${run[0].x},${run[0].y}`;
-    for (let i = 1; i < run.length; i++) { const a = run[i - 1], b = run[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
-    if (run.length === 1) d += `h1`;   // a lone reply between losses still shows as a dot of line
-    gput("areas", n, "path", { d: `${d}L${run.at(-1).x + (run.length === 1 ? 1 : 0)},${h}L${run[0].x},${h}Z` });
-    gput("lines", n++, "path", { d });
+  // The line, its fill and the lost marks are drawn as of `gfx.at`, then their layer slides left by the time since.
+  // Redrawn when a ping lands or the scale moves, and once more when a reply drawn mid-rise comes 1 px into view:
+  // a new one is born past the right edge, so by then it has risen (about one redraw a second, not sixty).
+  const key = `${w} ${h} ${ceil} ${probe.pick} ${pts.length} ${pts[0]?.t} ${pts.at(-1)?.t}`;
+  const stale = !calm.matches && shown.some((p, i) => gfx.at - p.q.t < RISE && Math.min(p.x, shown[i - 1]?.x ?? w) < w - 1);
+  if (key !== gfx.key || stale) {
+    gfx.key = key; gfx.at = now;
+    // A lost ping is no value, not zero: the line breaks there, and a small red mark sits under the gap.
+    const runs = [[]];
+    for (const q of pts) if (q.v === null) { if (runs.at(-1).length) runs.push([]); } else runs.at(-1).push(shown.find(p => p.q === q));
+    n = 0;
+    for (const seg of runs) {
+      if (!seg.length) continue;
+      let d = `M${seg[0].x},${seg[0].y}`;
+      for (let i = 1; i < seg.length; i++) { const a = seg[i - 1], b = seg[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
+      if (seg.length === 1) d += `h1`;   // a lone reply between losses still shows as a dot of line
+      gput("areas", n, "path", { d: `${d}L${seg.at(-1).x + (seg.length === 1 ? 1 : 0)},${h}L${seg[0].x},${h}Z` });
+      gput("lines", n++, "path", { d });
+    }
+    gcut("areas", n); gcut("lines", n);
+    n = 0;
+    for (const q of pts) if (q.v === null) gput("lost", n++, "rect", { x: x(q.t) - 1.5, y: h - 5, width: 3, height: 5, rx: 1 });
+    gcut("lost", n);
   }
-  gcut("areas", n); gcut("lines", n);
-  n = 0;
-  for (const q of pts) if (q.v === null) gput("lost", n++, "rect", { x: x(q.t) - 1.5, y: h - 5, width: 3, height: 5, rx: 1 });
-  gcut("lost", n);
+  const off = (gfx.at - now) / SPAN * w;
+  run.style.transform = `translateX(${off}px)`;
   // Hover reading: fades in and out; the line glides after the pointer.
   probe.show += ((probe.hx !== null && shown.length ? 1 : 0) - probe.show) * (calm.matches ? 1 : 0.2);
   if (probe.hx !== null) probe.cx = calm.matches || probe.show < 0.05 ? probe.hx : probe.cx + (probe.hx - probe.cx) * 0.3;
   const tip = $("probe-tip");
   if (probe.show > 0.01 && shown.length) {
     const near = shown.reduce((a, b) => Math.abs(b.x - probe.cx) < Math.abs(a.x - probe.cx) ? b : a);
-    gput("cursor", 0, "line", { x1: probe.cx, x2: probe.cx, y1: 0, y2: h, opacity: 0.6 * probe.show });
-    gput("knob", 0, "circle", { cx: near.x, cy: near.y, r: 4, opacity: probe.show });
+    gput("cursor", 0, "line", { x1: probe.cx - off, x2: probe.cx - off, y1: 0, y2: h, opacity: 0.6 * probe.show });   // on the sliding layer
+    gput("knob", 0, "circle", { cx: near.x - off, cy: near.y, r: 4, opacity: probe.show });
     const ago = Math.max(0, Math.round((now - near.q.t) / 1000));
     // Rewritten and measured only when its text changes: a rewrite then a width read is a layout, every frame.
     const html = `${msOf(near.q.v)}<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
@@ -3146,14 +3165,16 @@ function drawGraph() {
   } else { gcut("cursor", 0); gcut("knob", 0); }
   const op = probe.show > 0.01 ? probe.show : 0;
   if (tip._op !== op) tip.style.opacity = tip._op = op;
-  if (svg._vb !== `${w} ${h}`) svg.setAttribute("viewBox", `0 0 ${svg._vb = `${w} ${h}`}`);
+  if (svg._vb !== `${w} ${h}`) for (const el of [svg, run]) el.setAttribute("viewBox", `0 0 ${svg._vb = `${w} ${h}`}`);
+  const settling = probe.hx !== null ? Math.abs(probe.hx - probe.cx) > 0.25 || probe.show < 0.99 : probe.show > 0.01;
+  gfx.wait = settling || ceil !== want || stale ? 0 : Math.min(66, 500 / (w / SPAN * 1000)) - 4;   // the line slides w px a minute
   graphRaf = page === "probe" && !covered() ? requestAnimationFrame(drawGraph) : 0;
 }
 // Speed and Settings cover the whole page: under them the graph isn't drawn, and it picks up again as they close.
 function covered() { return settingsOpen() || speedOpen(); }
 function wakeGraph() { if (page === "probe" && !graphRaf) graphRaf = requestAnimationFrame(drawGraph); }
-$("probe-graph").addEventListener("pointermove", e => { probe.hx = e.clientX - e.currentTarget.getBoundingClientRect().left; });
-$("probe-graph").addEventListener("pointerleave", () => { probe.hx = null; });
+$("probe-graph").addEventListener("pointermove", e => { probe.hx = e.clientX - e.currentTarget.getBoundingClientRect().left; gfx.wait = 0; });
+$("probe-graph").addEventListener("pointerleave", () => { probe.hx = null; gfx.wait = 0; });
 function probeShow(on) {
   if (!on) return;
   if (adapters[sel]) probeBuild();
@@ -3328,7 +3349,7 @@ function paintSpeed() {
 // Each piece runs on its own slice of one timeline, so the parts overlap instead of popping one after another.
 let speedRaf = 0, speedN = 0, speedV = 0, speedAt = 0;
 const SC = 120, SY = 100, SR = 80, VY = 6, VH = 188, LEG_MS = 8000;
-const mix = (a, b, t) => a + (b - a) * t, clamp01 = x => Math.min(1, Math.max(0, x));
+const mix = (a, b, t) => a + (b - a) * t, clamp01 = x => Math.min(1, Math.max(0, x)), smooth = t => t * t * (3 - 2 * t);   // smooth: about CSS ease-in-out
 const inOut = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 const over = t => 1 + 2.4 * (t - 1) ** 3 + 1.4 * (t - 1) ** 2;   // a little past 1, then back
 const slice = (t, a, b, f = inOut) => f(clamp01((t - a) / (b - a)));
@@ -3423,7 +3444,7 @@ function speedDraw() {
 }
 // The road: a floor grid running toward you at the line's speed (log scale), eased like a car gathering pace.
 // Download runs it toward you, upload away from you; between the two it slows through a standstill.
-const road = { off: 0, v: 0, at: 0, p: 0 }, led = { a: 0, w: 0, hot: false };
+const road = { off: 0, v: 0, at: 0, p: 0, wait: 0 }, led = { a: 0, w: 0, hot: false };
 for (const id of ["sp-go", "speed-again"]) {
   const b = $(id), on = () => led.hot = true, off = () => led.hot = false;
   b.addEventListener("pointerenter", on); b.addEventListener("pointerleave", off); b.addEventListener("focus", on); b.addEventListener("blur", off);
@@ -3431,9 +3452,13 @@ for (const id of ["sp-go", "speed-again"]) {
 let roadRaf = 0;
 function speedRoad(now) {
   if (!speedOpen()) return;
-  const cv = $("speed-road"), w = cv.clientWidth, h = cv.clientHeight, dpr = devicePixelRatio || 1;
-  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-  const dt = Math.min(64, now - (road.at || now)); road.at = now;
+  // Slow drifts skip the frames where nothing would move half a pixel (see drawGraph), down to 30 a second for the
+  // breathing LEDs. road.at stays at the last drawn frame, so dt covers the skipped ones.
+  if (now - road.at < road.wait) { roadRaf = requestAnimationFrame(speedRoad); return; }
+  const cv = $("speed-road"), flat = $("speed-flat"), w = cv.clientWidth, h = cv.clientHeight, dpr = devicePixelRatio || 1;
+  const fit = (el, eh) => { if (el.width !== Math.round(w * dpr) || el.height !== Math.round(eh * dpr)) { el.width = Math.round(w * dpr); el.height = Math.round(eh * dpr); } };
+  fit(cv, h);
+  const dt = Math.min(64, Math.max(0, now - (road.at || now))); road.at = now;
   const mbps = speed.state === "run" ? speed.res[speed.leg] ?? 0 : 0;
   const parked = speed.state !== "run" && speed.state !== "done";   // before Start (or after a stop): the flat grid
   // The flat grid drifts toward you, so the page never looks frozen. Not slower than this: a 1 px line creeping a
@@ -3442,15 +3467,50 @@ function speedRoad(now) {
     (speed.leg === "up" && speed.state === "run" ? -1 : 1) * (0.15 + 2.6 * Math.min(1, Math.log10(1 + mbps) / 3));
   road.v += (want - road.v) * Math.min(1, dt / 700);
   if (!calm.matches) road.off = ((road.off + road.v * dt / 1000) % 1 + 1) % 1;
-  const c = cv.getContext("2d"), css = getComputedStyle(cv);
-  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
-  c.strokeStyle = css.getPropertyValue("--border-strong").trim() || "#555"; c.lineWidth = 1;
+  const c = cv.getContext("2d"), ink = getComputedStyle(cv).getPropertyValue("--border-strong").trim() || "#555";
   // The lines meet behind the needle's hub (on the summary, midway between the two dials), so the hub caps the vanishing point.
   const cb = cv.getBoundingClientRect(), hub = new DOMPoint(SC, SY).matrixTransform($("speed-dial").getScreenCTM());
   const vx = hub.x - cb.left, vy = hub.y - cb.top;
   // Before Start the floor lies flat, a plain square grid; Start tips it back into the road, and a stop lays it flat again.
   road.p = clamp01(road.p + (parked ? -1 : 1) * dt / 900);
   const t = calm.matches ? +!parked : inOut(road.p), cell = h / 10;
+  // Lying flat it only drifts toward you, and its rows repeat: it is drawn once, a row taller, on a canvas of its own
+  // that slides down (a transform, nothing redrawn) and steps back a row, unseen, each time it has moved one.
+  if (t === 0) {
+    const key = `${w} ${h} ${dpr} ${vx} ${ink}`;
+    if (flat.parentElement.hidden || flat._key !== key) {
+      flat._key = key; flat._off = road.off; flat.parentElement.hidden = false;
+      flat.style.height = `${h + cell}px`; fit(flat, h + cell);
+      const f = flat.getContext("2d");
+      f.setTransform(dpr, 0, 0, dpr, 0, 0); f.clearRect(0, 0, w, h + cell);
+      f.strokeStyle = ink; f.lineWidth = 1; f.globalAlpha = 0.35;
+      for (let i = -9; i <= 9; i++) { f.beginPath(); f.moveTo(vx + i * cell, 0); f.lineTo(vx + i * cell, h + cell); f.stroke(); }
+      for (let j = 0; j <= 10; j++) { f.beginPath(); f.moveTo(0, (j + road.off) * cell); f.lineTo(w, (j + road.off) * cell); f.stroke(); }
+      c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    }
+    flat.style.transform = `translateY(${((road.off - flat._off + 1) % 1 - 1) * cell}px)`;
+  } else {
+    flat.parentElement.hidden = true;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    c.strokeStyle = ink; c.lineWidth = 1;
+    roadLines(c, w, h, vx, vy, t, cell);
+  }
+  // The LED rings: pointing at a button spins its ring up over most of a second; leaving lets it coast to a stop.
+  led.w += ((led.hot ? 200 : 0) - led.w) * Math.min(1, dt / (led.hot ? 650 : 900));
+  if (!led.hot && led.w < 0.1) led.w = 0;   // stopped: no more rewrites
+  if (!calm.matches) led.a = (led.a + led.w * dt / 1000) % 360;
+  if (led.s !== led.a) $("sp-ledc").style.transform = $("speed-again").querySelector(".ring").style.transform = `rotate(${led.s = led.a}deg)`;
+  // Both LED rings breathe (0.35 to 1 and back, 2.4 s). Driven from here, not by a CSS animation, which would ask
+  // for all 60 frames a second; an ignition that is off stays lit flat, as does everything under reduced motion.
+  const k = now / 1200 % 2, glow = calm.matches ? "" : String(0.35 + 0.65 * smooth(k < 1 ? k : 2 - k));
+  $("sp-ledc").style.opacity = $("speed-dial").classList.contains("off") ? "" : glow;
+  $("speed-again").querySelector(".ring").style.opacity = glow;
+  // The fastest line, in px a second: flat, every row drifts alike; on the road the nearest row moves most.
+  const px = Math.abs(road.v) * (t === 0 ? cell : 2 * (h - vy) / 10);
+  road.wait = speed.state === "run" || led.w || (t > 0 && t < 1) ? 0 : Math.min(33, 500 / px) - 4;
+  roadRaf = requestAnimationFrame(speedRoad);
+}
+function roadLines(c, w, h, vx, vy, t, cell) {
   c.globalAlpha = 0.35;
   for (let i = -9; i <= 9; i++) { c.beginPath(); c.moveTo(mix(vx + i * cell, vx, t), mix(0, vy, t)); c.lineTo(mix(vx + i * cell, vx + i * w / 6, t), h); c.stroke(); }
   for (let j = 0; j < 10; j++) { const f = (j + road.off) / 10, y = mix(f * h, vy + (h - vy) * f * f, t); c.globalAlpha = mix(0.35, 0.5 * f, t); c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
@@ -3459,11 +3519,6 @@ function speedRoad(now) {
   const fog = c.createRadialGradient(vx, vy, 0, vx, vy, Math.max(0, (h - vy) * 0.6));   // a negative radius throws and ends the loop
   fog.addColorStop(0, "#000"); fog.addColorStop(0.35, "rgba(0,0,0,.85)"); fog.addColorStop(1, "rgba(0,0,0,0)");
   c.globalCompositeOperation = "destination-out"; c.fillStyle = fog; c.fillRect(0, 0, w, h); c.globalCompositeOperation = "source-over"; c.globalAlpha = 1;
-  // The LED rings: pointing at a button spins its ring up over most of a second; leaving lets it coast to a stop.
-  led.w += ((led.hot ? 200 : 0) - led.w) * Math.min(1, dt / (led.hot ? 650 : 900));
-  if (!calm.matches) led.a = (led.a + led.w * dt / 1000) % 360;
-  $("sp-ledc").style.transform = $("speed-again").querySelector(".ring").style.transform = `rotate(${led.a}deg)`;
-  roadRaf = requestAnimationFrame(speedRoad);
 }
 function openSpeed() {
   if (speedOpen()) return closeSpeed();
