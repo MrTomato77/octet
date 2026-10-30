@@ -3347,7 +3347,7 @@ function paintSpeed() {
 // turns to STOP. Stopping plays that backwards. A finished test splits the dial in two: download slides left,
 // upload comes out of it to the right, and the key turns to TEST AGAIN.
 // Each piece runs on its own slice of one timeline, so the parts overlap instead of popping one after another.
-let speedRaf = 0, speedN = 0, speedV = 0, speedAt = 0;
+let speedRaf = 0, speedN = 0, speedV = 0, speedG = 0, speedAt = 0;
 const SC = 120, SY = 100, SR = 80, VY = 6, VH = 188, LEG_MS = 8000;
 const mix = (a, b, t) => a + (b - a) * t, clamp01 = x => Math.min(1, Math.max(0, x)), smooth = t => t * t * (3 - 2 * t);   // smooth: about CSS ease-in-out
 const inOut = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
@@ -3368,8 +3368,11 @@ function speedDraw() {
   const v = s === "run" ? speed.res[speed.leg] ?? 0 : s === "done" ? speed.res.down ?? 0 : 0, to = open ? Math.min(1, Math.log10(1 + v) / 3) : 0;
   // The needle hangs on a spring: it swings toward each new reading, runs a touch past and settles back, like a real gauge.
   const dt = Math.min(48, at - (speedAt || at)) / 1000; speedAt = at;
-  speedV += ((to - speedN) * 90 - speedV * 12) * dt; speedN += speedV * dt;
-  if (calm.matches || (Math.abs(to - speedN) < 0.0005 && Math.abs(speedV) < 0.002)) { speedN = to; speedV = 0; }
+  // It chases an eased copy of the reading (about 0.12 s behind), not the reading itself: a jump then sets the needle
+  // off gently and gathering pace, instead of kicking it at full force on the first frame.
+  speedG += (to - speedG) * (1 - Math.exp(-dt / 0.12));
+  speedV += ((speedG - speedN) * 90 - speedV * 12) * dt; speedN += speedV * dt;
+  if (calm.matches || (Math.abs(to - speedN) < 0.0005 && Math.abs(speedV) < 0.002)) { speedN = speedG = to; speedV = 0; }
   // Positions are read before anything is written: a read after a write forces a fresh layout, each frame.
   const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / VH) || 1;
   const head = svg.closest(".dlg-body").querySelector(".dlg-head").getBoundingClientRect(), foot = $("speed-note").getBoundingClientRect();
