@@ -31,10 +31,19 @@ jobs:
           # Ed25519 signature of the exe, checked by Octet's updater before it installs anything.
           $env:OCTET_SIGNING_KEY | Out-File -Encoding ascii key.pem
           openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.exe -out Octet.exe.sig
-          Remove-Item key.pem
+          # And of the version with it (update.rs `message`): "octet-update", NUL, version, NUL, the exe.
+          # Updaters from this release on want only this one; the .sig above stays for older copies.
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          $head = [Text.Encoding]::ASCII.GetBytes("octet-update`0$version`0")
+          $msg = [IO.File]::Create("$PWD/Octet.exe.msg")
+          $msg.Write($head, 0, $head.Length)
+          $exe = [IO.File]::OpenRead("$PWD/Octet.exe"); $exe.CopyTo($msg); $exe.Close(); $msg.Close()
+          openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.exe.msg -out Octet.exe.vsig
+          Remove-Item key.pem, Octet.exe.msg
           if ((Get-Item Octet.exe.sig).Length -ne 64) { throw "Signing failed" }
+          if ((Get-Item Octet.exe.vsig).Length -ne 64) { throw "Signing failed" }
           gh release create $env:GITHUB_REF_NAME --draft --title "Octet $($env:GITHUB_REF_NAME.TrimStart('v'))" `
-            --notes "SHA-256 of Octet.exe: ``$hash``" Octet.exe Octet.exe.sha256 Octet.exe.sig THIRD-PARTY-NOTICES.md
+            --notes "SHA-256 of Octet.exe: ``$hash``" Octet.exe Octet.exe.sha256 Octet.exe.sig Octet.exe.vsig THIRD-PARTY-NOTICES.md
         env:
           GH_TOKEN: ${{ github.token }}
           OCTET_SIGNING_KEY: ${{ secrets.OCTET_SIGNING_KEY }}
@@ -59,9 +68,14 @@ jobs:
           brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
           printf '%s\n' "$OCTET_SIGNING_KEY" > key.pem
           "$(brew --prefix openssl@3)/bin/openssl" pkeyutl -sign -inkey key.pem -rawin -in Octet.dmg -out Octet.dmg.sig
-          rm key.pem
+          # And the version-bound .vsig, built the same way as Octet.exe.vsig.
+          version=$(printf '%s' "$GITHUB_REF_NAME" | sed 's/^v*//')
+          { printf 'octet-update\0%s\0' "$version"; cat Octet.dmg; } > Octet.dmg.msg
+          "$(brew --prefix openssl@3)/bin/openssl" pkeyutl -sign -inkey key.pem -rawin -in Octet.dmg.msg -out Octet.dmg.vsig
+          rm key.pem Octet.dmg.msg
           test "$(stat -f %z Octet.dmg.sig)" = 64
-          gh release upload "$GITHUB_REF_NAME" Octet.dmg Octet.dmg.sha256 Octet.dmg.sig
+          test "$(stat -f %z Octet.dmg.vsig)" = 64
+          gh release upload "$GITHUB_REF_NAME" Octet.dmg Octet.dmg.sha256 Octet.dmg.sig Octet.dmg.vsig
         env:
           GH_TOKEN: ${{ github.token }}
           OCTET_SIGNING_KEY: ${{ secrets.OCTET_SIGNING_KEY }}

@@ -10,7 +10,7 @@ const KEY: [u8; 32] = [
     0xae, 0xfe, 0x39, 0x0d, 0x77, 0xcd, 0xf5, 0xc5, 0xfc, 0x0b, 0x68, 0xbd, 0x5b, 0xbd, 0x32, 0x98,
 ];
 const REPO: &str = "MrTomato77/octet";
-/// This system's file in each release; its signature is beside it (".sig").
+/// This system's file in each release; its signatures are beside it (".sig", ".vsig").
 #[cfg(target_os = "macos")]
 const ASSET: &str = "Octet.dmg";
 #[cfg(not(target_os = "macos"))]
@@ -30,9 +30,17 @@ pub fn check() -> Result<Option<String>, String> {
     Ok(newer(tag, env!("CARGO_PKG_VERSION")).then(|| tag.trim_start_matches('v').to_string()))
 }
 
-fn verify(exe: &[u8], sig: &[u8]) -> bool {
-    let (Ok(key), Ok(sig)) = (ed25519_compact::PublicKey::from_slice(&KEY), ed25519_compact::Signature::from_slice(sig)) else { return false };
-    key.verify(exe, &sig).is_ok()
+fn verify(key: &[u8; 32], msg: &[u8], sig: &[u8]) -> bool {
+    let (Ok(key), Ok(sig)) = (ed25519_compact::PublicKey::from_slice(key), ed25519_compact::Signature::from_slice(sig)) else { return false };
+    key.verify(msg, &sig).is_ok()
+}
+
+/// What the ".vsig" signs: `octet-update`, NUL, the version as `check` gives it (the tag without
+/// its leading 'v', e.g. "0.2.0"), NUL, then the file's bytes. Binding the version means a release
+/// can't be relabelled: an old signed file put up as a newer version fails, so the newer-only
+/// check can trust the version. release.yml builds the same bytes before signing.
+fn message(version: &str, file: &[u8]) -> Vec<u8> {
+    [b"octet-update\0", version.as_bytes(), b"\0", file].concat()
 }
 
 /// Downloads `version`, checks its signature, and puts it in this copy's place. The new one runs
@@ -44,9 +52,12 @@ pub fn install(version: &str, progress: impl FnMut(f32)) -> Result<(), String> {
         return Err("Not a newer version of Octet".into());
     }
     let path = format!("/{REPO}/releases/download/v{version}/{ASSET}");
-    let sig = https_get("github.com", &format!("{path}.sig")).ok_or("Could not download the signature")?;
+    // Only the version-bound ".vsig", never the old ".sig" (the file alone, still published for
+    // copies from before ".vsig"): a ".sig" would let an old signed file pass as this version, so a
+    // release without a good ".vsig" is not installed, whatever else it offers.
+    let sig = https_get("github.com", &format!("{path}.vsig")).ok_or("Could not download the signature")?;
     let file = crate::net::https_get_with("github.com", &path, progress).ok_or("Could not download the update")?;
-    if !verify(&file, &sig) {
+    if !verify(&KEY, &message(version, &file), &sig) {
         return Err("The download is not signed by Octet's key: not installed".into());
     }
     place(&file)
@@ -170,9 +181,48 @@ mod tests {
         // "octet" signed with the release key (openssl pkeyutl -sign -rawin), as CI signs Octet.exe.
         let hex = "f54ae0ac4035a8dc998658a1c59f08cce77dffc575daae5c4fc72634d1858ec2ab56c182a5c031e516352232d695c5014becb10a0981215946efec00951b0007";
         let sig: Vec<u8> = (0..64).map(|i| u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16).unwrap()).collect();
-        assert!(verify(b"octet", &sig), "our key's signature passes");
-        assert!(!verify(b"octets", &sig), "the same signature on other bytes fails");
-        assert!(!verify(b"anything", &[0u8; 64]), "a zero signature fails");
-        assert!(!verify(b"anything", &[1u8; 10]), "a short one fails");
+        assert!(verify(&KEY, b"octet", &sig), "our key's signature passes");
+        assert!(!verify(&KEY, b"octets", &sig), "the same signature on other bytes fails");
+        assert!(!verify(&KEY, b"anything", &[0u8; 64]), "a zero signature fails");
+        assert!(!verify(&KEY, b"anything", &[1u8; 10]), "a short one fails");
+    }
+
+    fn unhex<const N: usize>(hex: &str) -> [u8; N] {
+        std::array::from_fn(|i| u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16).unwrap())
+    }
+
+    /// A throwaway key (not the release key) and a ".vsig" made with release.yml's own lines, for
+    /// the file "octet" at tag v0.2.0:
+    ///   openssl genpkey -algorithm ed25519 -out key.pem
+    ///   printf 'octet' > Octet.dmg; GITHUB_REF_NAME=v0.2.0
+    ///   version=$(printf '%s' "$GITHUB_REF_NAME" | sed 's/^v*//')
+    ///   { printf 'octet-update\0%s\0' "$version"; cat Octet.dmg; } > Octet.dmg.msg
+    ///   openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.dmg.msg -out Octet.dmg.vsig
+    ///   openssl pkey -in key.pem -pubout -outform DER | tail -c 32   (the public key)
+    /// The Windows job's PowerShell lines give the same signature byte for byte.
+    const TEST_KEY: &str = "16331a1d7d6e9eaa69c4c83dd908399cb695ceac5ac8ae15cff2f7dd9612ac16";
+    const TEST_VSIG: &str = "f37a8bfc3ef1965c66c2efe44ce9e905dd488f552268902edf672400c4ed5f24a0c6b504ab26b86b66672ebc732273011fcf768452ec4904bb1b8bffb55d100f";
+
+    #[test]
+    fn message_is_what_ci_signs() {
+        // The bytes of the .msg file above.
+        assert_eq!(message("0.2.0", b"octet"), b"octet-update\x000.2.0\x00octet");
+    }
+
+    #[test]
+    fn version_signature_binds_the_version() {
+        let (key, sig) = (unhex::<32>(TEST_KEY), unhex::<64>(TEST_VSIG));
+        assert!(verify(&key, &message("0.2.0", b"octet"), &sig), "the right version passes");
+        assert!(!verify(&key, &message("0.2.1", b"octet"), &sig), "another version fails");
+        assert!(!verify(&key, &message("0.2.0", b"octets"), &sig), "other bytes fail");
+    }
+
+    #[test]
+    fn an_old_style_signature_is_not_enough() {
+        // A ".sig" over the file alone, as CI still makes, offered where a ".vsig" belongs.
+        let key = ed25519_compact::KeyPair::from_seed(ed25519_compact::Seed::new([7; 32]));
+        let old = key.sk.sign(b"octet", None);
+        assert!(verify(&key.pk, b"octet", old.as_ref()), "it is a good signature of the file");
+        assert!(!verify(&key.pk, &message("0.2.0", b"octet"), old.as_ref()), "but not of the version");
     }
 }
