@@ -2013,7 +2013,7 @@ $("apply").onclick = async () => {
   const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway", "gwMetric"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]),
     // The first gateway's metric only goes on with `set address`, so a change to it counts as an IP change (static only:
     // on DHCP it isn't counted as a change at all).
-    extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: cfgOf(a).extra, wasGws: cfgOf(a).gws })   // whole entries: a changed mask or metric is re-applied
+    extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: cfgOf(a).extra, wasGws: cfgOf(a).gws, wasMetric: cfgOf(a).metric })   // whole entries: a changed mask or metric is re-applied
     .then(() => null, e => String(e));
   work.then(async err => {
     rows.forEach(el => el.classList.remove("working"));
@@ -2692,7 +2692,12 @@ function routes(c) {
     return { ...a, gi, gw: gi < 0 ? "" : gs[gi], shared: gi >= 0 && owner !== i };
   });
 }
-function setGws(gs) { draft.gateway = gs[0] || ""; draft.gws = gs.slice(1).map(g => ({ gateway: g, metric: "" })); }
+// A gateway keeps its metric wherever it moves in the list; a new one starts automatic.
+function setGws(gs) {
+  const m = new Map([[draft.gateway, draft.gwMetric], ...draft.gws.map(g => [g.gateway, g.metric])]);
+  draft.gateway = gs[0] || ""; draft.gwMetric = m.get(draft.gateway) ?? "";
+  draft.gws = gs.slice(1).map(g => ({ gateway: g, metric: m.get(g) ?? "" }));
+}
 const addrAt = n => n ? draft.extra[n - 1] : { address: draft.address, subnet: draft.subnet };
 function putAddr(n, v) { if (n) draft.extra[n - 1] = v; else { draft.address = v.address; draft.subnet = v.subnet; } }
 function advRow() {
@@ -3798,6 +3803,9 @@ function infoRows() {
   // A day-long lease starts and ends at the same clock time, so any day but today carries its date.
   const at = t => new Date(t).toLocaleString(lang === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit",
     ...(new Date(t).toDateString() !== new Date().toDateString() && { day: "numeric", month: "short" }) });
+  // Windows keeps a lease that never ends as 0xFFFFFFFF seconds (the year 2106).
+  const lease = !a.leaseEnds ? "" : a.leaseEnds >= 4294967295e3 ? L("never expires", "ไม่มีวันหมดอายุ")
+    : a.leaseGot ? L(`${at(a.leaseGot)} to ${at(a.leaseEnds)}`, `${at(a.leaseGot)} ถึง ${at(a.leaseEnds)}`) : L(`until ${at(a.leaseEnds)}`, `ถึง ${at(a.leaseEnds)}`);
   const pub = info.pub[pubKey(a)];
   return [
     { icon: "plugs-connected", head: L("Connection", "การเชื่อมต่อ"), rows: [
@@ -3822,7 +3830,7 @@ function infoRows() {
       ["Subnet", c.subnet, ""],
       ["Gateway", c.gateway, ""],
       ...(a.ipv6 || []).map(x => ["IPv6", x, x.startsWith("fe80") ? "link-local" : ""]),
-      ...(c.ipAuto && a.dhcpServer ? [[L("DHCP server", "DHCP server"), a.dhcpServer, a.leaseEnds ? (a.leaseGot ? L(`${at(a.leaseGot)} to ${at(a.leaseEnds)}`, `${at(a.leaseGot)} ถึง ${at(a.leaseEnds)}`) : L(`until ${at(a.leaseEnds)}`, `ถึง ${at(a.leaseEnds)}`)) : ""]] : []),
+      ...(c.ipAuto && a.dhcpServer ? [[L("DHCP server", "DHCP server"), a.dhcpServer, lease]] : []),
       ...(up && validIp(c.gateway) ? [["Public IP", pub === undefined ? L("Look up", "ดูค่า") : pub === null ? L("Looking up…", "กำลังดู…") : pub?.ip || L("Couldn't reach the internet", "ออกอินเทอร์เน็ตไม่ได้"), pub === undefined ? L("asks a web service", "ถามจากเว็บภายนอก") : [pub?.isp, pub?.city].filter(Boolean).join(" · "), "", "pub"]] : []),
     ] },
     { icon: "globe-simple", head: "DNS", tag: c.dnsAuto ? "DHCP" : "Manual", rows: [
