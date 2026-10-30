@@ -59,8 +59,6 @@ pub fn parse_subnet(value: &str) -> Result<u8, String> {
 const DNS: &str = "octet:set-dns";
 /// Same: release or renew the DHCP lease through the API.
 const LEASE: &str = "octet:lease";
-/// Windows PowerShell, by its path under System32 (see `crate::hidden`); only the interface index goes into its command.
-#[cfg(not(target_os = "macos"))]
 /// macOS: wait until the new address is on the device (see `crate::mac::wait_address`).
 #[cfg(target_os = "macos")]
 const WAIT: &str = "octet:wait-address";
