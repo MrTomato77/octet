@@ -552,7 +552,7 @@ mod native {
 
     /// The frequency as it has always been read: the scan list for our SSID, type and security,
     /// then the entry with our BSSID. 0 when there is none.
-    unsafe fn mhz_exact(h: windows_sys::Win32::Foundation::HANDLE, guid: &windows_sys::core::GUID,
+    pub(super) unsafe fn mhz_exact(h: windows_sys::Win32::Foundation::HANDLE, guid: &windows_sys::core::GUID,
         conn: &windows_sys::Win32::NetworkManagement::WiFi::WLAN_CONNECTION_ATTRIBUTES) -> u32 {
         use windows_sys::Win32::NetworkManagement::WiFi::*;
         unsafe {
@@ -587,6 +587,58 @@ mod native {
         }
     }
 
+    /// The frequency a channel number can stand for under this PHY, kept only if the joined link
+    /// reports exactly that frequency. The scan list's ulChCenterFrequency is where the AP's Beacon
+    /// was heard, its primary 20 MHz channel (IEEE 802.11-2020 11.1.3: Beacons go on the primary
+    /// channel), and the current-channel opcode gives that primary channel (seen here: ch 153 on an
+    /// 80 MHz link, list 5765). Channel to MHz, IEEE 802.11-2020 Annex E / 15.4.4.3 / 27.3.23.2:
+    /// 2.4 GHz 2407+5n (n 1-13), ch 14 2484; 5 GHz 5000+5n; 6 GHz 5950+5n (n = 1 mod 4).
+    /// Bands by PHY: DSSS/HR-DSSS (802.11b, clause 16) and ERP (802.11g, clause 18) are 2.4 GHz only;
+    /// OFDM (802.11a, clause 17) here only 5 GHz (channels under 32 are Japan's 4.9/5.03 GHz, not
+    /// taken); HT and VHT 2.4 or 5 GHz (6 GHz is HE and later only, 26.17.1); HE any of the three.
+    /// The channel numbers overlap across bands, so the link's own frequency picks the one: each band
+    /// gives a different MHz for the same number. EHT (multi-link), DMG and anything else: None.
+    #[allow(non_upper_case_globals)]   // Windows names these dot11_phy_type_*
+    pub(super) fn channel_mhz(phy: i32, ch: u32, link_mhz: u32) -> Option<u32> {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        let f24 = match ch { 1..=13 => Some(2407 + 5 * ch), 14 => Some(2484), _ => None };
+        let f5 = (32..=177).contains(&ch).then(|| 5000 + 5 * ch);
+        let f6 = (ch % 4 == 1 && ch <= 233).then(|| 5950 + 5 * ch);
+        let bands = match phy {
+            dot11_phy_type_hrdsss | dot11_phy_type_erp => [f24, None, None],
+            dot11_phy_type_ofdm => [None, f5, None],
+            dot11_phy_type_ht | dot11_phy_type_vht => [f24, f5, None],
+            dot11_phy_type_he => [f24, f5, f6],
+            _ => return None,
+        };
+        bands.contains(&Some(link_mhz)).then_some(link_mhz)
+    }
+
+    /// The joined network's frequency from its channel number, without the scan list: (PHY, channel,
+    /// MHz), or None where channel_mhz can't vouch for it. The link frequency comes from
+    /// wlan_intf_opcode_realtime_connection_quality (19, newer Windows 11; not in windows-sys yet):
+    /// WLAN_REALTIME_CONNECTION_QUALITY is PhyType, LinkQuality, RxRate, TxRate, bIsMLOConnection,
+    /// ulNumLinks (4 bytes each), then the first link: ucLinkID (padded to 4), ulChannelCenterFrequencyMhz.
+    pub(super) unsafe fn by_channel(h: usize, guid: windows_sys::core::GUID) -> Option<(i32, u32, u32)> {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        unsafe {
+            let query = |op| {
+                let (mut size, mut data) = (0u32, std::ptr::null_mut());
+                if WlanQueryInterface(h as _, &guid, op, std::ptr::null(), &mut size, &mut data, std::ptr::null_mut()) != 0 {
+                    return None;
+                }
+                let v = std::slice::from_raw_parts(data as *const u32, size as usize / 4).to_vec();
+                WlanFreeMemory(data);
+                Some(v)
+            };
+            let ch = *query(wlan_intf_opcode_channel_number)?.first()?;
+            let q = query(19)?;
+            // One link, not multi-link: [phy, quality, rx, tx, mlo, links, id, MHz, ...]
+            let (phy, link_mhz) = match q[..] { [phy, _, _, _, 0, 1, _, mhz, ..] => (phy as i32, mhz), _ => return None };
+            Some((phy, ch, channel_mhz(phy, ch, link_mhz)?))
+        }
+    }
+
     /// fast: fetch the whole scan list while the connection is asked for, instead of after it.
     #[allow(non_upper_case_globals)]   // Windows names these dot11_phy_type_*
     pub(super) fn wlans_with(fast: bool) -> HashMap<String, Wlan> {
@@ -606,12 +658,18 @@ mod native {
                     // Both ask WlanSvc; side by side they end together. The scope joins before the
                     // next card and before the handle is closed.
                     let (hu, guid) = (h as usize, info.InterfaceGuid);
-                    let (rc, all) = std::thread::scope(|s| {
-                        let t = fast.then(|| s.spawn(move || bss_all(hu, guid)));
+                    // The channel number, when it settles the frequency (well under a millisecond), else the list.
+                    let (rc, got) = std::thread::scope(|s| {
+                        let t = fast.then(|| s.spawn(move || by_channel(hu, guid).ok_or_else(|| bss_all(hu, guid))));
                         let rc = WlanQueryInterface(h, &info.InterfaceGuid, wlan_intf_opcode_current_connection, std::ptr::null(),
                             &mut size, &mut data, std::ptr::null_mut());
-                        (rc, t.and_then(|t| t.join().ok().flatten()))
+                        (rc, t.and_then(|t| t.join().ok()))
                     });
+                    let (quick, all) = match got {
+                        Some(Ok((phy, _, mhz))) => (Some((phy, mhz)), None),
+                        Some(Err(all)) => (None, all),
+                        None => (None, None),
+                    };
                     if rc != 0 {
                         continue;   // not joined to anything
                     }
@@ -668,11 +726,13 @@ mod native {
                         e.dot11Bssid == assoc.dot11Bssid && e.dot11BssType == dot11_BSS_type_infrastructure
                             && e.dot11Ssid.uSSIDLength == ssid.uSSIDLength && e.dot11Ssid.ucSSID[..n] == ssid.ucSSID[..n]
                     }).filter(|e| (e.usCapabilityInformation & 0x10 != 0) == p));
-                    w.mhz = match hit {
-                        Some(e) => {
+                    // The same association both times: its PHY must not have changed in between.
+                    let quick = quick.filter(|&(phy, _)| phy == assoc.dot11PhyType).map(|(_, mhz)| mhz);
+                    w.mhz = match quick.or(hit.map(|e| e.ulChCenterFrequency / 1000)) {   // kHz
+                        Some(mhz) => {
                             #[cfg(test)]
                             FAST_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            e.ulChCenterFrequency / 1000   // kHz
+                            mhz
                         }
                         None => mhz_exact(h, &info.InterfaceGuid, conn),
                     };
@@ -1000,6 +1060,64 @@ mod tests {
             assert_eq!(key(native::wlans_with(true)), key(native::wlans_with(false)));
         }
         println!("fast path taken {} of 20", native::FAST_HITS.load(Ordering::Relaxed));
+    }
+
+    /// A channel number gives a frequency only where the PHY allows that band and the link says the same.
+    #[cfg(windows)]
+    #[test]
+    fn channel_mhz_only_where_the_band_is_certain() {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        let f = native::channel_mhz;
+        assert_eq!(f(dot11_phy_type_he, 153, 5765), Some(5765));            // 5 GHz (this machine)
+        assert_eq!(f(dot11_phy_type_he, 153, 6715), Some(6715));            // 6 GHz, same number
+        assert_eq!(f(dot11_phy_type_vht, 153, 6715), None);                 // VHT is never 6 GHz
+        assert_eq!(f(dot11_phy_type_erp, 14, 2484), Some(2484));
+        assert_eq!(f(dot11_phy_type_ht, 6, 2437), Some(2437));
+        assert_eq!(f(dot11_phy_type_ofdm, 8, 5040), None);                  // Japan 5.03 GHz: not taken
+        assert_eq!(f(dot11_phy_type_he, 36, 5190), None);                   // link disagrees
+        assert_eq!(f(dot11_phy_type_eht, 36, 5180), None);                  // 802.11be: the list
+    }
+
+    /// The channel-number frequency equals the scan list's for the joined network, 20 times over:
+    /// `cargo test --release -p octet wifi_channel_mhz_matches_bss_list -- --ignored --nocapture`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn wifi_channel_mhz_matches_bss_list() {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        unsafe {
+            let (mut ver, mut h) = (0u32, std::ptr::null_mut());
+            assert_eq!(WlanOpenHandle(2, std::ptr::null(), &mut ver, &mut h), 0, "no WLAN service");
+            let mut list: *mut WLAN_INTERFACE_INFO_LIST = std::ptr::null_mut();
+            assert_eq!(WlanEnumInterfaces(h, std::ptr::null(), &mut list), 0);
+            let infos = std::slice::from_raw_parts((*list).InterfaceInfo.as_ptr(), (*list).dwNumberOfItems as usize);
+            let mut joined = 0;
+            for info in infos {
+                for _ in 0..20 {
+                    let (mut size, mut data) = (0u32, std::ptr::null_mut());
+                    if WlanQueryInterface(h, &info.InterfaceGuid, wlan_intf_opcode_current_connection, std::ptr::null(),
+                        &mut size, &mut data, std::ptr::null_mut()) != 0 {
+                        break;
+                    }
+                    joined += 1;
+                    let conn = &*(data as *const WLAN_CONNECTION_ATTRIBUTES);
+                    let list_mhz = native::mhz_exact(h, &info.InterfaceGuid, conn);
+                    match native::by_channel(h as usize, info.InterfaceGuid) {
+                        Some((phy, ch, mhz)) => {
+                            println!("phy {phy} (connection {}) channel {ch}: {mhz} MHz, list {list_mhz} MHz", conn.wlanAssociationAttributes.dot11PhyType);
+                            assert_eq!(mhz, list_mhz);
+                        }
+                        None => println!("phy {}: channel path not taken, list {list_mhz} MHz", conn.wlanAssociationAttributes.dot11PhyType),
+                    }
+                    WlanFreeMemory(data);
+                }
+            }
+            WlanFreeMemory(list.cast());
+            WlanCloseHandle(h, std::ptr::null());
+            if joined == 0 {
+                println!("skipped: no joined Wi-Fi");
+            }
+        }
     }
 
     /// Reads this machine: `cargo test -p octet reads_this_machine -- --ignored --nocapture`.
