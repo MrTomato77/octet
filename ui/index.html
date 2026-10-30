@@ -3512,7 +3512,7 @@ function scanStart(again = false) {
       .then(t => t?.open ? port : Promise.reject()))).catch(() => 0);
     return open ? { mac: null, vendor: null, ms: null, port: open } : { proxy: true };
   };
-  // Behind proxy ARP the router rate-limits and may block a burst: 16 at a time instead of 48.
+  // Behind proxy ARP the router rate-limits and may block a burst: 16 at a time instead of 96.
   const worker = async (_, w) => {
     await ready;
     while (todo.length && run === scan.run && !(scan.proxy && w >= 16)) {
@@ -3523,8 +3523,9 @@ function scanStart(again = false) {
   };
   scan.at = 0;
   requestAnimationFrame(drain);
-  // ponytail: an empty address waits ~400 ms; 48 at once sweeps a /24 in ~2 s.
-  Promise.all(Array.from({ length: tauri ? 48 : 16 }, worker)).then(() => { fed = true; });
+  // ponytail: an empty address waits ~500 ms (the 400 ms ping, then some); 96 at once sweeps a /24 in ~1.3 s, 48 took ~2.2 s.
+  // About one ARP and one ping per address, so ~200 a second each: still gentle on a LAN.
+  Promise.all(Array.from({ length: tauri ? 96 : 16 }, worker)).then(() => { fed = true; });
   const done = () => {
     mem.proxy = scan.proxy; seenSave(memKey, mem);
     if (scan.follow) setTimeout(() => run === scan.run && scan.follow && scanGo(scan.own), 400);

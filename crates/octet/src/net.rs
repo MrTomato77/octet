@@ -473,6 +473,38 @@ mod tests {
         assert!(super::dhcp(999_999, true).is_err());
     }
 
+    /// Times a real sweep of one /24 the way Scan does it (96 at a time, network and broadcast skipped).
+    /// Sends what Scan sends. `OCTET_SCAN=10.30.9,10.30.9.72,20` (the /24, the source address, the interface index,
+    /// optionally how many at once):
+    /// `cargo test -p octet sweep_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn sweep_timing() {
+        use std::net::Ipv4Addr;
+        let env = std::env::var("OCTET_SCAN").expect("OCTET_SCAN=a.b.c,source,index");
+        let v: Vec<&str> = env.split(',').collect();
+        let (from, index): (Ipv4Addr, u32) = (v[1].parse().unwrap(), v[2].parse().unwrap());
+        let todo = std::sync::Mutex::new((1..255u8).map(|h| format!("{}.{h}", v[0]).parse::<Ipv4Addr>().unwrap()).collect::<Vec<_>>());
+        let workers: usize = v.get(3).map_or(96, |w| w.parse().unwrap());
+        let (found, took) = (std::sync::Mutex::new(vec![]), std::sync::Mutex::new(vec![]));
+        let t0 = std::time::Instant::now();
+        std::thread::scope(|s| for _ in 0..workers {
+            s.spawn(|| loop {
+                let Some(ip) = todo.lock().unwrap().pop() else { break };   // not in `while let`: that holds the lock for the body
+                let t = std::time::Instant::now();
+                let h = super::scan_host(ip, Some(from), index);
+                let ms = t.elapsed().as_millis();
+                if let Some(h) = h { found.lock().unwrap().push((ip, h.ms, ms)); }   // the ping's round trip, how long it all took
+                took.lock().unwrap().push(ms);
+            });
+        });
+        let (mut found, mut took) = (found.into_inner().unwrap(), took.into_inner().unwrap());
+        found.sort();
+        took.sort();
+        println!("sweep {} ms, per address {}/{}/{} ms (min/median/max), {} hosts: {:?}",
+            t0.elapsed().as_millis(), took[0], took[took.len() / 2], took[took.len() - 1], found.len(), found);
+    }
+
     #[test]
     #[cfg(windows)]
     fn flushes_dns_cache() {
