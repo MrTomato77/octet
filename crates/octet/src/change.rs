@@ -61,7 +61,6 @@ const DNS: &str = "octet:set-dns";
 const LEASE: &str = "octet:lease";
 /// Windows PowerShell, by its path under System32 (see `crate::hidden`); only the interface index goes into its command.
 #[cfg(not(target_os = "macos"))]
-const POWERSHELL: &str = r"WindowsPowerShell\v1.0\powershell";
 /// macOS: wait until the new address is on the device (see `crate::mac::wait_address`).
 #[cfg(target_os = "macos")]
 const WAIT: &str = "octet:wait-address";
@@ -82,10 +81,11 @@ fn mask_of(v: &str) -> Result<Ipv4Addr, String> {
 
 /// A metric: empty = automatic (None), else 1-9999.
 #[cfg(not(target_os = "macos"))]
-fn metric(v: &str) -> Result<Option<u16>, String> {
+fn metric(v: &str) -> Result<Option<u32>, String> {
     match v.trim() {
         "" => Ok(None),
-        m => m.parse::<u16>().ok().filter(|m| (1..=9999).contains(m)).map(Some).ok_or_else(|| "A metric is a number from 1 to 9999".into()),
+        // Typed ones are 1-9999 (the UI checks); larger ones come from Windows itself (a VPN's routes) and pass back as they are.
+        m => m.parse::<u32>().ok().filter(|m| *m >= 1).map(Some).ok_or_else(|| "A metric is a number from 1 to 9999".into()),
     }
 }
 
@@ -266,14 +266,11 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                     c.push(format!("gwmetric={}", m.unwrap_or(0)));   // 0 = automatic
                     out.push(c);
                 }
-                match if_metric {
-                    Some(Some(m)) => out.push(cmd(&["netsh", "interface", "ipv4", "set", "interface", &format!("interface={index}"), &format!("metric={m}")])),
-                    // netsh has no value for "automatic" (its help: "metric - Interface metric"; metric=0 sets 0). Microsoft's
-                    // documented switch is Set-NetIPInterface -AutomaticMetric Enabled, which writes both stores by default:
-                    // https://learn.microsoft.com/powershell/module/nettcpip/set-netipinterface
-                    Some(None) => out.push(cmd(&[POWERSHELL, "-NoProfile", "-NonInteractive", "-Command",
-                        &format!("Set-NetIPInterface -InterfaceIndex {index} -AddressFamily IPv4 -AutomaticMetric Enabled -ErrorAction Stop")])),
-                    None => {}
+                // ponytail: an emptied metric sends nothing. netsh has no "automatic" value (metric=0 sets 0), and
+                // Set-NetIPInterface would run PowerShell as admin, which loads modules from folders the user can write.
+                // The way back is SetIpInterfaceEntry in-process (UseAutomaticMetric), once the UI has a metric field.
+                if let Some(Some(m)) = if_metric {
+                    out.push(cmd(&["netsh", "interface", "ipv4", "set", "interface", &format!("interface={index}"), &format!("metric={m}")]));
                 }
             }
             out
@@ -607,7 +604,7 @@ mod tests {
         };
         assert_eq!(run("15", ""), ["netsh interface ipv4 set interface interface=12 metric=15"]);
         assert!(run("15", "15").is_empty(), "unchanged: nothing sent");
-        assert_eq!(run("", "15"), [r"WindowsPowerShell\v1.0\powershell -NoProfile -NonInteractive -Command Set-NetIPInterface -InterfaceIndex 12 -AddressFamily IPv4 -AutomaticMetric Enabled -ErrorAction Stop"]);
+        assert!(run("", "15").is_empty(), "no PowerShell in the elevated helper");
         assert!(run("", "").is_empty());
     }
 

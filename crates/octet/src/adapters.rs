@@ -109,7 +109,7 @@ pub struct Cfg {
     pub extra: Vec<Addr>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gws: Vec<Gw>,
-    /// Metric of the first gateway and of the interface; empty = leave as Windows has it.
+    /// Metric of the first gateway (empty = automatic) and of the interface (empty = left as Windows has it).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub gw_metric: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -624,7 +624,7 @@ mod native {
         unsafe {
             let query = |op| {
                 let (mut size, mut data) = (0u32, std::ptr::null_mut());
-                if WlanQueryInterface(h as _, &guid, op, std::ptr::null(), &mut size, &mut data, std::ptr::null_mut()) != 0 {
+                if WlanQueryInterface(h as _, &guid, op, std::ptr::null(), &mut size, &mut data, std::ptr::null_mut()) != 0 || data.is_null() {
                     return None;
                 }
                 let v = std::slice::from_raw_parts(data as *const u32, size as usize / 4).to_vec();

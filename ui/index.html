@@ -1591,8 +1591,10 @@ function problems() {
   }
   {
     draft.extra.forEach((x, i) => { if (!validIp(x.address) || prefixOf(x.subnet) < 1 || x.address === draft.address) out.push([`extra${i}`, `${t("ip")} ${i + 2}`]); });
-    draft.gws.forEach((g, i) => { if (!validIp(g.gateway) || !okMetric(g.metric)) out.push([`gw${i}`, `${t("gateway")} ${i + 2}`]); });
-    if (!okMetric(draft.gwMetric)) out.push(["gwMetric", t("metric")]);
+    // A metric Windows already has passes as it is, even past 9999 (a VPN's routes): only typed ones are checked.
+    const now = cfgOf(adapters[sel]);
+    draft.gws.forEach((g, i) => { if (!validIp(g.gateway) || !okMetric(g.metric) && g.metric !== now.gws.find(x => x.gateway === g.gateway)?.metric) out.push([`gw${i}`, `${t("gateway")} ${i + 2}`]); });
+    if (!okMetric(draft.gwMetric) && draft.gwMetric !== now.gwMetric) out.push(["gwMetric", t("metric")]);
   }
   if (!draft.dnsAuto) {
     if (draft.dns1 && !validIp(draft.dns1)) out.push(["dns1", t("dns1")]);
@@ -2082,7 +2084,7 @@ function refresh(quiet) {
     iconNow("refresh", "circle-notch");
     say(L("Reading adapters…", "กำลังอ่านอะแดปเตอร์…"));
   }
-  const id = adapters[sel]?.id;
+  const id = adapters[sel]?.id, edited = changed();
   const work = tauri ? reload() : new Promise(res => setTimeout(() => {
     // Demo: the world moved while we weren't looking (cable plugged, lease changed).
     const a = adapters[sel];
@@ -2096,7 +2098,9 @@ function refresh(quiet) {
     btn.classList.remove("spin");
     // The adapter that was open is gone (or nothing was open): start from what is there.
     if (!a || a.id !== id || !draft) { renderList(); renderAdapter(true); if (!quiet) iconNow("refresh", "arrow-clockwise"); return; }
-    // While a group is automatic the draft mirrors Windows.
+    // While a group is automatic the draft mirrors Windows. So do metrics and gateways nobody edited: a VPN changes
+    // them behind our back, and an old copy in the form would look like an edit and go out with the next Apply.
+    for (const k of ["metric", "gwMetric", "gws"]) if (!edited.includes(k)) draft[k] = structuredClone(cfgOf(a)[k]);
     if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = a.cfg[k];
     if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = a.cfg[k];
     renderList(); renderAdapterFacts(); renderForm(true);   // values that changed roll; the rest stay still

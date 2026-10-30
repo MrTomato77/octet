@@ -30,16 +30,17 @@ jobs:
           "$hash  Octet.exe" | Out-File -Encoding ascii Octet.exe.sha256
           # Ed25519 signature of the exe, checked by Octet's updater before it installs anything.
           $env:OCTET_SIGNING_KEY | Out-File -Encoding ascii key.pem
-          openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.exe -out Octet.exe.sig
-          # And of the version with it (update.rs `message`): "octet-update", NUL, version, NUL, the exe.
-          # Updaters from this release on want only this one; the .sig above stays for older copies.
-          $version = $env:GITHUB_REF_NAME.TrimStart('v')
-          $head = [Text.Encoding]::ASCII.GetBytes("octet-update`0$version`0")
-          $msg = [IO.File]::Create("$PWD/Octet.exe.msg")
-          $msg.Write($head, 0, $head.Length)
-          $exe = [IO.File]::OpenRead("$PWD/Octet.exe"); $exe.CopyTo($msg); $exe.Close(); $msg.Close()
-          openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.exe.msg -out Octet.exe.vsig
-          Remove-Item key.pem, Octet.exe.msg
+          try {   # the key file goes even if a step fails
+            openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.exe -out Octet.exe.sig
+            # And of the version with it (update.rs `message`): "octet-update", NUL, version, NUL, the exe.
+            # Updaters from this release on want only this one; the .sig above stays for older copies.
+            $version = $env:GITHUB_REF_NAME.TrimStart('v')
+            $head = [Text.Encoding]::ASCII.GetBytes("octet-update`0$version`0")
+            $msg = [IO.File]::Create("$PWD/Octet.exe.msg")
+            $msg.Write($head, 0, $head.Length)
+            $exe = [IO.File]::OpenRead("$PWD/Octet.exe"); $exe.CopyTo($msg); $exe.Close(); $msg.Close()
+            openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.exe.msg -out Octet.exe.vsig
+          } finally { Remove-Item key.pem, Octet.exe.msg -ErrorAction SilentlyContinue }
           if ((Get-Item Octet.exe.sig).Length -ne 64) { throw "Signing failed" }
           if ((Get-Item Octet.exe.vsig).Length -ne 64) { throw "Signing failed" }
           gh release create $env:GITHUB_REF_NAME --draft --title "Octet $($env:GITHUB_REF_NAME.TrimStart('v'))" `
@@ -67,6 +68,7 @@ jobs:
           # Signed like Octet.exe, for the updater. macOS' own openssl (LibreSSL) can't sign Ed25519.
           brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
           printf '%s\n' "$OCTET_SIGNING_KEY" > key.pem
+          trap 'rm -f key.pem Octet.dmg.msg' EXIT   # the key file goes even if a step fails
           "$(brew --prefix openssl@3)/bin/openssl" pkeyutl -sign -inkey key.pem -rawin -in Octet.dmg -out Octet.dmg.sig
           # And the version-bound .vsig, built the same way as Octet.exe.vsig.
           version=$(printf '%s' "$GITHUB_REF_NAME" | sed 's/^v*//')
