@@ -13,6 +13,8 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8   # names are not ASCII on Thai Windows
 $cfg = @{}
 Get-CimInstance Win32_NetworkAdapterConfiguration | ForEach-Object { if ($_.SettingID) { $cfg[$_.SettingID] = $_ } }
+$ipif = @{}
+Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $ipif[[int]$_.ifIndex] = $_ }
 $out = foreach ($a in Get-NetAdapter) {
   if ($a.Status -eq 'Not Present') { continue }
   $c = $cfg[$a.InterfaceGuid]
@@ -24,7 +26,8 @@ $out = foreach ($a in Get-NetAdapter) {
     mac = [string]$a.MacAddress; status = [string]$a.Status
     dhcp = [bool]$c.DHCPEnabled; dhcpServer = [string]$c.DHCPServer; register = [bool]$c.FullDNSRegistrationEnabled
     ip = @($c.IPAddress | Where-Object { $_ }); subnet = @($c.IPSubnet | Where-Object { $_ })
-    gateway = @($c.DefaultIPGateway | Where-Object { $_ })
+    gateway = @($c.DefaultIPGateway | Where-Object { $_ }); gwMetric = @($c.GatewayCostMetric | Where-Object { $null -ne $_ })
+    ifMetric = $(if ($ipif[[int]$a.ifIndex].AutomaticMetric -eq 'Disabled') { [int]$ipif[[int]$a.ifIndex].InterfaceMetric } else { 0 })
     dns = @($c.DNSServerSearchOrder | Where-Object { $_ }); staticDns = [bool]$ns
   }
 }
@@ -48,6 +51,11 @@ struct Raw {
     gateway: Vec<String>,
     dns: Vec<String>,
     static_dns: bool,
+    /// Each gateway's metric (same order) and the interface metric; 0 = automatic.
+    #[serde(default)]
+    gw_metric: Vec<u32>,
+    #[serde(default)]
+    if_metric: u32,
     #[serde(default)]
     ssid: String,
     #[serde(default)]
@@ -58,6 +66,11 @@ struct Raw {
     mhz: u32,
     #[serde(default)]
     ppp: bool,
+    /// An address Windows found another device already using (duplicate address detection): set but not in use.
+    #[serde(default)]
+    conflict: String,
+    #[serde(default)]
+    metered: bool,
     #[serde(default)]
     suffix: String,
     #[serde(default)]
@@ -90,13 +103,13 @@ pub struct Cfg {
     pub dns1: String,
     pub dns2: String,
     pub register: bool,
-    /// Advanced, sent by the UI only (the reader leaves them empty; the UI fills them from `extra_ips`).
+    /// Advanced. The reader fills `gws` (with their metrics) and leaves `extra` empty; the UI fills it from `extra_ips`.
     /// Kept when not empty: the request travels to the elevated copy as JSON.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extra: Vec<Addr>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gws: Vec<Gw>,
-    /// Metric of the first gateway and of the interface; empty = leave as Windows has it.
+    /// Metric of the first gateway (empty = automatic) and of the interface (empty = left as Windows has it).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub gw_metric: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -134,6 +147,10 @@ pub struct Adapter {
     pub mhz: u32,
     /// A dial-up link (PPPoE, VPN): no DHCP, so no lease to renew.
     pub ppp: bool,
+    /// An address set on this adapter that another device on the network already has: Windows keeps it but won't use it.
+    pub conflict: String,
+    /// Windows counts this connection as metered: a phone hotspot it recognised, or one set as metered in Settings.
+    pub metered: bool,
     /// "up", "down" or "disabled"
     pub state: &'static str,
     pub dhcp_server: String,
@@ -142,7 +159,8 @@ pub struct Adapter {
     pub extra_subnets: Vec<String>,
     /// Default gateways after the first.
     pub extra_gws: Vec<String>,
-    /// For Info: the connection's DNS suffix, IPv6 addresses, the DHCP lease (ms since 1970, 0 = none), Wi-Fi details.
+    /// For Info: the connection's DNS suffix, IPv6 addresses, the DHCP lease (ms since 1970, 0 = none;
+    /// an end of 4294967295000, Windows' 0xFFFFFFFF seconds, is a lease that never ends), Wi-Fi details.
     pub suffix: String,
     pub ipv6: Vec<String>,
     pub lease_got: u64,
@@ -151,13 +169,18 @@ pub struct Adapter {
     pub cfg: Cfg,
 }
 
+/// The OS by name and build, for About and a bug report.
+pub fn os_name() -> String {
+    native::os_name()
+}
+
 pub fn read() -> Result<Vec<Adapter>, String> {
     native::read().map(shape)
 }
 
 #[cfg(test)]
 fn read_ps() -> Result<Vec<Adapter>, String> {
-    let output = crate::hidden("powershell.exe")
+    let output = crate::hidden(r"WindowsPowerShell\v1.0\powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
         .output()
         .map_err(|e| e.to_string())?;
@@ -188,6 +211,11 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 .map(|(ip, s)| (ip.clone(), s.cloned().unwrap_or_default()))
                 .unwrap_or_default();
             let dns = v4(&r.dns);
+            // Gateways with their metrics (both lists mix IPv4 and IPv6 in the PowerShell reader). A route metric of 0
+            // is automatic (netsh's gwmetric=0, the Automatic metric box): the route then costs the interface metric alone.
+            let num = |m: u32| if m == 0 { String::new() } else { m.to_string() };
+            let gws: Vec<Gw> = r.gateway.iter().zip(r.gw_metric.iter().copied().map(Some).chain(std::iter::repeat(None)))
+                .filter(|(g, _)| g.parse::<Ipv4Addr>().is_ok()).map(|(g, m)| Gw { gateway: g.clone(), metric: num(m.unwrap_or(0)) }).collect();
             let pairs: Vec<(String, String)> = r.ip.iter().zip(r.subnet.iter().map(Some).chain(std::iter::repeat(None)))
                 .filter(|(ip, _)| ip.parse::<Ipv4Addr>().is_ok()).map(|(ip, s)| (ip.clone(), s.cloned().unwrap_or_default())).skip(1).collect();
             let (extra_ips, extra_subnets) = pairs.into_iter().unzip();
@@ -200,6 +228,8 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
             let dhcp_server = Some(r.dhcp_server)
                 .filter(|s| r.dhcp && s.parse::<Ipv4Addr>().is_ok_and(|ip| !ip.is_broadcast()))
                 .unwrap_or_default();
+            // On APIPA (169.254) no DHCP server answered: the lease Windows still keeps is an old one.
+            let apipa = r.dhcp && address.parse::<Ipv4Addr>().is_ok_and(|a| a.is_link_local());
             Adapter {
                 id: r.id,
                 index: r.index,
@@ -211,21 +241,26 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 phy: r.phy,
                 mhz: r.mhz,
                 ppp: r.ppp,
+                conflict: r.conflict,
+                metered: r.metered,
                 state,
                 dhcp_server,
                 extra_ips,
                 extra_subnets,
-                extra_gws: v4(&r.gateway).into_iter().skip(1).collect(),
+                extra_gws: gws.iter().skip(1).map(|g| g.gateway.clone()).collect(),
                 suffix: r.suffix,
                 ipv6: r.ipv6,
-                lease_got: r.lease_got,
-                lease_ends: r.lease_ends,
+                lease_got: if apipa { 0 } else { r.lease_got },
+                lease_ends: if apipa { 0 } else { r.lease_ends },
                 wifi: r.wifi,
                 cfg: Cfg {
                     ip_auto: r.dhcp,
                     address,
                     subnet,
-                    gateway: v4(&r.gateway).into_iter().next().unwrap_or_default(),
+                    gateway: gws.first().map(|g| g.gateway.clone()).unwrap_or_default(),
+                    gw_metric: gws.first().map(|g| g.metric.clone()).unwrap_or_default(),
+                    gws: gws.into_iter().skip(1).collect(),
+                    metric: num(r.if_metric),
                     dns_auto: !r.static_dns,
                     dns1: dns.first().cloned().unwrap_or_default(),
                     dns2: dns.get(1).cloned().unwrap_or_default(),
@@ -279,6 +314,16 @@ mod native {
     }
     fn mask(prefix: u8) -> String {
         Ipv4Addr::from(u32::MAX.checked_shl(32 - prefix as u32).unwrap_or(0)).to_string()
+    }
+
+    /// "Windows 11 24H2 (26100.2033)": the product line from the build, as Windows' own winver does.
+    pub fn os_name() -> String {
+        const NT: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+        let build = reg_text(NT, "CurrentBuild").unwrap_or_default();
+        let line = if build.parse::<u32>().unwrap_or(0) >= 22000 { "Windows 11" } else { "Windows 10" };
+        let ver = reg_text(NT, "DisplayVersion").map(|v| format!(" {v}")).unwrap_or_default();
+        let ubr = reg_dword(NT, "UBR").map(|u| format!(".{u}")).unwrap_or_default();
+        format!("{line}{ver} ({build}{ubr})")
     }
 
     /// A REG_SZ or REG_MULTI_SZ value (multi-strings joined with ',').
@@ -353,9 +398,8 @@ mod native {
         Device::Disabled(desc.unwrap_or_default())
     }
 
-    /// GetAdaptersAddresses for one address family, as a buffer of IP_ADAPTER_ADDRESSES_LH.
-    fn gaa(family: u16) -> Result<Vec<u64>, String> {
-        let flags = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST;
+    /// GetAdaptersAddresses for one address family with the caller's flags, as a buffer of IP_ADAPTER_ADDRESSES_LH.
+    fn gaa(family: u16, flags: GET_ADAPTERS_ADDRESSES_FLAGS) -> Result<Vec<u64>, String> {
         let mut size = 16 * 1024u32;
         let mut buf: Vec<u64> = Vec::new(); // u64 keeps the 8-byte alignment the structs need
         for _ in 0..3 {
@@ -372,10 +416,22 @@ mod native {
         Err("GetAdaptersAddresses kept growing".into())
     }
 
+    /// What ipv6s() asks for: unicast addresses only, which makes the call ~20x faster.
+    /// No INCLUDE_ALL_INTERFACES: an interface listed only with it has no IPv6 binding, so no IPv6 address.
+    pub(super) const V6_FLAGS: GET_ADAPTERS_ADDRESSES_FLAGS = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST
+        | GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_SKIP_DNS_INFO | GAA_FLAG_SKIP_FRIENDLY_NAME;
+
+    const V4_FULL: GET_ADAPTERS_ADDRESSES_FLAGS = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST;
+    // Without ALL_INTERFACES Windows lists only interfaces bound to IPv4 (no NDIS filter modules, WAN miniports, tunnels, unplugged cards).
+    const V4_LEAN: GET_ADAPTERS_ADDRESSES_FLAGS = V4_FULL & !GAA_FLAG_INCLUDE_ALL_INTERFACES;
+    // Tests set this to make read() take the full IPv4 list, as it did before V4_LEAN.
+    #[cfg(test)]
+    thread_local! { pub(super) static FULL_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
     /// IPv6 addresses by adapter GUID (Info shows them; nothing edits them).
-    fn ipv6s() -> HashMap<String, Vec<String>> {
+    pub(super) fn ipv6s(flags: GET_ADAPTERS_ADDRESSES_FLAGS) -> HashMap<String, Vec<String>> {
         let mut out: HashMap<String, Vec<String>> = HashMap::new();
-        let Ok(buf) = gaa(AF_INET6) else { return out };
+        let Ok(buf) = gaa(AF_INET6, flags) else { return out };
         let mut p = buf.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
         while !p.is_null() {
             let a = unsafe { &*p };
@@ -396,8 +452,8 @@ mod native {
     }
 
     /// Live IPv4 settings of every interface the IP stack knows, by adapter GUID.
-    fn live() -> Result<HashMap<String, Raw>, String> {
-        let buf = gaa(AF_INET)?;
+    fn live(flags: GET_ADAPTERS_ADDRESSES_FLAGS) -> Result<HashMap<String, Raw>, String> {
+        let buf = gaa(AF_INET, flags)?;
         let mut out = HashMap::new();
         let mut p = buf.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
         while !p.is_null() {
@@ -425,6 +481,11 @@ mod native {
             while !u.is_null() {
                 let x = unsafe { &*u };
                 if let Some(ip) = unsafe { ipv4(&x.Address) } {
+                    // Duplicate address detection failed: another device has it. It stays listed (it is what's set,
+                    // and the form must show it), with the conflict flagged; read() puts the main address first.
+                    if x.DadState == 2 {   // IpDadStateDuplicate
+                        raw.conflict = ip.to_string();
+                    }
                     // The leased address is the main one, wherever Windows lists it: a typed-in extra can
                     // come first, and the leased one would then be offered for deletion (which netsh refuses).
                     let at = if x.PrefixOrigin == 3 { 0 } else { raw.ip.len() };   // IpPrefixOriginDhcp
@@ -450,19 +511,152 @@ mod native {
         Ok(out)
     }
 
+    /// Moves `ip` and its mask to the front of the list, where the main address goes.
+    pub(super) fn to_front(raw: &mut Raw, ip: &str) {
+        if let Some(i) = raw.ip.iter().position(|x| x == ip) {
+            let (a, m) = (raw.ip.remove(i), raw.subnet.remove(i));
+            raw.ip.insert(0, a);
+            raw.subnet.insert(0, m);
+        }
+    }
+
+    /// Metrics: of each default route by (interface index, gateway), and of each interface whose metric
+    /// was set by hand (automatic ones are left out), by interface index.
+    fn metrics() -> (HashMap<(u32, Ipv4Addr), u32>, HashMap<u32, u32>) {
+        let (mut routes, mut ifs) = (HashMap::new(), HashMap::new());
+        unsafe {
+            let mut t: *mut MIB_IPFORWARD_TABLE2 = std::ptr::null_mut();
+            if GetIpForwardTable2(AF_INET, &mut t) == 0 {
+                for r in std::slice::from_raw_parts((*t).Table.as_ptr(), (*t).NumEntries as usize) {
+                    if r.DestinationPrefix.PrefixLength == 0 {   // 0.0.0.0/0
+                        routes.insert((r.InterfaceIndex, Ipv4Addr::from(r.NextHop.Ipv4.sin_addr.S_un.S_addr.to_ne_bytes())), r.Metric);
+                    }
+                }
+                FreeMibTable(t.cast());
+            }
+            let mut t: *mut MIB_IPINTERFACE_TABLE = std::ptr::null_mut();
+            if GetIpInterfaceTable(AF_INET, &mut t) == 0 {
+                for r in std::slice::from_raw_parts((*t).Table.as_ptr(), (*t).NumEntries as usize) {
+                    if !r.UseAutomaticMetric {
+                        ifs.insert(r.InterfaceIndex, r.Metric);
+                    }
+                }
+                FreeMibTable(t.cast());
+            }
+        }
+        (routes, ifs)
+    }
+
     /// What a joined Wi-Fi card is on: network name, 802.11 standard, channel frequency.
     #[derive(Default)]
-    struct Wlan {
-        ssid: String,
-        phy: String,
-        mhz: u32,
-        wifi: super::Wifi,
+    pub(super) struct Wlan {
+        pub(super) ssid: String,
+        pub(super) phy: String,
+        pub(super) mhz: u32,
+        pub(super) wifi: super::Wifi,
     }
 
     /// The network each Wi-Fi card is joined to, by adapter GUID. Empty when there is no
     /// Wi-Fi (the WLAN service is not running) or nothing is joined.
-    #[allow(non_upper_case_globals)]   // Windows names these dot11_phy_type_*
     fn wlans() -> HashMap<String, Wlan> {
+        wlans_with(true)
+    }
+
+    #[cfg(test)]
+    pub(super) static FAST_HITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    /// The frequency as it has always been read: the scan list for our SSID, type and security,
+    /// then the entry with our BSSID. 0 when there is none.
+    pub(super) unsafe fn mhz_exact(h: windows_sys::Win32::Foundation::HANDLE, guid: &windows_sys::core::GUID,
+        conn: &windows_sys::Win32::NetworkManagement::WiFi::WLAN_CONNECTION_ATTRIBUTES) -> u32 {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        unsafe {
+            let assoc = &conn.wlanAssociationAttributes;
+            let mut mhz = 0;
+            let mut bss: *mut WLAN_BSS_LIST = std::ptr::null_mut();
+            if WlanGetNetworkBssList(h, guid, &assoc.dot11Ssid, dot11_BSS_type_infrastructure,
+                conn.wlanSecurityAttributes.bSecurityEnabled, std::ptr::null(), &mut bss) == 0 {
+                let entries = std::slice::from_raw_parts((*bss).wlanBssEntries.as_ptr(), (*bss).dwNumberOfItems as usize);
+                if let Some(e) = entries.iter().find(|e| e.dot11Bssid == assoc.dot11Bssid) {
+                    mhz = e.ulChCenterFrequency / 1000;   // kHz
+                }
+                WlanFreeMemory(bss.cast());
+            }
+            mhz
+        }
+    }
+
+    /// Every entry in the card's scan list (NULL SSID: no filter, no new scan), copied out and
+    /// freed here. The copies' IE offsets point nowhere; only the fixed fields are read.
+    /// The handle comes as usize: HANDLE is a raw pointer, not Send.
+    unsafe fn bss_all(h: usize, guid: windows_sys::core::GUID) -> Option<Vec<windows_sys::Win32::NetworkManagement::WiFi::WLAN_BSS_ENTRY>> {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        unsafe {
+            let mut bss: *mut WLAN_BSS_LIST = std::ptr::null_mut();
+            if WlanGetNetworkBssList(h as _, &guid, std::ptr::null(), dot11_BSS_type_any, 0, std::ptr::null(), &mut bss) != 0 {
+                return None;
+            }
+            let v = std::slice::from_raw_parts((*bss).wlanBssEntries.as_ptr(), (*bss).dwNumberOfItems as usize).to_vec();
+            WlanFreeMemory(bss.cast());
+            Some(v)
+        }
+    }
+
+    /// The frequency a channel number can stand for under this PHY, kept only if the joined link
+    /// reports exactly that frequency. The scan list's ulChCenterFrequency is where the AP's Beacon
+    /// was heard, its primary 20 MHz channel (IEEE 802.11-2020 11.1.3: Beacons go on the primary
+    /// channel), and the current-channel opcode gives that primary channel (seen here: ch 153 on an
+    /// 80 MHz link, list 5765). Channel to MHz, IEEE 802.11-2020 Annex E / 15.4.4.3 / 27.3.23.2:
+    /// 2.4 GHz 2407+5n (n 1-13), ch 14 2484; 5 GHz 5000+5n; 6 GHz 5950+5n (n = 1 mod 4).
+    /// Bands by PHY: DSSS/HR-DSSS (802.11b, clause 16) and ERP (802.11g, clause 18) are 2.4 GHz only;
+    /// OFDM (802.11a, clause 17) here only 5 GHz (channels under 32 are Japan's 4.9/5.03 GHz, not
+    /// taken); HT and VHT 2.4 or 5 GHz (6 GHz is HE and later only, 26.17.1); HE any of the three.
+    /// The channel numbers overlap across bands, so the link's own frequency picks the one: each band
+    /// gives a different MHz for the same number. EHT (multi-link), DMG and anything else: None.
+    #[allow(non_upper_case_globals)]   // Windows names these dot11_phy_type_*
+    pub(super) fn channel_mhz(phy: i32, ch: u32, link_mhz: u32) -> Option<u32> {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        let f24 = match ch { 1..=13 => Some(2407 + 5 * ch), 14 => Some(2484), _ => None };
+        let f5 = (32..=177).contains(&ch).then(|| 5000 + 5 * ch);
+        let f6 = (ch % 4 == 1 && ch <= 233).then(|| 5950 + 5 * ch);
+        let bands = match phy {
+            dot11_phy_type_hrdsss | dot11_phy_type_erp => [f24, None, None],
+            dot11_phy_type_ofdm => [None, f5, None],
+            dot11_phy_type_ht | dot11_phy_type_vht => [f24, f5, None],
+            dot11_phy_type_he => [f24, f5, f6],
+            _ => return None,
+        };
+        bands.contains(&Some(link_mhz)).then_some(link_mhz)
+    }
+
+    /// The joined network's frequency from its channel number, without the scan list: (PHY, channel,
+    /// MHz), or None where channel_mhz can't vouch for it. The link frequency comes from
+    /// wlan_intf_opcode_realtime_connection_quality (19, newer Windows 11; not in windows-sys yet):
+    /// WLAN_REALTIME_CONNECTION_QUALITY is PhyType, LinkQuality, RxRate, TxRate, bIsMLOConnection,
+    /// ulNumLinks (4 bytes each), then the first link: ucLinkID (padded to 4), ulChannelCenterFrequencyMhz.
+    pub(super) unsafe fn by_channel(h: usize, guid: windows_sys::core::GUID) -> Option<(i32, u32, u32)> {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        unsafe {
+            let query = |op| {
+                let (mut size, mut data) = (0u32, std::ptr::null_mut());
+                if WlanQueryInterface(h as _, &guid, op, std::ptr::null(), &mut size, &mut data, std::ptr::null_mut()) != 0 || data.is_null() {
+                    return None;
+                }
+                let v = std::slice::from_raw_parts(data as *const u32, size as usize / 4).to_vec();
+                WlanFreeMemory(data);
+                Some(v)
+            };
+            let ch = *query(wlan_intf_opcode_channel_number)?.first()?;
+            let q = query(19)?;
+            // One link, not multi-link: [phy, quality, rx, tx, mlo, links, id, MHz, ...]
+            let (phy, link_mhz) = match q[..] { [phy, _, _, _, 0, 1, _, mhz, ..] => (phy as i32, mhz), _ => return None };
+            Some((phy, ch, channel_mhz(phy, ch, link_mhz)?))
+        }
+    }
+
+    /// fast: fetch the whole scan list while the connection is asked for, instead of after it.
+    #[allow(non_upper_case_globals)]   // Windows names these dot11_phy_type_*
+    pub(super) fn wlans_with(fast: bool) -> HashMap<String, Wlan> {
         use windows_sys::Win32::NetworkManagement::WiFi::*;
         let mut out = HashMap::new();
         unsafe {
@@ -476,8 +670,22 @@ mod native {
                 let infos = std::slice::from_raw_parts((*list).InterfaceInfo.as_ptr(), n);
                 for info in infos {
                     let (mut size, mut data) = (0u32, std::ptr::null_mut());
-                    if WlanQueryInterface(h, &info.InterfaceGuid, wlan_intf_opcode_current_connection, std::ptr::null(),
-                        &mut size, &mut data, std::ptr::null_mut()) != 0 {
+                    // Both ask WlanSvc; side by side they end together. The scope joins before the
+                    // next card and before the handle is closed.
+                    let (hu, guid) = (h as usize, info.InterfaceGuid);
+                    // The channel number, when it settles the frequency (well under a millisecond), else the list.
+                    let (rc, got) = std::thread::scope(|s| {
+                        let t = fast.then(|| s.spawn(move || by_channel(hu, guid).ok_or_else(|| bss_all(hu, guid))));
+                        let rc = WlanQueryInterface(h, &info.InterfaceGuid, wlan_intf_opcode_current_connection, std::ptr::null(),
+                            &mut size, &mut data, std::ptr::null_mut());
+                        (rc, t.and_then(|t| t.join().ok()))
+                    });
+                    let (quick, all) = match got {
+                        Some(Ok((phy, _, mhz))) => (Some((phy, mhz)), None),
+                        Some(Err(all)) => (None, all),
+                        None => (None, None),
+                    };
+                    if rc != 0 {
                         continue;   // not joined to anything
                     }
                     let conn = &*(data as *const WLAN_CONNECTION_ATTRIBUTES);
@@ -517,15 +725,32 @@ mod native {
                         },
                     };
                     // The frequency is on the access point's entry in the scan list (the one with our BSSID).
-                    let mut bss: *mut WLAN_BSS_LIST = std::ptr::null_mut();
-                    if WlanGetNetworkBssList(h, &info.InterfaceGuid, ssid, dot11_BSS_type_infrastructure,
-                        conn.wlanSecurityAttributes.bSecurityEnabled.into(), std::ptr::null(), &mut bss) == 0 {
-                        let entries = std::slice::from_raw_parts((*bss).wlanBssEntries.as_ptr(), (*bss).dwNumberOfItems as usize);
-                        if let Some(e) = entries.iter().find(|e| e.dot11Bssid == assoc.dot11Bssid) {
-                            w.mhz = e.ulChCenterFrequency / 1000;   // kHz
+                    // The whole list is used only where it can't disagree with the filtered one: the
+                    // auth says whether security is on, and the entry's Privacy bit (0x10) agrees.
+                    // ponytail: hidden SSID, OWE, WEP and other auths take the old serial call.
+                    let sec = &conn.wlanSecurityAttributes;
+                    let privacy = match sec.dot11AuthAlgorithm {
+                        DOT11_AUTH_ALGO_80211_OPEN if sec.bSecurityEnabled == 0 => Some(false),
+                        DOT11_AUTH_ALGO_WPA | DOT11_AUTH_ALGO_WPA_PSK | DOT11_AUTH_ALGO_RSNA | DOT11_AUTH_ALGO_RSNA_PSK
+                        | DOT11_AUTH_ALGO_WPA3_SAE | DOT11_AUTH_ALGO_WPA3_ENT | DOT11_AUTH_ALGO_WPA3_ENT_192
+                            if sec.bSecurityEnabled != 0 => Some(true),
+                        _ => None,
+                    };
+                    let n = (ssid.uSSIDLength as usize).min(32);
+                    let hit = privacy.and_then(|p| all.as_ref()?.iter().find(|e| {
+                        e.dot11Bssid == assoc.dot11Bssid && e.dot11BssType == dot11_BSS_type_infrastructure
+                            && e.dot11Ssid.uSSIDLength == ssid.uSSIDLength && e.dot11Ssid.ucSSID[..n] == ssid.ucSSID[..n]
+                    }).filter(|e| (e.usCapabilityInformation & 0x10 != 0) == p));
+                    // The same association both times: its PHY must not have changed in between.
+                    let quick = quick.filter(|&(phy, _)| phy == assoc.dot11PhyType).map(|(_, mhz)| mhz);
+                    w.mhz = match quick.or(hit.map(|e| e.ulChCenterFrequency / 1000)) {   // kHz
+                        Some(mhz) => {
+                            #[cfg(test)]
+                            FAST_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            mhz
                         }
-                        WlanFreeMemory(bss.cast());
-                    }
+                        None => mhz_exact(h, &info.InterfaceGuid, conn),
+                    };
                     WlanFreeMemory(data);
                     let g = info.InterfaceGuid;
                     let id = format!("{{{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{}}}", g.data1, g.data2, g.data3, g.data4[0], g.data4[1],
@@ -540,10 +765,14 @@ mod native {
     }
 
     pub fn read() -> Result<Vec<Raw>, String> {
-        let mut live = live()?;
-        let mut wlans = wlans();
-        let mut v6 = ipv6s();
-        let mut out = vec![];
+        // Each asks Windows something that takes some 20 ms: asked side by side, a read takes one of those, not three.
+        let (lean, mut wlans, mut v6, metered, (routes, if_metrics)) = std::thread::scope(|s| {
+            let (w, v, m, r) = (s.spawn(wlans), s.spawn(|| ipv6s(V6_FLAGS)), s.spawn(crate::net::metered), s.spawn(metrics));
+            (live(V4_LEAN), w.join().unwrap_or_default(), v.join().unwrap_or_default(), m.join().unwrap_or_default(), r.join().unwrap_or_default())
+        });
+        #[cfg(test)]
+        let lean = if FULL_ONLY.get() { Err(String::new()) } else { lean };
+        let mut entries = vec![];
         // One entry per network adapter driver. Virtual ports of one card (Wi-Fi Direct)
         // have no driver entry of their own, and NCF_HIDDEN (0x8) marks WAN miniports and
         // the kernel debugger: both are left out, as Get-NetAdapter does.
@@ -559,7 +788,18 @@ mod native {
             let tcp = format!(r"{TCPIP}\{id}");
             // Typed-in DNS servers are kept here; DHCP-given ones are not.
             let static_dns = reg_text(&tcp, "NameServer").is_some_and(|s| !s.is_empty());
-            match device(&instance) {
+            entries.push((id, name, tcp, static_dns, device(&instance)));
+        }
+        // ALL_INTERFACES only adds interfaces with no IPv4 binding: if a present adapter is one of them
+        // (e.g. a Hyper-V external-switch card) or the lean call failed, ask again exactly as before.
+        // ponytail: on a machine with a present IPv4-unbound adapter every read pays both calls (lean + full, the full one serial after the join); remember which GUIDs need it if that hurts.
+        let mut live = match lean {
+            Ok(m) if entries.iter().all(|(id, .., d)| !matches!(d, Device::Present) || m.contains_key(id)) => m,
+            _ => live(V4_FULL)?,
+        };
+        let mut out = vec![];
+        for (id, name, tcp, static_dns, device) in entries {
+            match device {
                 Device::Missing => {}
                 Device::Present => {
                     // No IPv4 binding means nothing for Octet to edit.
@@ -571,6 +811,7 @@ mod native {
                     let w = w.unwrap_or_default();
                     (raw.ssid, raw.phy, raw.mhz) = (w.ssid, w.phy, w.mhz);
                     raw.ipv6 = v6.remove(&id).unwrap_or_default();
+                    raw.metered = metered.contains(&id);
                     // The lease, in seconds since 1970, as Windows keeps it for the interface.
                     if raw.dhcp && raw.status == "Up" {
                         let s = |v| reg_dword(&tcp, v).map_or(0, |t| u64::from(t) * 1000);
@@ -583,18 +824,41 @@ mod native {
                             raw.dns.clear();
                         }
                     }
+                    raw.gw_metric = raw.gateway.iter().map(|g| g.parse().ok().and_then(|g| routes.get(&(raw.index, g))).copied().unwrap_or(0)).collect();
+                    raw.if_metric = if_metrics.get(&raw.index).copied().unwrap_or(0);
+                    // With a conflict, the list's order can't be trusted to put the main address first: a static
+                    // adapter's main one is the first in its saved list (what `set address` wrote, and what Windows'
+                    // own dialog shows), not whichever address another device happens to hold.
+                    if !raw.conflict.is_empty() && !raw.dhcp
+                        && let Some(main) = reg_text(&tcp, "IPAddress").and_then(|t| t.split(',').next().map(String::from)) {
+                        to_front(&mut raw, &main);
+                    }
                     out.push(raw);
                 }
-                Device::Disabled(description) => out.push(Raw {
-                    id,
-                    name,
-                    description,
-                    status: "Disabled".into(),
-                    static_dns,
-                    dhcp: reg_dword(&tcp, "EnableDHCP").is_none_or(|d| d != 0),
-                    register: reg_dword(&tcp, "RegistrationEnabled").is_none_or(|d| d != 0),
-                    ..Default::default()
-                }),
+                Device::Disabled(description) => {
+                    // Windows reports nothing live for a disabled adapter, so its settings come from the registry,
+                    // where they wait for it to come back. Left blank, the form would show a static adapter as
+                    // empty, and an Apply from it would wipe what's there.
+                    let dhcp = reg_dword(&tcp, "EnableDHCP").is_none_or(|d| d != 0);
+                    let list = |v| reg_text(&tcp, v).map(|t| t.split([',', ' ']).filter(|x| !x.is_empty() && *x != "0.0.0.0").map(String::from).collect::<Vec<_>>()).unwrap_or_default();
+                    let (ip, subnet, gateway) = if dhcp { Default::default() } else { (list("IPAddress"), list("SubnetMask"), list("DefaultGateway")) };
+                    let (ip, subnet): (Vec<_>, Vec<_>) = ip.into_iter().zip(subnet).unzip();   // read as pairs
+                    out.push(Raw {
+                        id,
+                        name,
+                        description,
+                        status: "Disabled".into(),
+                        static_dns,
+                        dhcp,
+                        register: reg_dword(&tcp, "RegistrationEnabled").is_none_or(|d| d != 0),
+                        ip,
+                        subnet,
+                        gw_metric: list("DefaultGatewayMetric").iter().map(|m| m.parse().unwrap_or(0)).collect(),
+                        gateway,
+                        dns: if static_dns { list("NameServer") } else { vec![] },
+                        ..Default::default()
+                    })
+                }
             }
         }
         Ok(out)
@@ -606,6 +870,11 @@ mod native {
 mod native {
     use super::{Raw, Wifi};
     use crate::mac;
+
+    pub fn os_name() -> String {
+        let v = std::process::Command::new("/usr/bin/sw_vers").arg("-productVersion").output().ok();
+        format!("macOS {}", v.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default())
+    }
 
     pub fn read() -> Result<Vec<Raw>, String> {
         let (names, links) = (mac::display_names(), mac::links());
@@ -631,11 +900,15 @@ mod native {
                     gateway: s.gateway,
                     dns: s.dns,
                     static_dns: s.static_dns,
+                    gw_metric: vec![],   // ponytail: macOS gateway and interface metrics not read; Apply there sends none
+                    if_metric: 0,
                     ssid: w.as_ref().map(|w| w.ssid.clone()).unwrap_or_default(),
                     speed: w.as_ref().map(|w| w.rate).or(link.map(|l| l.speed)).filter(|_| up).unwrap_or(0),
                     phy: w.as_ref().map(|w| w.phy.clone()).unwrap_or_default(),
                     mhz: w.as_ref().map_or(0, |w| w.mhz),
                     ppp: false,
+                    conflict: String::new(),   // ponytail: macOS duplicate-address state not read yet
+                    metered: false,   // ponytail: macOS's "Low Data Mode" not read; the view guesses from the address
                     suffix: s.suffix,
                     ipv6: link.map(|l| l.ipv6.clone()).unwrap_or_default(),
                     lease_got: s.lease_got,
@@ -682,6 +955,39 @@ mod tests {
         assert_eq!((lab.cfg.dns1.as_str(), lab.cfg.dns2.as_str()), ("1.1.1.1", "8.8.8.8"));
     }
 
+    #[test]
+    fn gateway_and_interface_metrics_keep_their_place() {
+        // As CIM lists them: IPv4 and IPv6 gateways mixed, a metric for each; 0 = automatic.
+        let json = br#"[{"id":"{1}","index":4,"name":"LAN","description":"","mac":"","status":"Up","dhcp":false,"dhcpServer":"","register":false,
+          "ip":["10.0.0.5"],"subnet":["255.255.255.0"],"gateway":["10.0.0.1","fe80::1","10.0.0.2","10.0.0.3"],"gwMetric":[0,256,25,0],"ifMetric":15,
+          "dns":[],"staticDns":true}]"#;
+        let a = &parse(json).unwrap()[0];
+        assert_eq!((a.cfg.gateway.as_str(), a.cfg.gw_metric.as_str(), a.cfg.metric.as_str()), ("10.0.0.1", "", "15"));
+        assert_eq!(a.cfg.gws, [Gw { gateway: "10.0.0.2".into(), metric: "25".into() }, Gw { gateway: "10.0.0.3".into(), metric: String::new() }]);
+        assert_eq!(a.extra_gws, ["10.0.0.2", "10.0.0.3"]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn conflicting_extra_stays_an_extra() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let mut raw = Raw { ip: s(&["10.0.0.6", "10.0.0.5"]), subnet: s(&["255.255.0.0", "255.255.255.0"]), conflict: "10.0.0.6".into(), ..Default::default() };
+        native::to_front(&mut raw, "10.0.0.5");
+        assert_eq!((raw.ip, raw.subnet), (s(&["10.0.0.5", "10.0.0.6"]), s(&["255.255.255.0", "255.255.0.0"])));
+        let a = &shape(vec![Raw { ip: s(&["10.0.0.5", "10.0.0.6"]), subnet: s(&["24", "16"]), conflict: "10.0.0.6".into(), ..Default::default() }])[0];
+        assert_eq!((a.cfg.address.as_str(), a.extra_ips.as_slice(), a.conflict.as_str()), ("10.0.0.5", &s(&["10.0.0.6"])[..], "10.0.0.6"));
+    }
+
+    #[test]
+    fn apipa_shows_no_old_lease() {
+        let json = |ip: &str| format!(r#"[{{"id":"{{1}}","index":4,"name":"LAN","description":"","mac":"","status":"Up","dhcp":true,"dhcpServer":"","register":false,
+          "ip":["{ip}"],"subnet":["255.255.0.0"],"gateway":[],"dns":[],"staticDns":false,"leaseGot":1000,"leaseEnds":2000}}]"#);
+        let a = &parse(json("169.254.10.20").as_bytes()).unwrap()[0];
+        assert_eq!((a.lease_got, a.lease_ends), (0, 0));
+        let a = &parse(json("10.1.2.3").as_bytes()).unwrap()[0];
+        assert_eq!((a.lease_got, a.lease_ends), (1000, 2000));
+    }
+
     /// The native reader must agree with the PowerShell one on this machine, field by field,
     /// and the timings of both are printed:
     /// `cargo test --release -p octet native_matches_powershell -- --ignored --nocapture`.
@@ -726,6 +1032,112 @@ mod tests {
         let (a, b, c) = time(&|| read().unwrap(), 50);
         println!("TIME native     ms: min {a:.2} median {b:.2} max {c:.2}");
         assert_eq!(diffs, 0);
+    }
+
+    /// The lean IPv6 flags give the same map as the full ones:
+    /// `cargo test --release -p octet lean_ipv6_flags_read_the_same -- --ignored`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn lean_ipv6_flags_read_the_same() {
+        use windows_sys::Win32::NetworkManagement::IpHelper::*;
+        let full = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST;
+        assert_eq!(native::ipv6s(full), native::ipv6s(native::V6_FLAGS));
+    }
+
+    /// The lean IPv4 list must read the same as the full one it stands in for:
+    /// `cargo test --release -p octet lean_ipv4_table_reads_the_same -- --ignored`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn lean_ipv4_table_reads_the_same() {
+        let lean = format!("{:?}", read());
+        native::FULL_ONLY.set(true);
+        let full = format!("{:?}", read());
+        native::FULL_ONLY.set(false);
+        assert_eq!(lean, full);
+    }
+
+    /// The parallel scan-list read gives the same Wi-Fi map as the serial one (signal left out:
+    /// it moves between any two calls). Proves it only for the network joined while it runs:
+    /// `cargo test --release -p octet wifi_parallel_bss_reads_the_same -- --ignored --nocapture`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn wifi_parallel_bss_reads_the_same() {
+        use std::sync::atomic::Ordering;
+        let key = |m: std::collections::HashMap<String, native::Wlan>| {
+            m.into_iter().map(|(g, w)| (g, (w.ssid, w.phy, w.mhz, w.wifi.bssid, w.wifi.security))).collect::<std::collections::BTreeMap<_, _>>()
+        };
+        let first = key(native::wlans_with(false));
+        let Some((_, joined)) = first.iter().find(|(_, w)| w.2 != 0) else {
+            println!("skipped: no joined Wi-Fi");
+            return;
+        };
+        println!("joined {:?}, auth {:?}", joined.0, joined.4);
+        native::FAST_HITS.store(0, Ordering::Relaxed);
+        for _ in 0..20 {
+            assert_eq!(key(native::wlans_with(true)), key(native::wlans_with(false)));
+        }
+        println!("fast path taken {} of 20", native::FAST_HITS.load(Ordering::Relaxed));
+    }
+
+    /// A channel number gives a frequency only where the PHY allows that band and the link says the same.
+    #[cfg(windows)]
+    #[test]
+    fn channel_mhz_only_where_the_band_is_certain() {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        let f = native::channel_mhz;
+        assert_eq!(f(dot11_phy_type_he, 153, 5765), Some(5765));            // 5 GHz (this machine)
+        assert_eq!(f(dot11_phy_type_he, 153, 6715), Some(6715));            // 6 GHz, same number
+        assert_eq!(f(dot11_phy_type_vht, 153, 6715), None);                 // VHT is never 6 GHz
+        assert_eq!(f(dot11_phy_type_erp, 14, 2484), Some(2484));
+        assert_eq!(f(dot11_phy_type_ht, 6, 2437), Some(2437));
+        assert_eq!(f(dot11_phy_type_ofdm, 8, 5040), None);                  // Japan 5.03 GHz: not taken
+        assert_eq!(f(dot11_phy_type_he, 36, 5190), None);                   // link disagrees
+        assert_eq!(f(dot11_phy_type_eht, 36, 5180), None);                  // 802.11be: the list
+    }
+
+    /// The channel-number frequency equals the scan list's for the joined network, 20 times over:
+    /// `cargo test --release -p octet wifi_channel_mhz_matches_bss_list -- --ignored --nocapture`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn wifi_channel_mhz_matches_bss_list() {
+        use windows_sys::Win32::NetworkManagement::WiFi::*;
+        unsafe {
+            let (mut ver, mut h) = (0u32, std::ptr::null_mut());
+            assert_eq!(WlanOpenHandle(2, std::ptr::null(), &mut ver, &mut h), 0, "no WLAN service");
+            let mut list: *mut WLAN_INTERFACE_INFO_LIST = std::ptr::null_mut();
+            assert_eq!(WlanEnumInterfaces(h, std::ptr::null(), &mut list), 0);
+            let infos = std::slice::from_raw_parts((*list).InterfaceInfo.as_ptr(), (*list).dwNumberOfItems as usize);
+            let mut joined = 0;
+            for info in infos {
+                for _ in 0..20 {
+                    let (mut size, mut data) = (0u32, std::ptr::null_mut());
+                    if WlanQueryInterface(h, &info.InterfaceGuid, wlan_intf_opcode_current_connection, std::ptr::null(),
+                        &mut size, &mut data, std::ptr::null_mut()) != 0 {
+                        break;
+                    }
+                    joined += 1;
+                    let conn = &*(data as *const WLAN_CONNECTION_ATTRIBUTES);
+                    let list_mhz = native::mhz_exact(h, &info.InterfaceGuid, conn);
+                    match native::by_channel(h as usize, info.InterfaceGuid) {
+                        Some((phy, ch, mhz)) => {
+                            println!("phy {phy} (connection {}) channel {ch}: {mhz} MHz, list {list_mhz} MHz", conn.wlanAssociationAttributes.dot11PhyType);
+                            assert_eq!(mhz, list_mhz);
+                        }
+                        None => println!("phy {}: channel path not taken, list {list_mhz} MHz", conn.wlanAssociationAttributes.dot11PhyType),
+                    }
+                    WlanFreeMemory(data);
+                }
+            }
+            WlanFreeMemory(list.cast());
+            WlanCloseHandle(h, std::ptr::null());
+            if joined == 0 {
+                println!("skipped: no joined Wi-Fi");
+            }
+        }
     }
 
     /// Reads this machine: `cargo test -p octet reads_this_machine -- --ignored --nocapture`.

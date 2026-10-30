@@ -9,6 +9,10 @@ on:
     branches: [main]
     # Docs and screenshots don't change the exe. (Path filters never apply to tag pushes.)
     paths-ignore: ["**.md", "assets/**"]
+  # Pull requests into main test and build too (both jobs, so the Mac build is checked before merging).
+  pull_request:
+    branches: [main]
+    paths-ignore: ["**.md", "assets/**"]
 permissions:
   contents: write
 jobs:
@@ -18,7 +22,7 @@ jobs:
       - uses: actions/checkout@v5
       - run: rustup show            # installs the toolchain pinned in rust-toolchain.toml
       # Compiled dependencies kept between runs (keyed on Cargo.lock): the slow part of every release.
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0   # v2.9.3, pinned: a third-party action in the job whose build gets signed
       # Tests in release too, so they and the build below share one compile of the dependencies.
       - run: cargo test --release -p octet
       - run: cargo build --release -p octet
@@ -30,11 +34,21 @@ jobs:
           "$hash  Octet.exe" | Out-File -Encoding ascii Octet.exe.sha256
           # Ed25519 signature of the exe, checked by Octet's updater before it installs anything.
           $env:OCTET_SIGNING_KEY | Out-File -Encoding ascii key.pem
-          openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.exe -out Octet.exe.sig
-          Remove-Item key.pem
+          try {   # the key file goes even if a step fails
+            openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.exe -out Octet.exe.sig
+            # And of the version with it (update.rs `message`): "octet-update", NUL, version, NUL, the exe.
+            # Updaters from this release on want only this one; the .sig above stays for older copies.
+            $version = $env:GITHUB_REF_NAME.TrimStart('v')
+            $head = [Text.Encoding]::ASCII.GetBytes("octet-update`0$version`0")
+            $msg = [IO.File]::Create("$PWD/Octet.exe.msg")
+            $msg.Write($head, 0, $head.Length)
+            $exe = [IO.File]::OpenRead("$PWD/Octet.exe"); $exe.CopyTo($msg); $exe.Close(); $msg.Close()
+            openssl pkeyutl -sign -inkey key.pem -rawin -in Octet.exe.msg -out Octet.exe.vsig
+          } finally { Remove-Item key.pem, Octet.exe.msg -ErrorAction SilentlyContinue }
           if ((Get-Item Octet.exe.sig).Length -ne 64) { throw "Signing failed" }
+          if ((Get-Item Octet.exe.vsig).Length -ne 64) { throw "Signing failed" }
           gh release create $env:GITHUB_REF_NAME --draft --title "Octet $($env:GITHUB_REF_NAME.TrimStart('v'))" `
-            --notes "SHA-256 of Octet.exe: ``$hash``" Octet.exe Octet.exe.sha256 Octet.exe.sig THIRD-PARTY-NOTICES.md
+            --notes "SHA-256 of Octet.exe: ``$hash``" Octet.exe Octet.exe.sha256 Octet.exe.sig Octet.exe.vsig THIRD-PARTY-NOTICES.md
         env:
           GH_TOKEN: ${{ github.token }}
           OCTET_SIGNING_KEY: ${{ secrets.OCTET_SIGNING_KEY }}
@@ -46,7 +60,7 @@ jobs:
       - uses: actions/checkout@v5
       - run: rustup show
       - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0   # v2.9.3, pinned: a third-party action in the job whose build gets signed
       - run: cargo test --release -p octet
       # Universal Octet.app (Apple silicon and Intel), ad-hoc signed, in Octet.dmg.
       - run: crates/octet/macos/bundle.sh
@@ -58,10 +72,16 @@ jobs:
           # Signed like Octet.exe, for the updater. macOS' own openssl (LibreSSL) can't sign Ed25519.
           brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
           printf '%s\n' "$OCTET_SIGNING_KEY" > key.pem
+          trap 'rm -f key.pem Octet.dmg.msg' EXIT   # the key file goes even if a step fails
           "$(brew --prefix openssl@3)/bin/openssl" pkeyutl -sign -inkey key.pem -rawin -in Octet.dmg -out Octet.dmg.sig
-          rm key.pem
+          # And the version-bound .vsig, built the same way as Octet.exe.vsig.
+          version=$(printf '%s' "$GITHUB_REF_NAME" | sed 's/^v*//')
+          { printf 'octet-update\0%s\0' "$version"; cat Octet.dmg; } > Octet.dmg.msg
+          "$(brew --prefix openssl@3)/bin/openssl" pkeyutl -sign -inkey key.pem -rawin -in Octet.dmg.msg -out Octet.dmg.vsig
+          rm key.pem Octet.dmg.msg
           test "$(stat -f %z Octet.dmg.sig)" = 64
-          gh release upload "$GITHUB_REF_NAME" Octet.dmg Octet.dmg.sha256 Octet.dmg.sig
+          test "$(stat -f %z Octet.dmg.vsig)" = 64
+          gh release upload "$GITHUB_REF_NAME" Octet.dmg Octet.dmg.sha256 Octet.dmg.sig Octet.dmg.vsig
         env:
           GH_TOKEN: ${{ github.token }}
           OCTET_SIGNING_KEY: ${{ secrets.OCTET_SIGNING_KEY }}

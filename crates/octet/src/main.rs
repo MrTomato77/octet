@@ -7,6 +7,8 @@ mod mac;
 mod net;
 mod speed;
 mod update;
+#[cfg(test)]
+mod read_bench;
 
 use change::Request;
 use std::net::Ipv4Addr;
@@ -17,13 +19,35 @@ use tauri::{Emitter, Manager};
 /// A child process without a console window flashing up.
 pub fn hidden(program: &str) -> std::process::Command {
     #[allow(unused_mut)]   // only Windows sets flags
-    let mut c = std::process::Command::new(program);
+    let mut c = std::process::Command::new(tool(program));
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     c
+}
+
+/// A Windows tool by its full path: System32, else the Windows folder ("explorer"). Named bare, Windows looks in
+/// Octet's own folder first (Downloads, say), where a planted netsh.exe would run with Octet's admin rights.
+#[cfg(windows)]
+const NO_FOLDER: &str = "<no Windows folder>";
+#[cfg(windows)]
+fn tool(name: &str) -> std::path::PathBuf {
+    use windows_sys::Win32::System::SystemInformation::{GetSystemDirectoryW, GetWindowsDirectoryW};
+    let name = if name.ends_with(".exe") { name.to_string() } else { format!("{name}.exe") };
+    let (mut sys, mut win) = ([0u16; 260], [0u16; 260]);
+    let (s, w) = unsafe { (GetSystemDirectoryW(sys.as_mut_ptr(), 260) as usize, GetWindowsDirectoryW(win.as_mut_ptr(), 260) as usize) };
+    // A failed call (0, or a folder too long for the buffer) gives a path no file can have ('<' is not allowed), so
+    // nothing starts: never a bare name that gets searched, nor a guessed C:\Windows a user could make on another drive.
+    let at = |b: &[u16], n: usize| std::path::PathBuf::from(if n > 0 && n < 260 { String::from_utf16_lossy(&b[..n]) } else { NO_FOLDER.into() }).join(&name);
+    let sys = at(&sys, s);
+    if sys.exists() { sys } else { at(&win, w) }
+}
+
+#[cfg(not(windows))]
+fn tool(name: &str) -> &str {
+    name
 }
 
 /// Opens a URL in the default browser (or a settings page).
@@ -118,7 +142,7 @@ fn speed_stop() {
 
 /// Settings, Updates: the newer version on GitHub, or None.
 #[tauri::command]
-async fn update_check() -> Result<Option<String>, String> {
+async fn update_check() -> Result<Option<serde_json::Value>, String> {
     blocking(update::check).await
 }
 
@@ -132,7 +156,7 @@ async fn update_install(app: tauri::AppHandle, version: String) -> Result<(), St
 #[tauri::command]
 fn update_restart(app: tauri::AppHandle) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    std::process::Command::new(exe).arg("--updated").spawn().map_err(|e| e.to_string())?;
+    std::process::Command::new(exe).args(["--updated", &format!("--after={}", std::process::id())]).spawn().map_err(|e| e.to_string())?;
     app.exit(0);
     Ok(())
 }
@@ -149,10 +173,11 @@ fn computer_name() -> String {
     net::computer_name()
 }
 
-/// Info: the public address, only when the user asks for it.
+/// Info's public IP, only when the user asks for it, out through the adapter on screen: the same Cloudflare answer the speed test uses.
 #[tauri::command]
-async fn public_ip() -> Result<net::Public, String> {
-    blocking(net::public_ip).await
+async fn public_ip(index: u32, source: String) -> Result<serde_json::Value, String> {
+    let src: Ipv4Addr = source.parse().map_err(|_| "Not an IPv4 address".to_string())?;
+    blocking(move || speed::whois(index, src)).await
 }
 
 /// Who made the card behind a MAC, from the built-in IEEE list.
@@ -179,9 +204,26 @@ fn open_link(which: String) -> Result<(), String> {
         "releases" => "https://github.com/MrTomato77/octet/releases",
         "notices" => "https://github.com/MrTomato77/octet/blob/main/THIRD-PARTY-NOTICES.md",
         "simpleip" => "https://github.com/KurtisLiggett/Simple-IP-Config",
+        // A new issue with the version and system filled in; nothing from the page goes into the address.
+        "issue" => {
+            let body = format!("**Octet:** {}\n\n**What happened:**\n\n", system_info());
+            let enc: String = body.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
+            return open_url(&format!("https://github.com/MrTomato77/octet/issues/new?body={enc}"));
+        }
         _ => return Err("Unknown link".into()),
     };
     open_url(url)
+}
+
+/// About: the version, the OS and the WebView, to paste into a ticket or an issue.
+#[tauri::command]
+fn system_info() -> String {
+    let web = tauri::webview_version().unwrap_or_else(|_| "?".into());
+    // The chip as each OS names it: x64 and ARM64 on Windows, Intel and Apple silicon on a Mac.
+    let chip = match (cfg!(windows), std::env::consts::ARCH) {
+        (true, "x86_64") => "x64", (true, "aarch64") => "ARM64", (false, "x86_64") => "Intel", (false, "aarch64") => "Apple silicon", (_, a) => a,
+    };
+    format!("{} · {} · {} {web} · {chip}", env!("CARGO_PKG_VERSION"), adapters::os_name(), if cfg!(windows) { "WebView2" } else { "WebKit" })
 }
 
 // ---- "Always run as administrator": a marker file in %APPDATA%\Octet ----
@@ -220,12 +262,15 @@ fn set_always_admin(on: bool) -> Result<(), String> {
 }
 
 /// Start an elevated copy now and close this one. Err if UAC was declined.
+/// Off the main thread: ShellExecuteEx waits for the UAC answer, and the window would hang meanwhile.
 #[tauri::command]
-fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    change::run_as_admin(&exe, "--restarted", false)?;
-    app.exit(0);
-    Ok(())
+async fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
+    blocking(move || {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        change::run_as_admin(&exe, &format!("--restarted --after={}", std::process::id()), false)?;
+        app.exit(0);
+        Ok(())
+    }).await
 }
 
 /// The page has painted its first frame: show the window now, so it never opens white.
@@ -237,30 +282,50 @@ fn ready(window: tauri::WebviewWindow) {
 
 static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 
+/// Until process `pid` has closed (5 s at most).
+fn wait_for(pid: u32) {
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::{Foundation::CloseHandle, System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject}};
+        let h = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
+        if !h.is_null() {
+            WaitForSingleObject(h, 5000);
+            CloseHandle(h);
+            return;
+        }
+    }
+    let _ = pid;
+    std::thread::sleep(std::time::Duration::from_millis(700)); // can't watch it: the old fixed wait
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if let [_, flag, request, out] = args.as_slice() {
-        if flag == "--elevated" {
-            std::process::exit(change::run_elevated(request, out));
+    if let [_, flag, request, out, id @ ..] = args.as_slice() && flag == "--elevated" {
+        std::process::exit(change::run_elevated(request, out, id.first().map(String::as_str)));
+    }
+    // Running as administrator (Always run as admin): WebView2 takes extra browser arguments, even another browser
+    // folder, from WEBVIEW2_* variables, which any program of yours can set (HKCU\Environment). One of them opens a
+    // debugging port, through which a program without admin rights could drive this window and change the network.
+    if net::elevated() {
+        for (k, _) in std::env::vars_os().filter(|(k, _)| k.to_string_lossy().to_ascii_uppercase().starts_with("WEBVIEW2_")) {
+            unsafe { std::env::remove_var(k) };   // still one thread: nothing else reads the environment yet
         }
     }
     update::tidy();
     let restarted = args.iter().any(|a| a == "--restarted");
-    // After an update: wait for the old copy to close, then start as usual (elevated again if set to).
-    if args.iter().any(|a| a == "--updated") {
-        std::thread::sleep(std::time::Duration::from_millis(700));
+    // After an update or a restart as admin: let the copy that started this one close first, or single-instance
+    // would hand off to it (and both would be gone). Then start as usual (elevated again if set to).
+    if let Some(pid) = args.iter().find_map(|a| a.strip_prefix("--after=")?.parse().ok()) {
+        wait_for(pid);
+    } else if args.iter().any(|a| a == "--updated" || a == "--restarted") {
+        std::thread::sleep(std::time::Duration::from_millis(700));   // started by 0.2.0 or older, which pass no pid
     }
-    if restarted {
-        // Let the copy that started us close first, or single-instance would hand off to it.
-        std::thread::sleep(std::time::Duration::from_millis(700));
-    } else if always_admin() && !args.iter().any(|a| a == "--admin") && !net::elevated() {
-        if let Ok(exe) = std::env::current_exe() {
-            // No window or single-instance lock exists yet, so the elevated copy needn't wait.
-            if change::run_as_admin(&exe, "--admin", false).is_ok() {
-                return;
-            }
-        } // UAC declined: carry on without admin rights.
-    }
+    if !restarted && always_admin() && !args.iter().any(|a| a == "--admin") && !net::elevated() && let Ok(exe) = std::env::current_exe() {
+        // No window or single-instance lock exists yet, so the elevated copy needn't wait.
+        if change::run_as_admin(&exe, "--admin", false).is_ok() {
+            return;
+        }
+    } // UAC declined: carry on without admin rights.
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(w) = app.get_webview_window("main") {
@@ -278,9 +343,8 @@ fn main() {
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_secs(3));
-                if let Some(w) = handle.get_webview_window("main") {
-                    if !w.is_visible().unwrap_or(true) { let _ = w.show(); }
-                }
+                if let Some(w) = handle.get_webview_window("main")
+                    && !w.is_visible().unwrap_or(true) { let _ = w.show(); }
             });
             // Wi-Fi names are location data on macOS: ask once, so the header can show the network.
             #[cfg(target_os = "macos")]
@@ -294,8 +358,32 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    #[test]
+    fn runs_windows_tools_from_the_system_folders_only() {
+        let sys = super::tool("netsh").parent().unwrap().to_path_buf();
+        assert!(sys.ends_with("System32") || sys.ends_with("system32"), "{sys:?}");
+        for t in ["netsh", "control", "explorer", r"WindowsPowerShell\v1.0\powershell.exe"] {
+            let p = super::tool(t);
+            assert!(p.is_absolute() && p.exists(), "{t}: {p:?}");
+        }
+        // What a failed folder lookup gives: nothing starts, not even a netsh.exe in the current folder.
+        assert!(std::process::Command::new(std::path::Path::new(super::NO_FOLDER).join("netsh.exe")).spawn().is_err());
+    }
+
+    #[test]
+    fn waits_for_the_old_copy_to_close() {
+        let mut child = std::process::Command::new("ping").args(["-n", "2", "127.0.0.1"]).stdout(std::process::Stdio::null()).spawn().unwrap();
+        let t = std::time::Instant::now();
+        super::wait_for(child.id());
+        assert!(child.try_wait().unwrap().is_some(), "returned before it closed");
+        assert!(t.elapsed() < std::time::Duration::from_secs(5));
+    }
 }

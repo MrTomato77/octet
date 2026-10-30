@@ -57,18 +57,6 @@ pub fn computer_name() -> String {
     String::from_utf16_lossy(&buf[..len as usize])
 }
 
-/// The address the internet sees, with who it belongs to. Asked only when the user clicks
-/// (it leaves this machine): one HTTPS request to ipinfo.io through WinHTTP.
-#[derive(serde::Serialize, Debug, PartialEq)]
-pub struct Public {
-    pub ip: String,
-    pub isp: String,
-    pub city: String,
-}
-pub fn public_ip() -> Result<Public, String> {
-    parse_public(&https_get("ipinfo.io", "/json").ok_or("Could not reach the internet")?)
-}
-
 /// GET https://{host}{path}: the body when the answer is 200, else None. Windows' own HTTP
 /// stack, so the system proxy and certificate store apply; gives up after 6 s per step.
 pub fn https_get(host: &str, path: &str) -> Option<Vec<u8>> {
@@ -136,30 +124,25 @@ pub fn dhcp(index: u32, renew: bool) -> Result<(), String> {
         e => Err(format!("Windows could not {} the lease (error {e})", if renew { "renew" } else { "release" })),
     }
 }
-/// ipinfo's answer: {"ip": "...", "city": "...", "org": "AS7470 True Internet ..."}.
-fn parse_public(json: &[u8]) -> Result<Public, String> {
-    let v: serde_json::Value = serde_json::from_slice(json).map_err(|_| "Unexpected answer".to_string())?;
-    let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
-    let ip = s("ip");
-    if ip.parse::<std::net::IpAddr>().is_err() {
-        return Err("Unexpected answer".into());
-    }
-    // "AS7470 True Internet Co.,Ltd." -> "True Internet Co.,Ltd."
-    let org = s("org");
-    let isp = org.split_once(' ').filter(|(a, _)| a.starts_with("AS")).map_or(org.as_str(), |(_, b)| b).to_string();
-    Ok(Public { ip, isp, city: s("city") })
-}
-
-/// Who made the network card, from the first 3 bytes of its MAC ("00-11-32-.." -> "Synology").
-/// The IEEE list is built into the exe (data/oui.txt), so nothing is looked up online.
+/// Who made the network card, from the start of its MAC ("00-11-32-.." -> "Synology"). The IEEE lists
+/// (24-, 28- and 36-bit blocks) are built into the exe (data/oui.txt), so nothing is looked up online.
+/// Longest block first: a 24-bit block the IEEE split up names a reseller of addresses, not the maker.
+/// A made-up MAC (locally administered: phones and laptops on private Wi-Fi addresses) has no maker,
+/// whatever its first bytes happen to match, and neither does a multicast one.
 pub fn vendor(mac: &str) -> Option<&'static str> {
-    static OUI: &str = include_str!("../data/oui.txt");
-    let key: String = mac.chars().filter(char::is_ascii_hexdigit).take(6).collect::<String>().to_ascii_uppercase();
-    if key.len() < 6 {
+    static OUI: std::sync::OnceLock<Vec<(&'static str, &'static str)>> = std::sync::OnceLock::new();
+    let hex: String = mac.chars().filter(char::is_ascii_hexdigit).take(12).collect::<String>().to_ascii_uppercase();
+    let first = u8::from_str_radix(hex.get(..2)?, 16).ok()?;
+    if hex.len() < 12 || first & 0b11 != 0 {
         return None;
     }
-    // ponytail: linear scan of ~40k lines (about a millisecond); a sorted index if it ever runs in a loop.
-    OUI.lines().find_map(|l| l.strip_prefix(key.as_str())?.strip_prefix('\t'))
+    // Parsed once, a few ms; each lookup is then three binary searches instead of a scan of 50k lines.
+    let table = OUI.get_or_init(|| {
+        let mut t: Vec<_> = include_str!("../data/oui.txt").lines().filter_map(|l| l.split_once('\t')).collect();
+        t.sort_unstable_by_key(|r| r.0);
+        t
+    });
+    [9, 7, 6].into_iter().find_map(|n| table.binary_search_by_key(&&hex[..n], |r| r.0).ok().map(|i| table[i].1))
 }
 
 /// Sets an interface's IPv4 DNS servers ("1.1.1.1,8.8.8.8"; empty = from DHCP) and whether it
@@ -209,6 +192,33 @@ pub fn flush_dns() -> bool {
 #[cfg(target_os = "macos")]
 pub fn flush_dns() -> bool {
     crate::change::elevate(&crate::change::Request::FlushDns).is_ok()
+}
+
+/// Adapters (by GUID, "{...}" upper case) whose connection Windows counts as metered: a phone hotspot it
+/// recognised, or a network set as metered in Settings. Asked of Windows' Network List Manager.
+#[cfg(windows)]
+pub fn metered() -> std::collections::HashSet<String> {
+    use windows::Win32::Networking::NetworkListManager::*;
+    use windows::Win32::System::Com::{CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize};
+    use windows::core::Interface;
+    let mut out = std::collections::HashSet::new();
+    unsafe {
+        let com = CoInitializeEx(None, COINIT_MULTITHREADED).is_ok();
+        if let Ok(list) = CoCreateInstance::<_, INetworkListManager>(&NetworkListManager, None, CLSCTX_ALL).and_then(|m| m.GetNetworkConnections()) {
+            loop {
+                let mut c = [None];
+                let Some(c) = list.Next(&mut c, None).ok().and(c[0].take()) else { break };
+                let (Ok(id), Ok(cost)) = (c.GetAdapterId(), c.cast::<INetworkConnectionCost>().and_then(|k| k.GetCost())) else { continue };
+                if cost & (NLM_CONNECTION_COST_FIXED.0 | NLM_CONNECTION_COST_VARIABLE.0) as u32 != 0 {
+                    out.insert(format!("{{{id:?}}}").to_uppercase());
+                }
+            }
+        }
+        if com {
+            CoUninitialize();
+        }
+    }
+    out
 }
 
 /// One ICMP echo; round-trip milliseconds, or None when there is no reply in `timeout_ms`.
@@ -322,6 +332,45 @@ pub fn neighbour(ip: Ipv4Addr, index: u32) -> Option<String> {
     (mac != [0; 6]).then(|| mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
 }
 
+/// Whether the neighbour cache has just heard from `ip` (Reachable, or an entry set by hand), not
+/// merely remembers it (Stale, Delay, Probe: an answer from a while ago).
+#[cfg(windows)]
+fn fresh(ip: Ipv4Addr, index: u32) -> bool {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{GetIpNetEntry2, MIB_IPNET_ROW2};
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, NlnsPermanent, NlnsReachable};
+    let mut row = MIB_IPNET_ROW2::default();
+    row.Address.Ipv4.sin_family = AF_INET;
+    row.Address.Ipv4.sin_addr.S_un.S_addr = ip_u32(ip);
+    row.InterfaceIndex = index;
+    (unsafe { GetIpNetEntry2(&mut row) }) == 0 && [NlnsReachable, NlnsPermanent].contains(&row.State)
+}
+
+/// Throws away what the cache remembers about `ip` and asks ARP afresh: the MAC of what answers now, or None.
+#[cfg(windows)]
+fn resolve(ip: Ipv4Addr, index: u32) -> Option<String> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{MIB_IPNET_ROW2, ResolveIpNetEntry2};
+    use windows_sys::Win32::Networking::WinSock::AF_INET;
+    let mut row = MIB_IPNET_ROW2::default();
+    row.Address.Ipv4.sin_family = AF_INET;
+    row.Address.Ipv4.sin_addr.S_un.S_addr = ip_u32(ip);
+    row.InterfaceIndex = index;
+    if unsafe { ResolveIpNetEntry2(&mut row, std::ptr::null()) } != 0 || row.PhysicalAddressLength != 6 {
+        return None;
+    }
+    let mac = &row.PhysicalAddress[..6];
+    (mac != [0; 6]).then(|| mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
+}
+
+// ponytail: macOS reads the ARP table only; a stale entry there still counts.
+#[cfg(not(windows))]
+fn fresh(_: Ipv4Addr, _: u32) -> bool {
+    true
+}
+#[cfg(not(windows))]
+fn resolve(ip: Ipv4Addr, index: u32) -> Option<String> {
+    neighbour(ip, index)
+}
+
 /// Who holds an address, for the Scan grid.
 #[derive(serde::Serialize, Debug, PartialEq)]
 pub struct Host {
@@ -335,7 +384,19 @@ pub struct Host {
 /// ponytail: ~400 ms for an empty address; the UI runs many at once.
 pub fn scan_host(ip: Ipv4Addr, from: Option<Ipv4Addr>, index: u32) -> Option<Host> {
     let ms = ping(ip, from, 400);
-    let mac = neighbour(ip, index);
+    // No ping answer and only an old cache entry: the device may have left long ago (Windows keeps stale
+    // entries for a while), so ask again. Something still there answers ARP whether or not it answers ping.
+    let mac = match neighbour(ip, index) {
+        // For a device that left, Windows retries ARP ~3 times a second apart (up to ~4 s), and about one address in
+        // twelve held the whole sweep that long at 97%. Something there answers within tens of ms (a dozing phone, a
+        // few hundred), so 800 ms decides; the ask carries on alone on its thread and refreshes the cache.
+        Some(_) if ms.is_none() && !fresh(ip, index) => {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || { let _ = tx.send(resolve(ip, index)); });
+            rx.recv_timeout(std::time::Duration::from_millis(800)).ok().flatten()
+        }
+        m => m,
+    };
     (ms.is_some() || mac.is_some()).then(|| Host { vendor: mac.as_deref().and_then(vendor), mac, ms })
 }
 
@@ -366,6 +427,19 @@ pub fn watch(on_change: fn()) {
 
 #[cfg(test)]
 mod tests {
+    /// `cargo test --release -p octet bench_vendor -- --ignored --nocapture`: the table's one-time parse, then lookups.
+    #[test]
+    #[ignore]
+    fn bench_vendor() {
+        let t = std::time::Instant::now();
+        super::vendor("00-11-32-00-00-01");
+        println!("first lookup (parses the table): {:?}", t.elapsed());
+        let macs: Vec<String> = (0..100_000u32).map(|i| format!("{:02X}-{:02X}-{:02X}-00-00-01", (i >> 16) as u8 & 0xFC, (i >> 8) as u8, i as u8)).collect();
+        let t = std::time::Instant::now();
+        let hits = macs.iter().filter(|m| super::vendor(m).is_some()).count();
+        println!("100k lookups: {:?} ({hits} named)", t.elapsed());
+    }
+
     #[test]
     fn loopback_answers_ping() {
         assert!(super::ping(std::net::Ipv4Addr::LOCALHOST, None, 1000).is_some());
@@ -394,11 +468,7 @@ mod tests {
     }
 
     #[test]
-    fn reads_ipinfo_answers() {
-        let p = super::parse_public(br#"{"ip":"203.0.113.48","city":"Bangkok","org":"AS7470 True Internet Co.,Ltd."}"#).unwrap();
-        assert_eq!((p.ip.as_str(), p.isp.as_str(), p.city.as_str()), ("203.0.113.48", "True Internet Co.,Ltd.", "Bangkok"));
-        assert!(super::parse_public(b"<html>rate limited</html>").is_err());
-        assert!(super::parse_public(br#"{"ip":"not an ip"}"#).is_err());
+    fn names_this_computer() {
         assert!(!super::computer_name().is_empty());
     }
 
@@ -410,11 +480,36 @@ mod tests {
         assert!(super::dhcp(999_999, true).is_err());
     }
 
-    /// Reaches the internet: `cargo test -p octet asks_ipinfo -- --ignored --nocapture`.
+    /// Times a real sweep of one /24 the way Scan does it (96 at a time, network and broadcast skipped).
+    /// Sends what Scan sends. `OCTET_SCAN=10.30.9,10.30.9.72,20` (the /24, the source address, the interface index,
+    /// optionally how many at once):
+    /// `cargo test -p octet sweep_timing -- --ignored --nocapture`.
     #[test]
     #[ignore]
-    fn asks_ipinfo() {
-        println!("{:?}", super::public_ip());
+    fn sweep_timing() {
+        use std::net::Ipv4Addr;
+        let env = std::env::var("OCTET_SCAN").expect("OCTET_SCAN=a.b.c,source,index");
+        let v: Vec<&str> = env.split(',').collect();
+        let (from, index): (Ipv4Addr, u32) = (v[1].parse().unwrap(), v[2].parse().unwrap());
+        let todo = std::sync::Mutex::new((1..255u8).map(|h| format!("{}.{h}", v[0]).parse::<Ipv4Addr>().unwrap()).collect::<Vec<_>>());
+        let workers: usize = v.get(3).map_or(96, |w| w.parse().unwrap());
+        let (found, took) = (std::sync::Mutex::new(vec![]), std::sync::Mutex::new(vec![]));
+        let t0 = std::time::Instant::now();
+        std::thread::scope(|s| for _ in 0..workers {
+            s.spawn(|| loop {
+                let Some(ip) = todo.lock().unwrap().pop() else { break };   // not in `while let`: that holds the lock for the body
+                let t = std::time::Instant::now();
+                let h = super::scan_host(ip, Some(from), index);
+                let ms = t.elapsed().as_millis();
+                if let Some(h) = h { found.lock().unwrap().push((ip, h.ms, ms)); }   // the ping's round trip, how long it all took
+                took.lock().unwrap().push(ms);
+            });
+        });
+        let (mut found, mut took) = (found.into_inner().unwrap(), took.into_inner().unwrap());
+        found.sort();
+        took.sort();
+        println!("sweep {} ms, per address {}/{}/{} ms (min/median/max), {} hosts: {:?}",
+            t0.elapsed().as_millis(), took[0], took[took.len() / 2], took[took.len() - 1], found.len(), found);
     }
 
     #[test]
@@ -430,6 +525,12 @@ mod tests {
         assert_eq!(super::vendor("00-11-32-AB-CD-EF"), Some("Synology"));
         assert_eq!(super::vendor("b8:27:eb:00:00:01"), Some("Raspberry Pi Foundation"));
         assert_eq!(super::vendor("02-00-00-00-00-01"), None);
+        // A 28-bit block (MA-M) inside a 24-bit one the IEEE split up: the block's own maker, not the IEEE.
+        assert!(super::vendor("C8-5C-E2-70-00-01").is_some_and(|v| !v.contains("IEEE")));
+        // Made-up (locally administered) and multicast MACs have no maker, even when the bytes match a block.
+        assert_eq!(super::vendor("02-60-8C-00-00-01"), None);
+        assert_eq!(super::vendor("01-00-5E-00-00-01"), None);
+        assert_eq!(super::vendor("00-11-32"), None, "too short to be a MAC");
         assert_eq!(super::vendor(""), None);
     }
 

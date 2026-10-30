@@ -35,6 +35,9 @@ struct Via {
     index: u32,
     src: Ipv4Addr,
     to: SocketAddr,
+    /// Out through the adapter only. Off once the adapter way was refused: a VPN that blocks traffic around its
+    /// tunnel (a kill switch) leaves the normal way, through the VPN, as the only one.
+    pinned: bool,
 }
 
 /// A TCP socket that can only leave through the adapter (IP_UNICAST_IF, bound to its address), wrapped in TLS.
@@ -56,19 +59,49 @@ fn tcp(via: Via) -> Result<TcpStream, String> {
         if s == INVALID_SOCKET {
             return Err(format!("socket: {}", WSAGetLastError()));
         }
-        let fail = |what: &str| { let e = WSAGetLastError(); closesocket(s); Err(format!("{what}: {e}")) };
+        let fail = |what: &str| { let e = WSAGetLastError(); closesocket(s); Err(format!("{what}: {}", said(e))) };
         let idx = via.index.to_be(); // IPv4 wants the index in network byte order
-        if setsockopt(s, IPPROTO_IP, IP_UNICAST_IF, (&idx as *const u32).cast(), 4) != 0 {
+        if via.pinned && setsockopt(s, IPPROTO_IP, IP_UNICAST_IF, (&idx as *const u32).cast(), 4) != 0 {
             return fail("IP_UNICAST_IF");
         }
         let (from, to) = (addr(via.src, 0), addr(*t.ip(), t.port()));
-        if bind(s, (&from as *const SOCKADDR_IN).cast(), size_of::<SOCKADDR_IN>() as i32) != 0 {
+        if via.pinned && bind(s, (&from as *const SOCKADDR_IN).cast(), size_of::<SOCKADDR_IN>() as i32) != 0 {
             return fail("bind");
         }
-        if connect(s, (&to as *const SOCKADDR_IN).cast(), size_of::<SOCKADDR_IN>() as i32) != 0 {
+        // Connect with a deadline: a blocking one waits out every SYN retry (some 21 s) on a line that goes nowhere.
+        let mut nb = 1u32;
+        ioctlsocket(s, FIONBIO, &mut nb);
+        if connect(s, (&to as *const SOCKADDR_IN).cast(), size_of::<SOCKADDR_IN>() as i32) != 0 && WSAGetLastError() != WSAEWOULDBLOCK {
             return fail("connect");
         }
+        let mut p = WSAPOLLFD { fd: s, events: POLLWRNORM, revents: 0 };
+        match WSAPoll(&mut p, 1, 10_000) {
+            0 => { closesocket(s); return Err("connect: timed out".into()) }
+            n if n < 0 => return fail("connect"),
+            _ => {}
+        }
+        let (mut e, mut len) = (0i32, 4i32);
+        getsockopt(s, SOL_SOCKET, SO_ERROR, (&mut e as *mut i32).cast(), &mut len);
+        if e != 0 || p.revents & (POLLERR | POLLHUP) != 0 {
+            closesocket(s);
+            return Err(format!("connect: {}", said(e)));
+        }
+        nb = 0;
+        ioctlsocket(s, FIONBIO, &mut nb);
         Ok(TcpStream::from_raw_socket(s as u64))
+    }
+}
+
+/// The Winsock errors a connect meets most, in words; any other keeps its number.
+#[cfg(windows)]
+fn said(e: i32) -> String {
+    match e {
+        10051 => "no route to the internet".into(),   // WSAENETUNREACH
+        10065 => "no route to Cloudflare".into(),     // WSAEHOSTUNREACH
+        10060 => "timed out".into(),                  // WSAETIMEDOUT
+        10061 => "refused".into(),                    // WSAECONNREFUSED
+        10049 => "this adapter's address isn't usable".into(),   // WSAEADDRNOTAVAIL (bind)
+        _ => format!("error {e}"),
     }
 }
 
@@ -167,19 +200,21 @@ fn brand(asn: u64) -> Option<&'static str> {
 
 /// Bytes the far end has acknowledged on these sockets (SIO_TCP_INFO): sent, less what's still in flight or was sent again.
 #[cfg(windows)]
-fn acked(socks: &[TcpStream]) -> Option<u64> {
+/// Each socket keeps the last count it gave: one that can no longer say (dropped and opened again) still counts what it had.
+fn acked(socks: &mut [(TcpStream, u64)]) -> Option<u64> {
     use std::os::windows::io::AsRawSocket;
     use windows_sys::Win32::Networking::WinSock::{SIO_TCP_INFO, TCP_INFO_v0, WSAIoctl};
-    socks.iter().map(|s| {
+    Some(socks.iter_mut().map(|(s, last)| {
         let (ver, mut info, mut got) = (0u32, TCP_INFO_v0::default(), 0u32);
         let ok = unsafe { WSAIoctl(s.as_raw_socket() as usize, SIO_TCP_INFO, (&ver as *const u32).cast(), 4,
             (&mut info as *mut TCP_INFO_v0).cast(), size_of::<TCP_INFO_v0>() as u32, &mut got, std::ptr::null_mut(), None) } == 0;
-        ok.then(|| info.BytesOut.saturating_sub(info.BytesInFlight as u64 + info.BytesRetrans as u64))
-    }).sum()
+        if ok { *last = (*last).max(info.BytesOut.saturating_sub(info.BytesInFlight as u64 + info.BytesRetrans as u64)); }
+        *last
+    }).sum())
 }
 
 #[cfg(not(windows))]
-fn acked(_: &[TcpStream]) -> Option<u64> {
+fn acked(_: &mut [(TcpStream, u64)]) -> Option<u64> {
     None
 }
 
@@ -194,7 +229,7 @@ fn median(v: &[f64]) -> Option<u32> {
 fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send: &dyn Fn(Value)) -> Result<(), String> {
     let stop = Arc::new(AtomicBool::new(false));
     let err = Arc::new(Mutex::new(None::<String>));
-    let socks = Arc::new(Mutex::new(Vec::<TcpStream>::new()));
+    let socks = Arc::new(Mutex::new(Vec::<(TcpStream, u64)>::new()));
     let loaded = Arc::new(Mutex::new(Vec::<f64>::new()));
     let body = Arc::new(vec![0u8; if up { UP_CHUNK } else { 0 }]);
     for _ in 0..STREAMS {
@@ -202,13 +237,20 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
         std::thread::spawn(move || {
             let count = |n: u64| { used.fetch_add(n, Relaxed); };
             let run = || -> Result<(), String> {
-                let mut c = open(via)?;
-                socks.lock().unwrap().push(c.get_ref().try_clone().map_err(|e| e.to_string())?);
-                while !stop.load(Relaxed) {
-                    let s = if up { post(&mut c, &body, &count)? } else { get(&mut c, &format!("/__down?bytes={CHUNK}"), false, &count)?.0 };
-                    if s != 200 {
-                        return Err(format!("Cloudflare answered HTTP {s}"));
+                // A connection the far end drops (keep-alive ends) is opened again, twice at most, rather than failing the test.
+                for again in 0.. {
+                    let mut c = open(via)?;
+                    socks.lock().unwrap().push((c.get_ref().try_clone().map_err(|e| e.to_string())?, 0));
+                    while !stop.load(Relaxed) {
+                        let s = match if up { post(&mut c, &body, &count) } else { get(&mut c, &format!("/__down?bytes={CHUNK}"), false, &count).map(|r| r.0) } {
+                            Err(_) if again < 2 && !stop.load(Relaxed) => break,
+                            r => r?,
+                        };
+                        if s != 200 {
+                            return Err(format!("Cloudflare answered HTTP {s}"));
+                        }
                     }
+                    if stop.load(Relaxed) { break }
                 }
                 Ok(())
             };
@@ -222,9 +264,19 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
         let (stop, loaded, socks) = (stop.clone(), loaded.clone(), socks.clone());
         std::thread::spawn(move || {
             let Ok(mut c) = open(via) else { return };
-            if let Ok(s) = c.get_ref().try_clone() { socks.lock().unwrap().push(s); }
+            if let Ok(s) = c.get_ref().try_clone() { socks.lock().unwrap().push((s, 0)); }
             while !stop.load(Relaxed) {
-                if let Ok(ms) = ping(&mut c) { loaded.lock().unwrap().push(ms); }
+                match ping(&mut c) {
+                    Ok(ms) => loaded.lock().unwrap().push(ms),
+                    // Cut because the leg ended: no new connection that nobody would cut.
+                    Err(_) if stop.load(Relaxed) => break,
+                    // Dropped: the next reading comes on a new connection, cut with the others when the leg ends.
+                    Err(_) => if let Ok(n) = open(via) {
+                        if stop.load(Relaxed) { n.get_ref().shutdown(Shutdown::Both).ok(); break }   // the leg ended while it opened
+                        if let Ok(s) = n.get_ref().try_clone() { socks.lock().unwrap().push((s, 0)); }
+                        c = n;
+                    },
+                }
                 std::thread::sleep(TICK);
             }
         });
@@ -233,7 +285,7 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
     // end acknowledges them: counting writes would count what only reached the socket's send buffer, megabytes a
     // stream in the first moments, and the dial would shoot up as upload starts.
     let base = used.load(Relaxed);   // used runs over the whole test
-    let moved = || if up { acked(&socks.lock().unwrap()) } else { None }.unwrap_or_else(|| used.load(Relaxed) - base);
+    let moved = || if up { acked(&mut socks.lock().unwrap()) } else { None }.unwrap_or_else(|| used.load(Relaxed) - base);
     let t0 = Instant::now();
     let mut warm_at = None;
     let result = loop {
@@ -262,10 +314,53 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
     // and waiting on it held the next leg up for its whole timeout (15-21 s, the dial frozen meanwhile).
     // Each sees the stop once its call returns and ends on its own, its socket closed as it goes.
     stop.store(true, Relaxed);
-    for s in socks.lock().unwrap().iter() {
+    for (s, _) in socks.lock().unwrap().iter() {
         s.shutdown(Shutdown::Both).ok();
     }
     result
+}
+
+/// Who this adapter's connection is, as Cloudflare sees it: public IP, ISP and the Cloudflare site that answered.
+/// The one answer behind Info's public IP and the speed test's ISP and site, so the two can't disagree.
+fn meta(c: &mut Tls) -> Result<Value, String> {
+    let (status, body, _) = get(c, "/meta", true, &|_| {})?;
+    let m: Value = serde_json::from_slice(&body).map_err(|_| "Unexpected answer from Cloudflare".to_string())?;
+    let ip = m["clientIp"].as_str().filter(|ip| ip.parse::<std::net::IpAddr>().is_ok()).filter(|_| status == 200).ok_or("Unexpected answer from Cloudflare")?;
+    let isp = m["asn"].as_u64().and_then(brand).map(Value::from).unwrap_or_else(|| m["asOrganization"].clone());
+    // city: a guess at where this connection is; site: where the Cloudflare server that answered is.
+    Ok(json!({ "ip": ip, "isp": isp, "asn": m["asn"], "city": m["city"], "colo": m["colo"]["iata"], "site": m["colo"]["city"] }))
+}
+
+fn resolve(index: u32, src: Ipv4Addr) -> Result<Via, String> {
+    // ponytail: the name is looked up the system's way (default route); only the test itself is pinned.
+    let to = (HOST, 443).to_socket_addrs().ok().and_then(|mut a| a.find(SocketAddr::is_ipv4)).ok_or("Can't look up speed.cloudflare.com")?;
+    Ok(Via { index, src, to, pinned: true })
+}
+
+/// The first connection: through the adapter, else the normal way. Returns the way that worked, kept for the rest.
+fn reach(via: Via) -> Result<(Via, Tls), String> {
+    match open(via) {
+        Ok(c) => Ok((via, c)),
+        Err(e) => {
+            let free = Via { pinned: false, ..via };
+            open(free).map(|c| (free, c)).map_err(|_| e)
+        }
+    }
+}
+
+/// Cloudflare's answer, plus `via`: the local address the normal way left from, when the adapter way was refused.
+fn meta_via(via: Via, c: &mut Tls) -> Result<Value, String> {
+    let mut m = meta(c)?;
+    if !via.pinned {
+        m["via"] = json!(c.get_ref().local_addr().map(|a| a.ip().to_string()).unwrap_or_default());
+    }
+    Ok(m)
+}
+
+/// Info's public IP: the same answer the speed test gets, out through the same adapter.
+pub fn whois(index: u32, src: Ipv4Addr) -> Result<Value, String> {
+    let (via, mut c) = reach(resolve(index, src)?).map_err(|e| format!("Can't reach the internet through this adapter ({e})"))?;
+    meta_via(via, &mut c)
 }
 
 /// The whole test. Returns once it's over, stopped or failed; a stopped test sends nothing more.
@@ -273,25 +368,30 @@ pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String
     let me = RUN.fetch_add(1, Relaxed) + 1;
     let live = || RUN.load(Relaxed) == me;
     let send = |v: Value| if live() { send(v) };
-    // ponytail: the name is looked up the system's way (default route); only the test itself is pinned.
-    let to = (HOST, 443).to_socket_addrs().ok().and_then(|mut a| a.find(SocketAddr::is_ipv4)).ok_or("Can't look up speed.cloudflare.com")?;
-    let via = Via { index, src, to };
     let used = Arc::new(AtomicU64::new(0));
-
-    let mut c = open(via).map_err(|e| format!("Can't reach Cloudflare through this adapter ({e})"))?;
-    // Who the line is: Cloudflare's view of this connection (ISP, and the Cloudflare site that answered).
-    if let Ok((200, body, _)) = get(&mut c, "/meta", true, &|_| {}) {
-        let m: Value = serde_json::from_slice(&body).unwrap_or_default();
-        // colo is the Cloudflare site ({iata, city}); the top-level city is a guess at the client's, not wanted here.
-        let isp = m["asn"].as_u64().and_then(brand).map(Value::from).unwrap_or_else(|| m["asOrganization"].clone());
-        send(json!({ "kind": "meta", "isp": isp, "asn": m["asn"], "colo": m["colo"]["iata"], "city": m["colo"]["city"] }));
+    let (via, mut c) = reach(resolve(index, src)?).map_err(|e| format!("Can't reach Cloudflare through this adapter ({e})"))?;
+    if let Ok(mut m) = meta_via(via, &mut c) {
+        m["kind"] = json!("meta");
+        send(m);
     }
     ping(&mut c)?; // warms the connection; the first is slow
+    let mut fails = 0;
     for _ in 0..20 {
         if !live() {
             return Ok(());
         }
-        send(json!({ "kind": "latency", "ms": ping(&mut c)?.round() }));
+        match ping(&mut c) {
+            Ok(ms) => send(json!({ "kind": "latency", "ms": ms.round() })),
+            // A connection the far end dropped: a new one (warmed again), as the legs do, rather than failing the test.
+            Err(e) => {
+                fails += 1;
+                if fails > 2 {
+                    return Err(e);
+                }
+                c = open(via)?;
+                ping(&mut c)?;
+            }
+        }
     }
     drop(c);
     for up in [false, true] {
@@ -302,4 +402,35 @@ pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String
     }
     send(json!({ "kind": "done", "bytes": used.load(Relaxed) }));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    // Sends nothing: an address this PC doesn't have fails at bind, before any connect.
+    #[test]
+    #[cfg(windows)]
+    fn says_why_it_cant_connect() {
+        let _ = std::net::TcpListener::bind("127.0.0.1:0");   // starts Winsock, as resolving the host does in a real run
+        let via = super::Via { index: 1, src: "192.0.2.1".parse().unwrap(), to: "192.0.2.2:443".parse().unwrap(), pinned: true };
+        let e = super::tcp(via).unwrap_err();
+        assert!(e.contains("isn't usable"), "{e}");
+    }
+
+    // Real traffic (~200 MB): OCTET_IF=<adapter index> OCTET_SRC=<its IPv4> cargo test -p octet speed -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn runs_a_whole_test() {
+        let (Ok(i), Ok(src)) = (std::env::var("OCTET_IF"), std::env::var("OCTET_SRC")) else { return };
+        let t0 = std::time::Instant::now();
+        let last = std::cell::RefCell::new(String::new());
+        super::run(i.parse().unwrap(), src.parse().unwrap(), |v| {
+            let k = v["kind"].as_str().unwrap_or("").to_string();
+            if *last.borrow() != k || k == "done" { println!("{:5.1}s {v}", t0.elapsed().as_secs_f64()); *last.borrow_mut() = k; }
+        }).unwrap();
+        // A line that goes nowhere fails within the connect deadline, not after every SYN retry.
+        let t = std::time::Instant::now();
+        assert!(super::open(super::Via { index: i.parse().unwrap(), src: src.parse().unwrap(), to: "10.255.255.1:443".parse().unwrap(), pinned: true }).is_err());
+        println!("dead end: {:?}", t.elapsed());
+        assert!(t.elapsed() < std::time::Duration::from_secs(12));
+    }
 }

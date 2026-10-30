@@ -59,7 +59,7 @@ A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simpl
 
 ## Fast, all the way down
 
-The backend is Rust talking to Windows directly: IP Helper for addresses, DNS and DHCP, ICMP for ping, WinHTTP for the one web request. No `ipconfig`, no PowerShell, no console windows flashing by. A DNS change takes milliseconds.
+The backend is Rust talking to Windows directly: IP Helper for addresses, DNS and DHCP, ICMP for ping, WinHTTP for update checks, and TLS sockets pinned to the adapter on screen for the speed test and public IP. No `ipconfig`, no PowerShell, no console windows flashing by. A DNS change takes milliseconds.
 
 ## Download
 
@@ -87,7 +87,7 @@ Octet opens without admin rights. It asks through UAC only when you Apply, enabl
 
 ## Privacy
 
-No telemetry, no server of its own. What it shows comes from Windows itself. On your network it sends only what you'd expect: an ARP check before Apply, pings to the gateway and DNS after it, pings and ARP while you Ping or Scan, and a reverse name lookup for the gateway. Device makers come from the IEEE list built into the app; MAC addresses are never looked up online. The only request to the internet is your public IP, through [ipinfo.io](https://ipinfo.io), and only when you click it.
+No telemetry, no server of its own. What it shows comes from Windows itself. On your network it sends only what you'd expect: an ARP check before Apply, pings to the gateway and DNS after it, pings and ARP while you Ping or Scan, and a reverse name lookup for the gateway. Device makers come from the IEEE list built into the app; MAC addresses are never looked up online. The internet is reached only when you ask: your public IP (Info) and the speed test, both through Cloudflare ([speed.cloudflare.com](https://speed.cloudflare.com)), out through the adapter on screen. Updates are looked for on GitHub only when you press the button in Settings, or when Octet starts if you turn on *Auto-check* (off unless you do), and a download is installed only if its signature checks out and it is newer than the copy you run.
 
 ## Build
 

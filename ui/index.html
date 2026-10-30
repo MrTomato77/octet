@@ -28,7 +28,7 @@
   --t-press: 100ms; --t-fast: 140ms; --t-base: 180ms; --t-slow: 240ms;
 
   --bg: oklch(0.965 0.002 250); --surface: oklch(0.99 0.001 250); --side: oklch(0.94 0.004 250);
-  --ink: oklch(0.24 0.01 250); --muted: oklch(0.47 0.012 250); --faint: oklch(0.62 0.01 250);
+  --ink: oklch(0.24 0.01 250); --muted: oklch(0.47 0.012 250); --faint: oklch(0.52 0.01 250);   /* 4.5:1 or better on the page and panels; about 4.3:1 on a hovered row, 4.0:1 on the selected one (dark alike) */
   --border: oklch(0.86 0.006 250); --border-strong: oklch(0.72 0.008 250);
   --hover: oklch(0.915 0.006 250); --select: oklch(0.895 0.008 250);
   --accent: oklch(0.5 0.15 255); --accent-ink: oklch(0.99 0 0); --accent-soft: oklch(0.93 0.035 255);
@@ -39,7 +39,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: oklch(0.215 0.006 250); --surface: oklch(0.245 0.006 250); --side: oklch(0.19 0.006 250);
-    --ink: oklch(0.94 0.004 250); --muted: oklch(0.72 0.01 250); --faint: oklch(0.56 0.01 250);
+    --ink: oklch(0.94 0.004 250); --muted: oklch(0.72 0.01 250); --faint: oklch(0.64 0.01 250);
     --border: oklch(0.35 0.008 250); --border-strong: oklch(0.48 0.01 250);
     --hover: oklch(0.27 0.008 250); --select: oklch(0.3 0.01 250);
     --accent: oklch(0.74 0.12 255); --accent-ink: oklch(0.17 0.02 255); --accent-soft: oklch(0.32 0.05 255);
@@ -50,7 +50,7 @@
 }
 :root[data-theme="dark"] {
   --bg: oklch(0.215 0.006 250); --surface: oklch(0.245 0.006 250); --side: oklch(0.19 0.006 250);
-  --ink: oklch(0.94 0.004 250); --muted: oklch(0.72 0.01 250); --faint: oklch(0.56 0.01 250);
+  --ink: oklch(0.94 0.004 250); --muted: oklch(0.72 0.01 250); --faint: oklch(0.64 0.01 250);
   --border: oklch(0.35 0.008 250); --border-strong: oklch(0.48 0.01 250);
   --hover: oklch(0.27 0.008 250); --select: oklch(0.3 0.01 250);
   --accent: oklch(0.74 0.12 255); --accent-ink: oklch(0.17 0.02 255); --accent-soft: oklch(0.32 0.05 255);
@@ -356,6 +356,7 @@ button, input, select { font: inherit; color: inherit; }
 .scell.edge { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--border) 60%, transparent); color: var(--faint); font: inherit; font-size: 10px; line-height: 1; }
 .scell:not(.edge):hover, .scell.pick { box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--ink) 70%, transparent); }
 .sgrid.off .scell { opacity: 0.4; }
+.scell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* A key in the footer points at its cells: a click holds it, another lets go. */
 .sgrid[data-only=me] .scell:not(.me), .sgrid[data-only=gw] .scell:not(.gw),
 .sgrid[data-only=used] .scell:not(.used) { opacity: 0.2; }
@@ -716,6 +717,7 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .sp-again.stop:hover, .sp-again.stop:focus-visible { border-color: var(--bad); }
 .sp-note { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-note.bad { color: var(--bad); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }   /* read aloud, not shown */
 /* Cloudflare's mark, the one the DNS templates use, in the text's own colour */
 .cf-logo, .sp-note.cf::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 5px; vertical-align: -2px; background: currentColor;
   -webkit-mask: url(vendor/logos/cloudflare.svg) center / contain no-repeat; mask: url(vendor/logos/cloudflare.svg) center / contain no-repeat; }
@@ -764,8 +766,15 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .panes { min-height: 248px; }
 .pane[hidden], .set [hidden] { display: none; }
 .pane.in { animation: rise var(--t-base) var(--ease-out); }
-.keys { display: grid; grid-template-columns: auto auto 1fr; gap: var(--s2) 6px; align-items: center; font-size: 13px; }
-.keys > span:last-child, .keys > span:nth-child(3n) { color: var(--muted); padding-left: var(--s2); }
+.keys { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: center; align-content: start; font-size: 13px; }
+.keys > span { color: var(--muted); padding-left: var(--s2); }
+.keys h4 { grid-column: 1 / -1; margin: var(--s2) 0 0; font-size: 12px; font-weight: 600; color: var(--faint); }
+.keys h4:first-child { margin-top: 0; }
+/* Under Updates, once a newer version is found: the first points of its release notes. */
+.upd-notes, .news ul { margin: 0; padding-left: 16px; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
+.upd-notes { color: var(--ink); margin-top: -2px; }
+.about .news { display: grid; }
+.brand-name .link { margin-left: auto; font-size: 12px; }
 kbd { font: 12px/20px var(--font); min-width: 24px; padding: 0 6px; text-align: center; border: 1px solid var(--border-strong);
   border-bottom-width: 2px; border-radius: var(--r-input); background: var(--bg); justify-self: start; }
 .about { display: grid; gap: var(--s4); align-content: start; }
@@ -1019,7 +1028,6 @@ html.app, html.app body { overflow: hidden; }
           <label data-t="dns2" for="f-dns2-0">Alternate</label><div id="f-dns2"></div>
         </div>
         </div>
-        <!-- ponytail: placeholders until each page is built (docs/plan-0.2.md) -->
         <div class="page" id="page-adv" data-page="adv" role="tabpanel" hidden>
           <div class="ahead" aria-hidden="true"><span class="host">IP address</span><span class="slash"></span><span class="cidr">CIDR</span><span class="to"></span><span class="host">Gateway</span></div>
           <div class="alist" id="adv-list" role="list" aria-label="Addresses"></div>
@@ -1051,6 +1059,7 @@ html.app, html.app body { overflow: hidden; }
       </div>
       <section class="settings-view speed-view" id="speed" aria-labelledby="sp-title" hidden>
         <canvas class="sp-road" id="speed-road" aria-hidden="true"></canvas>
+        <span class="sr" id="speed-said" aria-live="polite"></span>
         <div class="dlg-body">
           <div class="dlg-head">
             <h3 id="sp-title"><span data-t="speedTest">Speed test</span> <span class="via" id="speed-via"></span></h3>
@@ -1150,30 +1159,47 @@ html.app, html.app body { overflow: hidden; }
                 <div class="stack" id="s-hidden"></div>
                 <span class="lbl" data-t="updates">Updates</span>
                 <div class="upd" id="s-upd"><span class="upd-say"><i class="ph"></i><span class="t"></span><span class="pct"></span></span><button type="button" id="s-upd-go"><span></span></button><span class="upd-bar"></span></div>
+                <span id="s-upd-notes-gap" hidden></span>
+                <ul class="upd-notes" id="s-upd-notes" hidden></ul>
+                <span class="lbl" data-t="updAuto">Auto-check</span>
+                <div class="seg opt" role="radiogroup" aria-label="Check for updates when Octet starts" style="--n: 2">
+                  <span class="thumb"></span>
+                  <label class="choice"><input type="radio" name="updauto" value="0" checked><span data-t="off">Off</span></label>
+                  <label class="choice"><input type="radio" name="updauto" value="1"><span data-t="atStart">When Octet starts</span></label>
+                </div>
+                <span class="lbl" data-t="scanMem">Scan memory</span>
+                <div class="upd mem"><span class="upd-say"><i class="ph ph-clock-counter-clockwise"></i><span class="t" id="s-mem" tabindex="-1" aria-live="polite"></span></span><button type="button" id="s-mem-clear"><span data-t="clear">Clear</span></button></div>
               </div>
               <div class="pane keys" data-pane="keys" hidden>
+                <h4 data-t="kgAll">Anywhere</h4>
                 <kbd>Ctrl</kbd><kbd>Enter</kbd><span data-t="kApply">Apply changes</span>
                 <kbd>F5</kbd><span></span><span data-t="kRefresh">Read adapters again</span>
                 <kbd>Ctrl</kbd><kbd>1-5</kbd><span data-t="kPages">Go to a page</span>
+                <kbd>Ctrl</kbd><kbd>T</kbd><span data-t="kSpeed">Open or close the speed test</span>
                 <kbd>Ctrl</kbd><kbd>B</kbd><span data-t="kSide">Expand or collapse the sidebar</span>
+                <kbd>Esc</kbd><span></span><span data-t="kEsc">Close a menu or the sidebar</span>
+                <h4 data-t="kgCfg">The whole configuration</h4>
                 <kbd>Ctrl</kbd><kbd>C</kbd><span data-t="kCopy">Copy the whole configuration</span>
                 <kbd>Ctrl</kbd><kbd>V</kbd><span data-t="kPaste">Paste a whole configuration</span>
+                <h4 data-t="kgType">Typing an address</h4>
                 <kbd>.</kbd><kbd>&larr; &rarr;</kbd><span data-t="kOctet">Move between octets</span>
-                <kbd>Esc</kbd><span></span><span data-t="kEsc">Close a menu or the sidebar</span>
+                <kbd>:</kbd><span></span><span data-t="kPort">Add a port (Ping)</span>
               </div>
               <div class="pane about" data-pane="about" hidden>
                 <div class="brand">
                   <img src="icon.png" alt="" width="40" height="40">
-                  <div class="brand-name"><b>Octet</b><span class="ver" id="s-version">0.1.0</span></div>
+                  <div class="brand-name"><b>Octet</b><span class="ver" id="s-version"></span><button type="button" class="link" data-link="releases" data-t="relNotes">Release notes</button></div>
                   <span class="muted" data-t="tagline">IPv4 and DNS settings, in seconds.</span>
                 </div>
                 <div class="set">
                   <span class="lbl" data-t="license">License</span>
                   <span class="val">MIT · <button type="button" class="link" data-link="notices" data-t="notices">Third-party notices</button></span>
                   <span class="lbl" data-t="source">Source</span>
-                  <span class="val"><button type="button" class="link" data-link="repo">github.com/MrTomato77/octet</button></span>
-                  <span class="lbl" data-t="updates">Updates</span>
-                  <span class="val"><button type="button" class="link" data-link="releases" data-t="releases">See releases</button></span>
+                  <span class="val"><button type="button" class="link" data-link="repo">github.com/MrTomato77/octet</button> · <button type="button" class="link" data-link="issue" data-t="report">Report a problem</button></span>
+                  <span class="lbl" data-t="sysInfo">System</span>
+                  <span class="val"><span class="muted" id="s-sys"></span><button type="button" class="link" id="s-sys-copy" data-t="copy">Copy</button></span>
+                  <span class="lbl" id="s-news-lbl"></span>
+                  <div class="val news"><ul id="s-news"></ul></div>
                   <span class="lbl" data-t="privacy">Privacy</span>
                   <span class="val muted" data-t="privacyText">No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.</span>
                   <span class="lbl" data-t="credits">Credits</span>
@@ -1257,11 +1283,13 @@ const demo = {
   macs: { "10.0.0.1": "D8-B3-70-5E-21-0A", "192.168.50.254": "00-0C-42-9A-11-30" },
   vendors: { "3C5282": "Hewlett Packard", "D8B370": "Ubiquiti", "000C42": "Routerboard.com" },   // a slice of data/oui.txt
 };
+// The demo's connection, as Cloudflare would describe it (Info's public IP and the speed test share it).
+const demoWho = { ip: "203.0.113.48", isp: "True Online", asn: 7470, city: "Bangkok", colo: "BKK", site: "Bangkok" };
 const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   if (cmd === "who_has") return res(demo.taken[a.address]?.[0] ?? demo.macs[a.address] ?? (demo.proxyArp ? demo.macs[adapters[sel].cfg.gateway] ?? "02-00-00-00-AA-01" : null));
   if (cmd === "vendor") return res(demo.vendors[a.mac.replace(/[^0-9A-F]/gi, "").slice(0, 6).toUpperCase()] ?? null);
   if (cmd === "hostname") return res(demo.names[a.address] ?? demo.taken[a.address]?.[1] ?? null);
-  if (cmd === "public_ip") return demo.outcome === "fail" ? rej("offline") : res({ ip: "203.0.113.48", isp: "True Internet", city: "Bangkok" });   // one ipinfo-style answer: address and who it belongs to
+  if (cmd === "public_ip") return demo.outcome === "fail" ? rej("offline") : res(demoWho);   // Cloudflare's view of the connection, as the speed test gets it
   if (cmd === "scan_host") {
     const [n3, h] = [a.address.split(".").slice(0, 3).join("."), +a.address.split(".")[3]];
     const me = adapters.find(x => x.cfg.address === a.address), gw = adapters.some(x => x.cfg.gateway === a.address);
@@ -1294,9 +1322,14 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   // A name nobody answers for takes seconds on a real network (DNS, LLMNR and NetBIOS all time out).
   : cmd === "hostname" && !(demo.names[a.address] ?? demo.taken[a.address]) ? 2500 : 300));
 const net = (cmd, args) => tauri ? invoke(cmd, args) : demoInvoke(cmd, args);
+// The first read starts here, so it runs while the rest of the page is built; the first reload() takes it.
+let firstRead = tauri ? invoke("read_adapters") : null;
+firstRead?.catch(() => {});   // its error is reported by that reload(), not as an unhandled rejection
 async function reload() {
   const id = adapters[sel]?.id;
-  adapters.splice(0, adapters.length, ...await invoke("read_adapters"));
+  const read = firstRead || invoke("read_adapters");
+  firstRead = null;
+  adapters.splice(0, adapters.length, ...await read);
   const i = adapters.findIndex(a => a.id === id && !hidden.has(a.id));
   sel = i >= 0 ? i : firstVisible();
   keep("octet-rows", adapters.filter(a => !hidden.has(a.id)).length);   // next launch draws this many skeleton rows
@@ -1304,7 +1337,7 @@ async function reload() {
 const change = request => net("change", { request });
 const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const keep = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
-let sel = 0, draft = null, lang = pref("octet-lang") || (navigator.language.startsWith("th") ? "th" : "en");
+let sel = 0, draft = null, applies = 0, lang = pref("octet-lang") || (navigator.language.startsWith("th") ? "th" : "en");
 
 const T = {
   en: { adapters: "Adapters", settings: "Settings", refresh: "Refresh", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
@@ -1312,9 +1345,11 @@ const T = {
     dhcp: "DHCP", manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
     dns1: "Preferred", dns2: "Alternate", register: "Register in DNS", revert: "Revert", apply: "Apply",
     theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark", updates: "Updates", admin: "Run as admin", adminAsk: "When needed", adminAlways: "Always",
-    general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: "Read adapters again",
+    general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: mac ? "Read adapters again" : "Read adapters again (or Ctrl R)",
     kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
-    kOctet: "Move between octets", kEsc: "Close a menu or the sidebar", tagline: "IPv4 and DNS settings, in seconds.",
+    kOctet: "Move between octets", kEsc: "Close a menu, a view or the sidebar", kSpeed: "Open or close the speed test", kPort: "Add a port (Ping)",
+    kgAll: "Anywhere", kgCfg: "The whole configuration", kgType: "Typing an address", updAuto: "Auto-check", off: "Off", atStart: "When Octet starts", relNotes: "Release notes", scanMem: "Scan memory", clear: "Clear",
+    report: "Report a problem", sysInfo: "System", copy: "Copy", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
     up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabProbe: "Ping", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
@@ -1328,9 +1363,11 @@ const T = {
     dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
     dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "Register ใน DNS", revert: "ย้อนกลับ", apply: "บันทึก",
     theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", updates: "อัปเดต", admin: "สิทธิ์ Admin", adminAsk: "ขอเมื่อต้องใช้", adminAlways: "ทุกครั้ง",
-    general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "บันทึก", kRefresh: "รีเฟรชรายการ",
+    general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "บันทึก", kRefresh: mac ? "รีเฟรชรายการ" : "รีเฟรชรายการ (หรือ Ctrl R)",
     kSide: "ย่อ/ขยายแถบซ้าย", kCopy: "คัดลอกค่าทั้งหมด", kPaste: "วางค่าทั้งหมด",
-    kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนูหรือแถบซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
+    kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนู หน้าที่เปิดอยู่ หรือแถบซ้าย", kSpeed: "เปิด/ปิด Speed Test", kPort: "ใส่พอร์ต (หน้า Ping)",
+    kgAll: "ใช้ได้ทุกหน้า", kgCfg: "ค่าทั้งหมด", kgType: "ตอนพิมพ์ IP", updAuto: "ตรวจอัตโนมัติ", off: "ปิด", atStart: "ตอนเปิด Octet", relNotes: "บันทึกการเปลี่ยนแปลง", scanMem: "ความจำ Scan", clear: "ล้าง",
+    report: "แจ้งปัญหา", sysInfo: "ระบบ", copy: "คัดลอก", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
     up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabProbe: "Ping", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
@@ -1362,6 +1399,8 @@ const kindName = { wifi: "Wi-Fi", ethernet: "Ethernet", bluetooth: "Bluetooth", 
 
 // ---------- address classification ----------
 const ipNum = v => v.split(".").reduce((n, o) => n * 256 + +o, 0);
+// Windows times a ping in whole ms, so 0 is a reply under 1 ms (a wired LAN), not "no reply".
+const msOf = v => v < 1 ? "<1 ms" : `${v} ms`;
 const inNet = (v, net, bits) => (ipNum(v) >>> (32 - bits)) === (ipNum(net) >>> (32 - bits));
 function scope(v) {
   if (!validIp(v)) return null;
@@ -1392,6 +1431,8 @@ function resolver(v, gw) {
   const hit = resolvers.find(([ips]) => ips.includes(v));
   if (hit) return { logo: hit[2], title: hit[1] };
   if (v === "100.100.100.100") return { logo: "tailscale", title: "Tailscale MagicDNS" };
+  if (v === "127.0.2.2" || v === "127.0.2.3") return { logo: "cloudflare", title: "Cloudflare WARP" };   // its local DNS proxy
+  if (inNet(v, "127.0.0.0", 8)) return { text: "This PC", title: "A DNS proxy on this computer (a VPN or filter)" };
   if (gw && v === gw) return { text: "Router", title: "Your gateway answers DNS" };
   const sc = scope(v)[0];
   if (sc !== "Public") return { text: "Local", title: `${sc} DNS server on your network` };
@@ -1578,8 +1619,10 @@ function problems() {
   }
   {
     draft.extra.forEach((x, i) => { if (!validIp(x.address) || prefixOf(x.subnet) < 1 || x.address === draft.address) out.push([`extra${i}`, `${t("ip")} ${i + 2}`]); });
-    draft.gws.forEach((g, i) => { if (!validIp(g.gateway) || !okMetric(g.metric)) out.push([`gw${i}`, `${t("gateway")} ${i + 2}`]); });
-    if (!okMetric(draft.gwMetric)) out.push(["gwMetric", t("metric")]);
+    // A metric Windows already has passes as it is, even past 9999 (a VPN's routes): only typed ones are checked.
+    const now = cfgOf(adapters[sel]);
+    draft.gws.forEach((g, i) => { if (!validIp(g.gateway) || !okMetric(g.metric) && g.metric !== now.gws.find(x => x.gateway === g.gateway)?.metric) out.push([`gw${i}`, `${t("gateway")} ${i + 2}`]); });
+    if (!okMetric(draft.gwMetric) && draft.gwMetric !== now.gwMetric) out.push(["gwMetric", t("metric")]);
   }
   if (!draft.dnsAuto) {
     if (draft.dns1 && !validIp(draft.dns1)) out.push(["dns1", t("dns1")]);
@@ -1589,12 +1632,15 @@ function problems() {
 }
 const keys = ["ipAuto", "address", "subnet", "gateway", "extra", "gws", "gwMetric", "metric", "dnsAuto", "dns1", "dns2", "register"];
 const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
-const changed = () => !draft ? [] : keys.filter(k => {
-  const a = adapters[sel].cfg;
-  if (draft.ipAuto && ["address", "subnet", "gateway", "gwMetric"].includes(k)) return false;
-  if (draft.dnsAuto && ["dns1", "dns2"].includes(k)) return false;
-  return !same(a[k], draft[k]);
-});
+const changed = () => {
+  if (!draft) return [];
+  const a = cfgOf(adapters[sel]);   // a reloaded adapter has no Advanced values yet: without them every reload looks like an edit
+  return keys.filter(k => {
+    if (draft.ipAuto && ["address", "subnet", "gateway", "gwMetric"].includes(k)) return false;
+    if (draft.dnsAuto && ["dns1", "dns2"].includes(k)) return false;
+    return !same(a[k], draft[k]);
+  });
+};
 // The Advanced values (more addresses and gateways, metrics) with what Windows reported.
 function cfgOf(a) {
   a.cfg.extra ??= (a.extraIps || []).map((address, i) => ({ address, subnet: a.extraSubnets?.[i] || a.cfg.subnet }));
@@ -1605,9 +1651,11 @@ const okMetric = v => v === "" || (/^\d{1,4}$/.test(v) && +v >= 1);
 
 function say(text, kind = "", ic = "", quiet = false) {
   const st = $("status");
-  st.setAttribute("aria-live", quiet ? "off" : "polite");
-  st.removeAttribute("title"); delete st.dataset.tip;
   const fresh = st.textContent !== text;
+  // The same line again (a key typed while a field is still wrong): left as it is, so a screen reader doesn't repeat it.
+  st.removeAttribute("title"); delete st.dataset.tip;
+  if (!fresh && st.className.replace(" changed", "") === "status" + (kind ? " " + kind : "") && (st.querySelector("i")?.className ?? "") === (ic ? "ph ph-" + ic : "")) return;
+  st.setAttribute("aria-live", quiet ? "off" : "polite");
   st.textContent = text;
   if (ic) st.insertAdjacentHTML("afterbegin", `<i class="ph ph-${ic}"></i>`);
   st.className = "status" + (kind ? " " + kind : "");
@@ -1629,7 +1677,11 @@ function sync(from) {
   if (bad.length && diff.length) say(bad.map(b => b[1]).join(", ") + L(" needs a valid value", " ไม่ถูกต้อง"), "bad");
   else if (diff.length) say(t("changes")(diff.length), "", "", true);
   // Idle: the line explains an adapter that is down or off instead of "No changes".
-  else if (adapters[sel].state === "disabled") {
+  else if (adapters[sel].conflict) {
+    // Windows found another device already on this address and won't use it: the first thing to fix.
+    say(L(`${adapters[sel].conflict} is already used by another device: not in use here`, `${adapters[sel].conflict} มีอุปกรณ์อื่นใช้อยู่ เครื่องนี้จึงใช้ไม่ได้`), "bad", "warning");
+    $("status").title = L("Pick another address, or find the other device with Scan", "เลือก IP อื่น หรือหาอุปกรณ์ที่ใช้อยู่ด้วย Scan");
+  } else if (adapters[sel].state === "disabled") {
     // The chip already says Disabled: the line says what that means for these settings.
     say(L("Kept, used once the adapter is enabled", "ค่าเก็บไว้ จะใช้เมื่อเปิดอะแดปเตอร์"), "", "power", true);
     $("status").title = L("Enable it from the ··· menu", "เปิดได้จากเมนู ···");
@@ -1860,6 +1912,7 @@ function renderList(enter = false) {
   const ul = $("list");
   // FLIP: remember where each adapter sat, so a re-sort (turned on or off) slides rows to their new place.
   const was = new Map([...ul.querySelectorAll("li[data-id]")].map(li => [li.dataset.id, li.offsetTop]));
+  const focus = ul.contains(document.activeElement) && document.activeElement.closest("li")?.dataset.id;   // kept across the rebuild
   ul.innerHTML = ""; ul.append(indicator);
   ul.classList.toggle("enter", enter);
   let n = 0;
@@ -1883,7 +1936,8 @@ function renderList(enter = false) {
       b.querySelector("i").animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 400, easing: "ease-out" });
     }
     seen[a.id] = a.state;
-    b.onclick = () => { closeSettings(); Promise.resolve(select(i)).then(() => speedOpen() && paintSpeed()); if (!isRail()) setRail(true); };
+    // The adapter already open, clicked again while the speed test covers it: back to that adapter, and the test to Start.
+    b.onclick = () => { if (i === sel && speedOpen()) { speedIdle(); return closeSpeed(); } closeSettings(); Promise.resolve(select(i)).then(() => speedOpen() && paintSpeed()); if (!isRail()) setRail(true); };
     li.append(b); ul.append(li);
   });
   let moved = false;
@@ -1893,11 +1947,15 @@ function renderList(enter = false) {
   }
   placeIndicator(animateNext || moved);   // the selection highlight travels with its row
   animateNext = false;
+  if (focus) { [...ul.querySelectorAll("li[data-id]")].find(li => li.dataset.id === focus)?.querySelector("button").focus(); hideTip(); }   // a quiet redraw, not a move: no tip
 }
 let animateNext = false;
 const seen = {};   // last state drawn per adapter, so a change can pulse its dot
 async function select(i) {
+  const id = adapters[i]?.id;
   if (i === sel || busyNow || !await discardOk()) return;
+  i = adapters.findIndex(a => a.id === id);   // a refresh while the question was up may have reordered the list
+  if (i < 0) return;
   // Only text moves: octets count to the new adapter's values, the header text rises in. The page itself stays.
   sel = i; animateNext = true; renderList(); renderAdapter(true);
   if (!calm.matches) $("a-icon").animate([{ opacity: 0 }, { opacity: 0, offset: 0.45 }, { opacity: 1 }], { duration: 420, easing: "ease-out" });
@@ -1937,6 +1995,8 @@ function precheck(c) {
   if (c.address === c.gateway) return ["address", L("Same address as the gateway", "IP ซ้ำกับ Gateway")];
   const p = prefixOf(c.subnet);
   if (c.gateway && p > 0 && !inNet(c.gateway, c.address, p)) return ["gateway", L("Gateway is outside this subnet", "Gateway อยู่นอก subnet นี้")];
+  const host = c.gateway && p > 0 && p < 31 ? ipNum(c.gateway) % 2 ** (32 - p) : null;   // /31 and /32 have no network or broadcast address
+  if (host === 0 || host === 2 ** (32 - p) - 1) return ["gateway", L("Gateway can't be the subnet's network or broadcast address", "Gateway เป็นเลข network หรือ broadcast ของ subnet ไม่ได้")];
   return null;
 }
 // Icons return to rest after a moment; a newer action cancels the pending reset.
@@ -1950,6 +2010,8 @@ function rowsOf(diff) {
 $("apply").onclick = async () => {
   if (busyNow || !draft) return;
   const btn = $("apply"), a = adapters[sel], d = changed(), rows = rowsOf(d), has = ks => d.some(k => ks.includes(k));
+  // An earlier Apply's slow test says its result only while this is still its adapter and no Apply came after it.
+  const run = ++applies, here = () => adapters[sel]?.id === a.id && run === applies;
   const sent = structuredClone(draft);   // what is applied, whatever happens to the form meanwhile
   clearMsgs();
   const pre = precheck(sent);
@@ -1979,19 +2041,22 @@ $("apply").onclick = async () => {
   lock(true); btn.classList.add("spin"); iconNow("apply", "circle-notch");
   rows.forEach(el => el.classList.add("working"));
   say(L("Waiting for permission…", "รอสิทธิ์ Admin…"));
-  const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]),
-    extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: a.extraIps || [], wasGws: a.extraGws || [] })
+  const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway", "gwMetric"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]),
+    // The first gateway's metric only goes on with `set address`, so a change to it counts as an IP change (static only:
+    // on DHCP it isn't counted as a change at all).
+    extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: cfgOf(a).extra, wasGws: cfgOf(a).gws, wasMetric: cfgOf(a).metric })   // whole entries: a changed mask or metric is re-applied
     .then(() => null, e => String(e));
   work.then(async err => {
     rows.forEach(el => el.classList.remove("working"));
     btn.classList.remove("spin");
     if (err) {
-      // Part of it may have gone through: show what Windows has now, keep the edits.
+      // Part of it may have gone through: show what Windows has now, keep the edits (only on their own adapter).
       if (tauri) await reload().catch(() => {});
       lock(false); iconNow("apply", "shield-check");
-      renderAdapterFacts(); renderForm();
+      renderList();
+      if (adapters[sel]?.id === a.id) { renderAdapterFacts(); renderForm(); } else renderAdapter();
       if (err === "Cancelled") say(L("Permission declined, nothing changed", "ไม่ได้ให้สิทธิ์ Admin จึงยังไม่ได้เปลี่ยนอะไร"), "", "shield-slash");
-      else { say(L("Not applied: ", "บันทึกไม่สำเร็จ: ") + err, "bad"); $("status").title = err; }
+      else { say((adapters[sel]?.id === a.id ? "" : a.name + ": ") + L("Not applied: ", "บันทึกไม่สำเร็จ: ") + err, "bad"); $("status").title = err; }
       return;
     }
     iconNow("apply", "check");
@@ -2001,13 +2066,24 @@ $("apply").onclick = async () => {
       marks.forEach(b => b.classList.remove("settle"));
       a.cfg = sent;
       if (tauri) await reload().catch(() => {});   // show what Windows actually took
-      lock(false); renderAdapter();
+      lock(false); renderList(); renderAdapter();   // a new gateway can move the adapter up the list
       iconLater("apply", "shield-check", 1200);
-      if (!a.cfg.gateway && !a.cfg.dns1) { say(t("applied")(a.name), "ok", "check"); return; }
-      say(t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…"));
+      if (!sent.ipAuto && !sent.gateway && !sent.dns1) { say(t("applied")(a.name), "ok", "check"); return; }   // nothing to test
+      const testing = t("applied")(a.name) + L(" · testing…", " · กำลังทดสอบ…");
+      say(testing);
       await new Promise(res => setTimeout(res, 1000));   // let the new address settle
       // Back on DHCP, the leased DNS servers arrive a moment after Apply: test those, not the old ones.
-      if (tauri) { await reload().catch(() => {}); renderAdapter(); }
+      // The form is open again by now: what's being typed (here or on another adapter) stays; an untouched form, Info
+      // and Scan show the new values (a Scan already under way on the same network goes on).
+      if (tauri) {
+        const open = adapters[sel]?.id;
+        await reload().catch(() => {});
+        renderList();
+        if (adapters[sel]?.id !== open || !changed().length) { renderAdapter(); if (here()) say(testing, "", "", true); }
+      }
+      // A reload makes new adapter objects: test what this one has now (a DHCP lease's), not what was sent.
+      const cfg = (adapters.find(x => x.id === a.id) ?? a).cfg;
+      if (!cfg.gateway && !cfg.dns1) { if (here()) say(t("applied")(a.name), "ok", "check"); return; }
       // macOS brings the routes up a moment after the address: there, a few tries before "not answering".
       const probe = async ip => {
         if (!ip) return undefined;
@@ -2017,10 +2093,10 @@ $("apply").onclick = async () => {
           await new Promise(res => setTimeout(res, 500));
         }
       };
-      const [gw, dns] = await Promise.all([probe(a.cfg.gateway), probe(a.cfg.dns1 === a.cfg.gateway ? "" : a.cfg.dns1)]);
-      const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${ms} ms`;
+      const [gw, dns] = await Promise.all([probe(cfg.gateway), probe(cfg.dns1 === cfg.gateway ? "" : cfg.dns1)]);
+      const part = (name, ms) => ms === undefined ? "" : ms === null ? `${name} ${L("not answering", "ไม่ตอบ")}` : `${name} ${msOf(ms)}`;
       const fail = gw === null || dns === null;
-      say([part("Gateway", gw), part(`DNS ${a.cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? "wifi-x" : "check-circle");
+      if (here()) say([part("Gateway", gw), part(`DNS ${cfg.dns1}`, dns)].filter(Boolean).join(" · "), fail ? "bad" : "ok", fail ? "wifi-x" : "check-circle");
     }, calm.matches ? 0 : 180 + marks.length * 60);
   });
 };
@@ -2033,11 +2109,11 @@ function refresh(quiet) {
   lastRead = Date.now();
   btn.classList.add("spin");
   if (!quiet) {
-    // A read takes ~16 ms: the rows stay put (no skeleton) and only what changed moves.
+    // A read takes ~40 ms: the rows stay put (no skeleton) and only what changed moves.
     iconNow("refresh", "circle-notch");
     say(L("Reading adapters…", "กำลังอ่านอะแดปเตอร์…"));
   }
-  const id = adapters[sel]?.id;
+  const id = adapters[sel]?.id, was = adapters[sel] && JSON.stringify(cfgOf(adapters[sel]));
   const work = tauri ? reload() : new Promise(res => setTimeout(() => {
     // Demo: the world moved while we weren't looking (cable plugged, lease changed).
     const a = adapters[sel];
@@ -2051,7 +2127,11 @@ function refresh(quiet) {
     btn.classList.remove("spin");
     // The adapter that was open is gone (or nothing was open): start from what is there.
     if (!a || a.id !== id || !draft) { renderList(); renderAdapter(true); if (!quiet) iconNow("refresh", "arrow-clockwise"); return; }
-    // While a group is automatic the draft mirrors Windows.
+    // While a group is automatic the draft mirrors Windows. So do metrics and gateways nobody edited: a VPN changes
+    // them behind our back, and an old copy in the form would look like an edit and go out with the next Apply.
+    // Compared with what Windows had when the read began, so a value typed during the read stays too.
+    const old = JSON.parse(was);
+    for (const k of ["metric", "gwMetric", "gws"]) if (JSON.stringify(draft[k]) === JSON.stringify(old[k])) draft[k] = structuredClone(cfgOf(a)[k]);
     if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = a.cfg[k];
     if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = a.cfg[k];
     renderList(); renderAdapterFacts(); renderForm(true);   // values that changed roll; the rest stay still
@@ -2250,11 +2330,12 @@ function parseConfig(text) {
   const ip = "(\\d{1,3}(?:\\.\\d{1,3}){3})";
   const m = text.match(new RegExp(`^\\s*${ip}\\s*(?:/(\\d{1,2})|\\s+(?:mask\\s+)?${ip})`, "i"));
   if (!m) return null;
-  const mask = m[2] !== undefined ? masks[+m[2]] : m[3];
-  if (!mask || !validIp(m[1])) return null;
+  const n = v => v ? v.split(".").map(Number).join(".") : "";   // 192.168.001.050 is 192.168.1.50
+  const mask = m[2] !== undefined ? masks[+m[2]] : n(m[3]);
+  if (!mask || !validIp(n(m[1]))) return null;
   const gw = text.match(new RegExp(`(?:gw|gateway)\\s*:?\\s*${ip}`, "i"));
   const dns = text.match(new RegExp(`dns\\s*:?\\s*${ip}(?:\\s*[,\\s]\\s*${ip})?`, "i"));
-  return { address: m[1], subnet: mask, gateway: gw ? gw[1] : "", dns1: dns ? dns[1] : "", dns2: dns && dns[2] ? dns[2] : "" };
+  return { address: n(m[1]), subnet: mask, gateway: n(gw?.[1]), dns1: n(dns?.[1]), dns2: n(dns?.[2]) };
 }
 function pasteConfig(text) {
   const c = parseConfig(text);
@@ -2278,7 +2359,8 @@ document.addEventListener("copy", e => {
   e.preventDefault(); e.clipboardData.setData("text/plain", configText()); say(L("Configuration copied", "คัดลอกค่าทั้งหมดแล้ว"), "ok", "check");
 });
 document.addEventListener("paste", e => {
-  if (document.activeElement?.matches(".ip input, .prefix")) return;   // the field handles it
+  // A text box keeps its own paste (an IP field takes a whole config itself); elsewhere it fills the IP page only.
+  if (document.activeElement?.matches("input:not([type=radio]):not([type=checkbox]), textarea") || page !== "ip") return;
   if (pasteConfig(e.clipboardData.getData("text"))) e.preventDefault();
 });
 
@@ -2300,26 +2382,36 @@ function renderHidden() {
   box.querySelectorAll(":scope > *").forEach((el, i) => el.style.setProperty("--i", i + 6));
 }
 document.querySelectorAll(".set > *").forEach((el, i) => el.style.setProperty("--i", i));
-const settingsOpen = () => !$("settings").hidden;
+// Speed or Settings over the page: what's under it is out of reach (Tab, screen readers) and focus moves in, to the
+// view's title; closing gives focus back to the button that opened it, if it was in the view (or nowhere).
+function cover(v, on) {
+  for (const el of document.querySelectorAll(".scroll, .actions")) el.inert = on;
+  if (on) { const h = $(v.getAttribute("aria-labelledby")); h.tabIndex = -1; h.focus({ preventScroll: true }); return; }
+  const at = document.activeElement;
+  if (v.contains(at) || at === document.body) $(v.id === "speed" ? "open-speed" : "open-settings").focus({ preventScroll: true });
+}
+const viewShown = v => !v.hidden && !v.classList.contains("out");   // fading out counts as closed: a click then reopens it
+const settingsOpen = () => viewShown($("settings"));
 function openSettings() {
   if (settingsOpen()) return closeSettings();
-  closeSpeed(); renderHidden(); hideTip(); setTools(false);
+  closeSpeed(); renderHidden(); renderMem(); renderAbout(); hideTip(); setTools(false);
   const v = $("settings");
-  v.classList.remove("out"); v.hidden = false; replay(v, "in");
+  v.classList.remove("out"); v.hidden = false; replay(v, "in"); cover(v, true);
   $("open-settings").classList.add("on"); $("open-settings").setAttribute("aria-current", "page");
   indicator.style.opacity = 0;
   if (!isRail()) setRail(true);
 }
 function closeSettings() {
   const v = $("settings");
-  if (v.hidden) return;
+  if (!viewShown(v)) return;   // already fading: closing it again would un-inert the page under the other view
+  cover(v, false);
   $("open-settings").classList.remove("on"); $("open-settings").removeAttribute("aria-current");
   placeIndicator();
   let done = false;
-  const end = () => { if (done) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };
-  v.classList.add("out");
+  const end = () => { if (done || !v.classList.contains("out")) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };   // reopened meanwhile: stays open
+  v.classList.add("out"); wakeGraph();
   v.addEventListener("animationend", end, { once: true });
-  setTimeout(end, 200);   // a hidden window may never run the animation
+  clearTimeout(v._end); v._end = setTimeout(end, 200);   // an earlier close's timer would cut this fade short   // a hidden window may never run the animation
 }
 $("open-settings").onclick = openSettings;
 $("s-close").onclick = closeSettings;
@@ -2342,6 +2434,9 @@ document.querySelectorAll("input[name=lang]").forEach(x => x.onchange = () => {
   crossfade(() => {
     lang = x.value; document.documentElement.lang = lang; translate(); renderList(); renderHidden();
     if (draft) { renderAdapterFacts(); renderForm(); } else renderAdapter();
+    if (adapters[sel]) renderInfo();
+    scanTell(); paintProbe();   // the pages drawn by script, so they don't wait for new data to change language
+    updShow(); renderMem(); renderAbout();
   });
 });
 // Always run as administrator: saved now, and Octet restarts elevated if it isn't already.
@@ -2372,7 +2467,7 @@ document.querySelectorAll("input[name=stab]").forEach(x => x.onchange = () => {
   }
 });
 tauri?.app.getVersion().then(v => { $("s-version").textContent = v; updShow(); }).catch(() => {});
-// Updates: Check, then Update (the whole exe, signed), then Restart. ponytail: demo only, the updater plugin comes once the look is agreed.
+// Updates: Check, then Update (the whole exe, signature and version checked in update.rs), then Restart.
 const upd = { s: "idle", p: 0 };
 function updShow() {
   const el = $("s-upd"), v = $("s-version").textContent, was = el.dataset.s;
@@ -2387,10 +2482,13 @@ function updShow() {
   }[upd.s];
   el.dataset.tip = upd.s === "failed" ? upd.err : "";
   el.dataset.s = upd.s; el.style.setProperty("--p", upd.p);
-  el.querySelector(".pct").textContent = upd.s === "getting" ? `${Math.round(upd.p * 100)}%` : "";
+  const when = ["idle", "latest"].includes(upd.s) && updWhen();
+  el.querySelector(".pct").textContent = upd.s === "getting" ? `${Math.round(upd.p * 100)}%` : when ? L(`· checked ${when}`, `· ตรวจ ${when}`) : "";
   // The same state can still have new words: the version arrives after the first paint.
-  const same = was === upd.s && el.dataset.say === say;
-  el.dataset.say = say;
+  // The button's word counts too: "Octet 0.2.1" reads the same in both languages, "Check" doesn't.
+  const same = was === upd.s && el.dataset.say === say + go;
+  el.dataset.say = say + go;
+  updMore();
   if (same) return;
   // The icon pops in, turned a little, as the words roll over.
   const i = el.querySelector(".upd-say i");
@@ -2418,7 +2516,7 @@ const updApi = tauri ? {
   install: v => invoke("update_install", { version: v }),
   restart: () => invoke("update_restart"),
 } : {
-  check: async () => { await updWait(900); return upd.seen ? null : (upd.seen = true, "0.1.8"); },
+  check: async () => { await updWait(900); return upd.seen ? null : (upd.seen = true, { version: "0.2.2", notes: ["Ping keeps its graph when you switch pages", "Scan names more devices"] }); },
   install: async () => { for (let p = 0; p < 1; p = Math.min(1, p + 0.07)) { await updWait(120); upd.p = p; updShow(); } },
   restart: async () => { upd.seen = false; },
 };
@@ -2427,8 +2525,9 @@ $("s-upd-go").onclick = async () => {
   try {
     if (["idle", "latest", "failed"].includes(upd.s)) {
       upd.s = "checking"; updShow();
-      const v = await updApi.check();
-      upd.v = v; upd.s = v ? "new" : "latest"; updShow();
+      const r = await updApi.check();
+      upd.v = r?.version; upd.notes = r?.notes || []; upd.s = r ? "new" : "latest";
+      keep("octet-upd-at", Date.now()); updShow();
     } else if (upd.s === "new") {
       upd.s = "getting"; upd.p = 0; updShow();
       await updApi.install(upd.v);
@@ -2441,6 +2540,21 @@ $("s-upd-go").onclick = async () => {
     upd.s = "failed"; upd.err = String(e); upd.p = 0; updShow();
   }
 };
+// Under the row, once a newer version is found: the first points of its release notes.
+function updMore() {
+  const notes = ["new", "getting", "ready"].includes(upd.s) ? upd.notes || [] : [];
+  $("s-upd-notes").replaceChildren(...notes.map(t => Object.assign(document.createElement("li"), { textContent: t })));
+  $("s-upd-notes").hidden = $("s-upd-notes-gap").hidden = !notes.length;
+}
+// When it last asked, quietly beside the version: a time today, a date before.
+function updWhen() {
+  const at = +pref("octet-upd-at"), d = new Date(at);
+  return !at ? "" : d.toLocaleString(lang === "th" ? "th-TH" : "en-GB", d.toDateString() === new Date().toDateString() ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" });
+}
+document.querySelector(`input[name=updauto][value="${pref("octet-upd-auto") === "1" ? 1 : 0}"]`).checked = true; segIndex("updauto");
+document.querySelectorAll("input[name=updauto]").forEach(x => x.onchange = () => { segIndex("updauto"); keep("octet-upd-auto", x.value); });
+// Off unless asked: Octet talks to nothing outside your network on its own.
+if (pref("octet-upd-auto") === "1") setTimeout(() => upd.s === "idle" && $("s-upd-go").click(), 4000);
 updShow();
 // Links open in the default browser; inside the app only these known pages can be opened.
 const links = {
@@ -2448,7 +2562,35 @@ const links = {
   releases: "https://github.com/MrTomato77/octet/releases",
   notices: "https://github.com/MrTomato77/octet/blob/main/THIRD-PARTY-NOTICES.md",
   simpleip: "https://github.com/KurtisLiggett/Simple-IP-Config",
+  issue: "https://github.com/MrTomato77/octet/issues/new",   // the app adds the version and system (Rust, main.rs)
 };
+// About: what this version brought, and the system in one line for a ticket or an issue.
+const NEWS = { v: "0.2.1",
+  en: ["Public IP and the speed test work with a VPN on", "Scan sweeps a /24 in about 2 s, and flows to 100%", "Gateway metrics are read, so Apply keeps them"],
+  th: ["Public IP และ Speed Test ใช้ได้ตอนเปิด VPN", "Scan สแกน /24 เสร็จในราว 2 วินาที ลื่นจนถึง 100%", "อ่าน metric ของ Gateway แล้ว กดบันทึกค่าไม่หาย"] };
+// The app asks Tauri for its version (above); the demo, here and on the website, shows the version these notes are for.
+if (!tauri) { $("s-version").textContent = NEWS.v; updShow(); }
+function renderAbout() {
+  $("s-news-lbl").textContent = L(`New in ${NEWS.v}`, `ใหม่ใน ${NEWS.v}`);
+  $("s-news").replaceChildren(...NEWS[lang].map(t => Object.assign(document.createElement("li"), { textContent: t })));
+  (tauri ? invoke("system_info") : Promise.resolve(`${$("s-version").textContent} · ${L("Demo in a browser", "เดโมในเบราว์เซอร์")}`))
+    .then(s => {
+      // Shown short (the OS and the chip; the version is in the header); Copy and the tooltip carry it all.
+      const p = s.split(" · ");
+      $("s-sys").textContent = p.length > 3 ? `${p[1]} · ${p.at(-1)}` : s; $("s-sys").dataset.full = s; $("s-sys").dataset.tip = s;
+    }, () => {});
+}
+$("s-sys-copy").onclick = () => navigator.clipboard.writeText(`Octet ${$("s-sys").dataset.full}`).then(() => {
+  const b = $("s-sys-copy"); roll(b, L("Copied", "คัดลอกแล้ว"));   // said on the button: Settings covers the status line
+  clearTimeout(b.t); b.t = setTimeout(() => roll(b, T[lang].copy), 1400);
+}, () => {});
+// Scan memory: addresses seen in use within the hour, across the networks scanned (seenAll, under Scan).
+function renderMem() {
+  const now = Date.now(), n = Object.values(seenAll()).reduce((s, m) => s + Object.values(m.ips || {}).filter(t => now - t < SEEN_MS).length, 0);
+  $("s-mem").textContent = n ? L(`${n} address${n > 1 ? "es" : ""} from the last hour`, `จำไว้ ${n} IP จากชั่วโมงที่ผ่านมา`) : L("Nothing remembered", "ไม่ได้จำอะไรไว้");
+  $("s-mem-clear").classList.toggle("gone", !n); $("s-mem-clear").disabled = !n;   // folds away like Updates' button
+}
+$("s-mem-clear").onclick = () => { keep("octet-seen", "{}"); renderMem(); $("s-mem").focus(); };   // the button goes: focus stays in the row
 document.querySelectorAll("[data-link]").forEach(b => b.onclick = () =>
   tauri ? invoke("open_link", { which: b.dataset.link }).catch(e => say(String(e), "bad")) : window.open(links[b.dataset.link], "_blank", "noopener"));
 // Dialogs close with a short fade instead of vanishing.
@@ -2490,15 +2632,18 @@ document.querySelector(".side").addEventListener("transitionend", placeIndicator
 // No browser menu (Back, Refresh, Save as, Print) in the app; text fields keep cut, copy and paste.
 document.addEventListener("contextmenu", e => { if (document.documentElement.classList.contains("app") && !e.target.closest("input, textarea")) e.preventDefault(); });
 document.addEventListener("keydown", e => {
-  if (e.key.toLowerCase() === "b" && isMod(e)) { e.preventDefault(); $("collapse").click(); }
-  if (e.key === "F5" || isMod(e) && e.key.toLowerCase() === "r") { e.preventDefault(); $("refresh").click(); }
   // The browser's own keys (print, save page, find, zoom, devtools…) have no place in the app. ⌘H stays macOS' Hide.
   if (document.documentElement.classList.contains("app") && (isMod(e) && (mac ? /^[psfgjuo+=\-0]$/i : /^[psfgjhuo+=\-0]$/i).test(e.key) || e.key === "F3" || e.key === "F7" || e.key === "F12")) e.preventDefault();
+  // A question is up: only its own keys. Nothing behind it changes, and Ctrl+Enter can't start a second Apply under it.
+  if (document.querySelector("dialog[open]")) { if (e.key === "F5" || isMod(e) && e.key.toLowerCase() === "r") e.preventDefault(); return; }
+  if (e.key.toLowerCase() === "b" && isMod(e)) { e.preventDefault(); $("collapse").click(); }
+  if (e.key.toLowerCase() === "t" && isMod(e)) { e.preventDefault(); openSpeed(); }
+  if (e.key === "F5" || isMod(e) && e.key.toLowerCase() === "r") { e.preventDefault(); $("refresh").click(); }
   if (isMod(e) && e.key >= "1" && e.key <= String(ptabs.length) && !settingsOpen()) { e.preventDefault(); showPage(ptabs[e.key - 1].dataset.page); }
-  if (e.key === "Escape" && settingsOpen() && !document.querySelector("dialog[open]")) { closeSettings(); return; }
-  if (e.key === "Escape" && speedOpen() && !document.querySelector("dialog[open]")) { closeSpeed(); return; }
+  if (e.key === "Escape" && settingsOpen()) { closeSettings(); return; }
+  if (e.key === "Escape" && speedOpen()) { closeSpeed(); return; }
   if (e.key === "Escape" && tools.classList.contains("open")) { setTools(false); $("more").focus(); }
-  else if (e.key === "Escape" && !isRail() && !document.querySelector("dialog[open]")) setRail(true);
+  else if (e.key === "Escape" && !isRail()) setRail(true);
   if (e.key === "Enter" && isMod(e) && !$("apply").disabled && !settingsOpen()) $("apply").click();
 });
 
@@ -2631,7 +2776,12 @@ function routes(c) {
     return { ...a, gi, gw: gi < 0 ? "" : gs[gi], shared: gi >= 0 && owner !== i };
   });
 }
-function setGws(gs) { draft.gateway = gs[0] || ""; draft.gws = gs.slice(1).map(g => ({ gateway: g, metric: "" })); }
+// A gateway keeps its metric wherever it moves in the list; a new one starts automatic.
+function setGws(gs) {
+  const m = new Map([[draft.gateway, draft.gwMetric], ...draft.gws.map(g => [g.gateway, g.metric])]);
+  draft.gateway = gs[0] || ""; draft.gwMetric = m.get(draft.gateway) ?? "";
+  draft.gws = gs.slice(1).map(g => ({ gateway: g, metric: m.get(g) ?? "" }));
+}
 const addrAt = n => n ? draft.extra[n - 1] : { address: draft.address, subnet: draft.subnet };
 function putAddr(n, v) { if (n) draft.extra[n - 1] = v; else { draft.address = v.address; draft.subnet = v.subnet; } }
 function advRow() {
@@ -2840,9 +2990,9 @@ async function probeTick() {
   const t0 = Date.now();
   if (adapters[sel]) probeBuild();
   await Promise.all(probe.rows.filter(r => r.target).map(async r => {
-    const t = r.target, port = r.port || 0, source = adapters[sel]?.cfg.address || null;   // out through this adapter
+    const t = r.target, port = r.port || 0, source = adapters[sel]?.cfg.address || null, key = probe.key;   // out through this adapter
     const v = await (port ? net("tcping", { address: t, port, source }) : net("ping", { address: t, source })).catch(() => null);
-    if ((r.port || 0) !== port) return;
+    if ((r.port || 0) !== port || probe.key !== key) return;   // another adapter by now (maybe with the same gateway): not its reading
     r.closed = v?.closed !== undefined;   // refused: the device answered, nothing listens on that port
     if (r.target !== t || !probe.rows.includes(r)) return;
     const ms = v === null ? null : v.open ?? v.closed ?? v.ms ?? v;
@@ -2873,7 +3023,7 @@ function paintProbe() {
   const r = probe.rows[probe.pick]; if (!r) return;
   const own = probe.rows.at(-1);
   if (r !== own && own?.f && !own.el.contains(document.activeElement)) { own.f.set(r.target, probe.live, true); own.el.classList.toggle("empty", !r.target); }
-  const ok = r.got.filter(v => v !== null), ms = v => v === null ? "-" : String(v);   // the unit sits after it, small
+  const ok = r.got.filter(v => v !== null), ms = v => v === null ? "-" : v < 1 ? "<1" : String(v);   // the unit sits after it, small
   roll($("ps-max"), ms(ok.length ? Math.max(...ok) : null));
   roll($("ps-avg"), ms(ok.length ? Math.round(ok.reduce((a, b) => a + b) / ok.length) : null));
   // Jitter: how far each reply is from the one before, on average.
@@ -2914,17 +3064,40 @@ function count(el, to, fmt = x => String(Math.round(x))) {
 const SPAN = 60000, DELAY = 1500, RISE = 600;
 let graphRaf = 0, ceil = 20;
 const ease = k => 1 - (1 - k) ** 3;
+// The graph's SVG elements are kept, layer by layer (back to front), and each frame changes only the attributes
+// that moved: rebuilding the markup every frame cost a re-parse and a fresh layout of every node.
+const gfx = { w: 0, h: 0 };
+function gput(layer, i, tag, attrs, text) {
+  const list = gfx[layer]._els ??= [];
+  let el = list[i];
+  if (!el) { el = list[i] = document.createElementNS("http://www.w3.org/2000/svg", tag); el.setAttribute("class", gfx[layer]._cls); el._a = {}; gfx[layer].append(el); }
+  for (const k in attrs) if (el._a[k] !== attrs[k]) el.setAttribute(k, el._a[k] = attrs[k]);
+  if (text !== undefined && el.textContent !== text) el.textContent = text;
+}
+function gcut(layer, n) { const list = gfx[layer]._els ?? []; while (list.length > n) list.pop().remove(); }
 function drawGraph() {
   const now = clock();
-  const svg = $("probe-svg"), w = svg.clientWidth || 1, h = svg.clientHeight || 1;
+  const svg = $("probe-svg");
+  if (!gfx.rows) {
+    for (const [k, cls] of [["rows", "grid"], ["ticks", "tick"], ["cols", "grid"], ["areas", "area"], ["lines", "line"], ["lost", "lost"], ["cursor", "cursor"], ["knob", "knob"]]) {
+      gfx[k] = svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "g")); gfx[k]._cls = cls;
+    }
+    // Its size, kept: reading it each frame would force a layout.
+    new ResizeObserver(() => { gfx.w = svg.clientWidth; gfx.h = svg.clientHeight; }).observe(svg);
+  }
+  const w = gfx.w || svg.clientWidth || 1, h = gfx.h || svg.clientHeight || 1;
   const pick = probe.rows[probe.pick], pts = pick?.pts ?? [], all = pts.filter(q => q.v !== null).map(q => q.v);
   const want = Math.max(10, ...all) * 1.6;
   ceil = calm.matches ? want : ceil + (want - ceil) * 0.06;
   const x = t => w - (now - DELAY - t) / SPAN * w, y = v => h - 1 - (h - 2) * Math.min(v, ceil) / ceil;
   const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].find(v => ceil / v <= 4) ?? 1000;
-  let out = "";
-  for (let v = step; v < ceil; v += step) out += `<line class="grid" x1="0" x2="${w}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="4" y="${y(v) - 3}">${v} ms</text>`;
-  for (let k = 1; k < 12; k++) out += `<line class="grid" x1="${w * k / 12}" x2="${w * k / 12}" y1="0" y2="${h}"/>`;   // fixed columns, 5 s each
+  let n = 0;
+  for (let v = step; v < ceil; v += step, n++) {
+    gput("rows", n, "line", { x1: 0, x2: w, y1: y(v), y2: y(v) });
+    gput("ticks", n, "text", { x: 4, y: y(v) - 3 }, `${v} ms`);
+  }
+  gcut("rows", n); gcut("ticks", n);
+  for (let k = 1; k < 12; k++) gput("cols", k - 1, "line", { x1: w * k / 12, x2: w * k / 12, y1: 0, y2: h });   // fixed columns, 5 s each
   const shown = pts.filter(q => q.v !== null).map(q => {
     const k = calm.matches ? 1 : ease(Math.min(1, (now - q.t) / RISE));
     return { q, x: x(q.t), y: y(q.from + (q.v - q.from) * k) };
@@ -2932,37 +3105,45 @@ function drawGraph() {
   // A lost ping is no value, not zero: the line breaks there, and a small red mark sits under the gap.
   const runs = [[]];
   for (const q of pts) if (q.v === null) { if (runs.at(-1).length) runs.push([]); } else runs.at(-1).push(shown.find(p => p.q === q));
+  n = 0;
   for (const run of runs) {
     if (!run.length) continue;
     let d = `M${run[0].x},${run[0].y}`;
     for (let i = 1; i < run.length; i++) { const a = run[i - 1], b = run[i], m = (a.x + b.x) / 2; d += `C${m},${a.y} ${m},${b.y} ${b.x},${b.y}`; }
     if (run.length === 1) d += `h1`;   // a lone reply between losses still shows as a dot of line
-    out += `<path class="area" d="${d}L${run.at(-1).x + (run.length === 1 ? 1 : 0)},${h}L${run[0].x},${h}Z"/><path class="line" d="${d}"/>`;
+    gput("areas", n, "path", { d: `${d}L${run.at(-1).x + (run.length === 1 ? 1 : 0)},${h}L${run[0].x},${h}Z` });
+    gput("lines", n++, "path", { d });
   }
-  for (const q of pts) if (q.v === null) out += `<rect class="lost" x="${x(q.t) - 1.5}" y="${h - 5}" width="3" height="5" rx="1"/>`;
+  gcut("areas", n); gcut("lines", n);
+  n = 0;
+  for (const q of pts) if (q.v === null) gput("lost", n++, "rect", { x: x(q.t) - 1.5, y: h - 5, width: 3, height: 5, rx: 1 });
+  gcut("lost", n);
   // Hover reading: fades in and out; the line glides after the pointer.
   probe.show += ((probe.hx !== null && shown.length ? 1 : 0) - probe.show) * (calm.matches ? 1 : 0.2);
   if (probe.hx !== null) probe.cx = calm.matches || probe.show < 0.05 ? probe.hx : probe.cx + (probe.hx - probe.cx) * 0.3;
   const tip = $("probe-tip");
   if (probe.show > 0.01 && shown.length) {
     const near = shown.reduce((a, b) => Math.abs(b.x - probe.cx) < Math.abs(a.x - probe.cx) ? b : a);
-    out += `<line class="cursor" x1="${probe.cx}" x2="${probe.cx}" y1="0" y2="${h}" opacity="${0.6 * probe.show}"/><circle class="knob" cx="${near.x}" cy="${near.y}" r="4" opacity="${probe.show}"/>`;
+    gput("cursor", 0, "line", { x1: probe.cx, x2: probe.cx, y1: 0, y2: h, opacity: 0.6 * probe.show });
+    gput("knob", 0, "circle", { cx: near.x, cy: near.y, r: 4, opacity: probe.show });
     const ago = Math.max(0, Math.round((now - near.q.t) / 1000));
-    tip.innerHTML = `${near.q.v} ms<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
+    tip.innerHTML = `${msOf(near.q.v)}<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
     tip.style.transform = `translateX(${Math.min(Math.max(probe.cx + 10, 4), w - tip.offsetWidth - 4)}px)`;
-  }
+  } else { gcut("cursor", 0); gcut("knob", 0); }
   tip.style.opacity = probe.show > 0.01 ? probe.show : 0;
-  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-  svg.innerHTML = out;
-  graphRaf = page === "probe" ? requestAnimationFrame(drawGraph) : 0;
+  if (svg._vb !== `${w} ${h}`) svg.setAttribute("viewBox", `0 0 ${svg._vb = `${w} ${h}`}`);
+  graphRaf = page === "probe" && !covered() ? requestAnimationFrame(drawGraph) : 0;
 }
+// Speed and Settings cover the whole page: under them the graph isn't drawn, and it picks up again as they close.
+function covered() { return settingsOpen() || speedOpen(); }
+function wakeGraph() { if (page === "probe" && !graphRaf) graphRaf = requestAnimationFrame(drawGraph); }
 $("probe-graph").addEventListener("pointermove", e => { probe.hx = e.clientX - e.currentTarget.getBoundingClientRect().left; });
 $("probe-graph").addEventListener("pointerleave", () => { probe.hx = null; });
 function probeShow(on) {
   if (!on) return;
   if (adapters[sel]) probeBuild();
   paintProbe(); placeThumb(false); alignFoot();
-  if (!graphRaf) graphRaf = requestAnimationFrame(drawGraph);
+  wakeGraph();
 }
 setTimeout(probeTick, 1000);
 // Measure each footer item at its widest ("999 ms", "100%") and keep that width (once the fonts are in,
@@ -2991,10 +3172,12 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && pr
 // ---------- Speed test: its own view, opened from the sidebar ----------
 // Download, then upload, against Cloudflare, out through the adapter on screen only (Rust pins the socket to it).
 // Nothing runs until Start. Another adapter, or closing the view, stops a test that is running.
-const speed = { state: "idle", res: {}, used: 0, stop: null, leg: "", run: 0, aid: null, lat: [] };
+const speed = { state: "idle", res: {}, used: 0, stop: null, leg: "", run: 0, aid: null, lat: [], gap: 250 };
 // A phone hotspot (an iPhone's /28, Android's 192.168.43.x): data is metered, so it says so before it starts.
-const metered = a => !!a && (prefixOf(a.cfg.subnet) >= 28 || ["172.20.10.1", "192.168.43.1"].includes(a.cfg.gateway));
-const speedOpen = () => !$("speed").hidden;
+// Windows' own word first (a phone hotspot it recognised, or a network you set as metered); else a guess from the
+// address: an iPhone or older Android hotspot, or a subnet too small for anything but a few devices.
+const metered = a => !!a && (a.metered || prefixOf(a.cfg.subnet) >= 28 || ["172.20.10.1", "192.168.43.1"].includes(a.cfg.gateway));
+const speedOpen = () => viewShown($("speed"));
 // One test. Events come from Rust over a Channel or, in the demo, from a stand-in with the same shape:
 // { kind: "meta", isp, asn, colo, city } · { kind: "latency", ms } · { kind: "down" | "up", mbps, loaded, bytes } · { kind: "done", bytes } · { kind: "error", message }
 // meta is what speed.cloudflare.com/meta says about this connection: who the ISP is and which Cloudflare site answered.
@@ -3007,7 +3190,7 @@ function speedRun(a, on) {
   // Demo: ~88 Mbps down, ~93 up, slow start over the first second, a little noise; the loaded latency climbs.
   const timers = [], at = (ms, f) => timers.push(setTimeout(f, ms));
   let bytes = 0;
-  at(80, () => on({ kind: "meta", isp: "True Internet", asn: 7470, colo: "BKK", city: "Bangkok" }));
+  at(80, () => on({ kind: "meta", ...demoWho }));
   for (let i = 0; i < 6; i++) at(150 + i * 120, () => on({ kind: "latency", ms: 19 + Math.round(Math.random() * 5) }));
   const leg = (kind, t0, top) => { for (let i = 1; i <= 32; i++) at(t0 + i * 250, () => {
     const mbps = +(top * Math.min(1, i / 5) * (0.94 + Math.random() * 0.08)).toFixed(1);
@@ -3025,7 +3208,8 @@ function speedStart() {
   Object.assign(speed, { state: "run", res: {}, used: 0, leg: "", aid: a.id, lat: [], meta: null, t0: performance.now(), t1: 0, d1: undefined });
   speed.stop = speedRun(a, ev => {
     if (run !== speed.run) return;
-    if (ev.kind === "meta") speed.meta = ev;
+    // Who the line is: also Info's public IP for this adapter, so the two pages show one answer.
+    if (ev.kind === "meta") { speed.meta = ev; info.pub[pubKey(a)] = ev; }
     if (ev.kind === "latency") {
       speed.lat.push(ev.ms);
       const s = speed.lat.slice().sort((x, y) => x - y), d = speed.lat.slice(1).map((v, i) => Math.abs(v - speed.lat[i]));
@@ -3045,16 +3229,24 @@ function speedStart() {
 function speedEnd(state) {
   speed.stop?.(); speed.stop = null; speed.run++;
   Object.assign(speed, { state, leg: state === "done" ? "" : speed.leg, t1: performance.now() });
+  // The result lives in the dial's drawing, which a screen reader can't follow: say it once, when it's in.
+  const r = speed.res, f = v => v === undefined ? "-" : (+v).toFixed(1);
+  $("speed-said").textContent = state === "error" ? speed.error || "" : state !== "done" ? "" : L(`Download ${f(r.down)} Mbps, upload ${f(r.up)} Mbps, ping ${r.ms === undefined ? "-" : msOf(r.ms)}`, `ดาวน์โหลด ${f(r.down)} Mbps อัปโหลด ${f(r.up)} Mbps ping ${r.ms === undefined ? "-" : msOf(r.ms)}`);
   paintSpeed(); speedDraw();
 }
 // Start is the button in the middle; once it opens into the dial, the key at the bottom stops it (or, when done, runs it again).
 $("sp-go").onclick = () => speed.live && speed.state !== "run" && speedStart();
 $("speed-again").onclick = () => speed.state === "run" ? speedEnd("stopped") : speed.state === "done" && speedStart();
 for (const id of ["sp-go"]) $(id).onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $(id).onclick(); } };
+// Back to Start: a running test stops and the results go.
+function speedIdle() {
+  if (speed.state === "run") speedEnd("stopped");
+  Object.assign(speed, { state: "idle", res: {}, used: 0, aid: null }); speedDraw(); paintSpeed();
+}
 function paintSpeed() {
   const a = adapters[sel], s = speed.state;
   // Another adapter on screen: a test for the last one stops, and its results go with it.
-  if (a && speed.aid && a.id !== speed.aid) { if (s === "run") speedEnd("stopped"); Object.assign(speed, { state: "idle", res: {}, used: 0, aid: null }); speedDraw(); return paintSpeed(); }
+  if (a && speed.aid && a.id !== speed.aid) return speedIdle();
   const live = a?.state === "up" && validIp(a.cfg.address || "");
   $("speed-via").textContent = a ? `${a.name}${a.cfg.address ? " · " + a.cfg.address : ""}` : "";
   const warn = s !== "run" && live && metered(a);
@@ -3083,8 +3275,9 @@ function paintSpeed() {
     : s === "error" ? speed.error
     : s === "done" ? ""
     : s === "stopped" ? L(`Stopped · ${mb} MB used`, `หยุดแล้ว · ใช้ไป ${mb} MB`)
-    : warn ? L("Phone hotspot: uses about 250 MB of data", "ต่อผ่านมือถือ: ใช้ข้อมูลราว 250 MB")
-    : L("Cloudflare · about 250 MB · they see your IP", "Cloudflare · ราว 250 MB · Cloudflare เห็น IP ของคุณ");
+    // The test runs for a set time, so the data it moves grows with the line's speed (a gigabit line: about 1 GB).
+    : warn ? L("Metered or hotspot: about 250 MB per 100 Mbps", "เน็ตจำกัดปริมาณ/มือถือ: ใช้ราว 250 MB ต่อ 100 Mbps")
+    : L("Cloudflare · ~250 MB per 100 Mbps · they see your IP", "Cloudflare · ~250 MB ต่อ 100 Mbps · Cloudflare เห็น IP ของคุณ");
   $("speed-note").className = "sp-note " + (s === "error" ? "bad" : "") + ($("speed-note").textContent.startsWith("Cloudflare") ? " cf" : "");
   if (grade) {
     $("speed-grade-w").textContent = { good: L("Smooth", "ลื่น"), meh: L("Fair", "พอใช้"), bad: L("Laggy", "หน่วง") }[grade];
@@ -3095,9 +3288,9 @@ function paintSpeed() {
   roll($("speed-ping"), n(speed.res.ms));
   const mt = speed.meta;
   // Just the name; the AS number (and a name too long for the row) is there on hover.
-  $("speed-isp").textContent = mt?.isp || "-"; $("speed-isp").title = mt ? `${mt.isp}${mt.asn ? " · AS" + mt.asn : ""}` : "";
+  $("speed-isp").textContent = [mt?.isp || "-", viaName(mt)].filter(Boolean).join(" · "); $("speed-isp").title = mt ? `${mt.isp}${mt.asn ? " · AS" + mt.asn : ""}` : "";
   count($("speed-data"), s === "idle" ? undefined : speed.used / 1e6, x => `${Math.round(x)} MB`);
-  $("speed-srv").textContent = mt ? `${mt.colo}${mt.city ? " · " + mt.city : ""}` : "-";
+  $("speed-srv").textContent = mt ? `${mt.colo}${mt.site ? " · " + mt.site : ""}` : "-";
   // Side gauges: latency on the left, latency with the line full on the right; the top few segments go amber.
   for (const [id, val, max] of [["speed-g-ping", speed.res.ms, 200], ["speed-g-load", speed.leg ? speed.res[speed.leg + "Load"] : undefined, 300]]) {
     const g = $(id), segs = g.querySelector(".segs");
@@ -3200,7 +3393,13 @@ function speedDraw() {
   $("speed-lap").textContent = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${(secs % 60).toFixed(2).padStart(5, "0")}`;
   // The numbers run to each new reading (an odometer, not a jump); on the summary the upload counts up as its dial fills.
   const inMs = s === "run" && !speed.leg, aim = s === "run" ? (inMs ? speed.res.ms : speed.res[speed.leg]) : s === "done" ? speed.res.down : undefined;
-  speed.d1 = aim === undefined ? undefined : speed.d1 === undefined || calm.matches || Math.abs(aim - speed.d1) < 0.05 ? aim : speed.d1 + (aim - speed.d1) * 0.12;
+  // A steady run from where it is to each new reading, timed to land as the next one comes (the gap between readings
+  // is measured): always on its way, not a rush then a wait. Easing toward it did half of each move in the first 80 ms.
+  if (aim !== speed.da) {
+    if (speed.da !== undefined && aim !== undefined) speed.gap += (Math.min(1000, at - speed.dt0) - speed.gap) * 0.3;
+    speed.df = speed.d1 ?? aim; speed.da = aim; speed.dt0 = at;
+  }
+  speed.d1 = aim === undefined ? undefined : calm.matches ? aim : speed.df + (aim - speed.df) * Math.min(1, (at - speed.dt0) / speed.gap);
   $("speed-now").textContent = speed.d1 === undefined ? "-" : inMs ? Math.round(speed.d1) : speed.d1.toFixed(1);
   $("sp-now2").textContent = s === "done" ? ((speed.res.up ?? 0) * inOut(slice(z, 0.35, 1, x => x))).toFixed(1) : "-";
   const moving = [speed.mt, speed.zt].some(o => at - o.t0 < o.ms) || Math.abs(to - speedN) > 0 || (aim !== undefined && speed.d1 !== aim);
@@ -3241,7 +3440,7 @@ function speedRoad(now) {
   for (let j = 0; j < 10; j++) { const f = (j + road.off) / 10, y = mix(f * h, vy + (h - vy) * f * f, t); c.globalAlpha = mix(0.35, 0.5 * f, t); c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
   c.globalAlpha = t;   // the fog belongs to the road
   // Horizon fog: the lines thin out into nothing before they meet, so there's no bright knot where they converge.
-  const fog = c.createRadialGradient(vx, vy, 0, vx, vy, (h - vy) * 0.6);
+  const fog = c.createRadialGradient(vx, vy, 0, vx, vy, Math.max(0, (h - vy) * 0.6));   // a negative radius throws and ends the loop
   fog.addColorStop(0, "#000"); fog.addColorStop(0.35, "rgba(0,0,0,.85)"); fog.addColorStop(1, "rgba(0,0,0,0)");
   c.globalCompositeOperation = "destination-out"; c.fillStyle = fog; c.fillRect(0, 0, w, h); c.globalCompositeOperation = "source-over"; c.globalAlpha = 1;
   // The LED rings: pointing at a button spins its ring up over most of a second; leaving lets it coast to a stop.
@@ -3254,7 +3453,7 @@ function openSpeed() {
   if (speedOpen()) return closeSpeed();
   closeSettings(); hideTip(); setTools(false);
   const v = $("speed");
-  v.classList.remove("out"); v.hidden = false; replay(v, "in");
+  v.classList.remove("out"); v.hidden = false; replay(v, "in"); cover(v, true);
   $("open-speed").classList.add("on"); $("open-speed").setAttribute("aria-current", "page");
   indicator.style.opacity = 0;
   paintSpeed(); speedDraw();
@@ -3262,15 +3461,16 @@ function openSpeed() {
 }
 function closeSpeed() {
   const v = $("speed");
-  if (v.hidden) return;
+  if (!viewShown(v)) return;
+  cover(v, false);
   if (speed.state === "run") speedEnd("stopped");   // no test runs where nobody can see it
   $("open-speed").classList.remove("on"); $("open-speed").removeAttribute("aria-current");
   placeIndicator();
   let done = false;
-  const end = () => { if (done) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };
-  v.classList.add("out");
+  const end = () => { if (done || !v.classList.contains("out")) return; done = true; v.hidden = true; v.classList.remove("out", "in"); };   // reopened meanwhile: stays open
+  v.classList.add("out"); wakeGraph();
   v.addEventListener("animationend", end, { once: true });
-  setTimeout(end, 200);
+  clearTimeout(v._end); v._end = setTimeout(end, 200);   // an earlier close's timer would cut this fade short
 }
 $("open-speed").onclick = openSpeed;
 
@@ -3294,7 +3494,7 @@ scan.divs = scan.blocks.map(() => { const d = document.createElement("div"); d.c
 $("scan-grid").append(...scan.blocks.flatMap((g, b) => b ? [scan.divs[b], g] : [g]));
 // Where block b starts, in the grid's scroll space.
 const scanTop = b => scan.blocks[b].offsetTop - $("scan-grid").offsetTop;
-const scanGo = (b, how = "smooth") => $("scan-grid").scrollTo({ top: scanTop(b), behavior: how });
+const scanGo = (b, how = calm.matches ? "instant" : "smooth") => $("scan-grid").scrollTo({ top: scanTop(b), behavior: how });
 $("scan-again").onclick = () => scanStart(true);
 // The range swept: the adapter's own unless another was picked from the header (a secondary IP's, or one typed in).
 // `src` is the address the pings go out from: the adapter's own address inside that range, or its main one.
@@ -3329,7 +3529,7 @@ function scanStart(again = false) {
   scan.note = !live ? "" : scan.off ? L("Past the gateway: ping only", "อยู่หลัง Gateway: ใช้ ping อย่างเดียว")
     : n === 1 && p > 0 && p < 24 ? L(`Showing ${net}.x, too wide for all`, `แสดง ${net}.x วงใหญ่เกินจะสแกนทั้งหมด`) : "";
   const key = `${net}|${n}|${first}|${scan.src}`;
-  if (!again && key === scan.key && scan.done) { scanTell(null); return; }
+  if (!again && key === scan.key && scan.done) { scanTell(); return; }
   // What this network showed before (its range and gateway): when each address last answered, and whether the router stands in.
   // Filled in once the gateway's MAC is known (the key includes it: 192.168.1.x at home and at work are different networks).
   let memKey = "", mem = { ips: {} };
@@ -3349,7 +3549,8 @@ function scanStart(again = false) {
     delete c.dataset.ip; delete c.dataset.tip; c.removeAttribute("aria-label");
     if (e && e !== "out") c.dataset.tip = `${numIp(first + i)} · ` + (e === "bc" ? L("Broadcast: reaches every device here, not one", "Broadcast: ส่งถึงทุกเครื่องในวง ใช้เป็น IP ไม่ได้") : L("Network: names the subnet itself", "Network: ชื่อของวงนี้ ใช้เป็น IP ไม่ได้"));
   });
-  scanTell(null);
+  scanTell();
+  scanCur(live ? base - first : 0, false);   // Tab lands on this PC's own address
   if (!live) return;
   const todo = [...Array(n * 256).keys()].filter(i => !scan.edge(i));
   scan.total = todo.length;
@@ -3380,20 +3581,24 @@ function scanStart(again = false) {
       c.dataset.tip = scanSays(ip, got, a); c.setAttribute("aria-label", c.dataset.tip);
       scan.done++;
       if (scan.follow && Math.floor(i / 256) > scan.at) scanGo(scan.at = Math.floor(i / 256));
-      scanState();
-      if (scan.tell === null || scan.tell === undefined) scanTell(null);
   };
-  // The pace follows how fast answers have come in so far (an average, so bursts even out),
-  // a bit slower while the queue is short so it never runs dry, faster when it piles up.
-  let fed = false, got = 0, acc = 0;
+  // The pace (cells a ms) aims at how fast answers come in on average, plus enough to clear what waits in ~0.4 s,
+  // and eases toward that aim: free addresses answer in waves (~96 every half second), and a pace that jumped
+  // with them made the ring and grid crawl, then sprint.
+  // Once every address is asked, the last answer is at most ~1.6 s away (a 400 ms ping, then an 800 ms ARP re-check
+  // in Rust, and some margin): what's left is spread over that, so the end slows down instead of halting at 97%.
+  let fed = false, got = 0, acc = 0, pace = 0, sent = 0;
   const t0 = performance.now(); let last = t0;
   const drain = now => {
     if (run !== scan.run) return;
     const dt = Math.min(now - last, 50); last = now;
-    const rate = got / Math.max(now - t0, 400), lean = fed ? 2 : q.length > 40 ? 1.4 : q.length < 10 ? 0.7 : 1;
-    acc += dt * rate * lean;
+    let aim = (fed ? 0 : got / Math.max(now - t0, 400)) + q.length / (fed ? 250 : 400);
+    if (sent && !fed) aim = Math.min(aim, (scan.total - scan.done) / Math.max(250, sent + 1600 - now));
+    pace += (aim - pace) * (1 - Math.exp(-dt / 320));   // by time, so a 144 Hz screen eases alike
+    acc += dt * pace;
     q.sort((x, y) => x[0] - y[0]);
-    while (acc >= 1 && q.length) { show(...q.shift()); acc--; }
+    // The tally counts every cell, so it's redone once a frame, not once per address.
+    if (acc >= 1 && q.length) { while (acc >= 1 && q.length) { show(...q.shift()); acc--; } scanTell(); }
     if (!q.length) acc = Math.min(acc, 1);
     if (q.length || !fed) requestAnimationFrame(drain); else done();
   };
@@ -3402,30 +3607,45 @@ function scanStart(again = false) {
   const gwIp = a.cfg.gateway, gwMac = !scan.off && validIp(gwIp || "") ? scanAsk(gwIp, a, scan.src).then(x => x?.mac ?? null) : Promise.resolve(null);
   const ready = gwMac.then(m => { memKey = `${net}|${n}|${gwIp}|${m ?? ""}`; mem = seenLoad(memKey); if (run === scan.run) scan.proxy = !!mem.proxy; });
   const confirm = async (ip, x) => {
-    if (!x?.mac || x.ms || ip === gwIp || ownsIp(a, ip) || x.mac !== await gwMac) return x;
+    if (!x?.mac || x.ms != null || ip === gwIp || ownsIp(a, ip) || x.mac !== await gwMac) return x;
     const open = await Promise.any(PROXY_PORTS.map(port => scanTcp(ip, port, scan.src || a.cfg.address)
       .then(t => t?.open ? port : Promise.reject()))).catch(() => 0);
     return open ? { mac: null, vendor: null, ms: null, port: open } : { proxy: true };
   };
-  // Behind proxy ARP the router rate-limits and may block a burst: 16 at a time instead of 48.
+  // Behind proxy ARP the router rate-limits and may block a burst: 16 at a time instead of 96.
   const worker = async (_, w) => {
     await ready;
     while (todo.length && run === scan.run && !(scan.proxy && w >= 16)) {
-      const i = todo.shift(), ip = numIp(first + i), res = await confirm(ip, await scanAsk(ip, a, scan.src));
+      const i = todo.shift(), ip = numIp(first + i);
+      if (!todo.length) sent = performance.now();
+      const res = await confirm(ip, await scanAsk(ip, a, scan.src));
       if (run !== scan.run) return;
       q.push([i, res]); got++;
     }
   };
   scan.at = 0;
   requestAnimationFrame(drain);
-  // ponytail: an empty address waits ~400 ms; 48 at once sweeps a /24 in ~2 s.
-  Promise.all(Array.from({ length: tauri ? 48 : 16 }, worker)).then(() => { fed = true; });
+  // ponytail: an empty address waits ~500 ms (the 400 ms ping, then some); 96 at once sweeps a /24 in ~1.3 s, 48 took ~2.2 s.
+  // About one ARP and one ping per address, so ~200 a second each: still gentle on a LAN.
+  Promise.all(Array.from({ length: tauri ? 96 : 16 }, worker)).then(() => { fed = true; });
   const done = () => {
     mem.proxy = scan.proxy; seenSave(memKey, mem);
     if (scan.follow) setTimeout(() => run === scan.run && scan.follow && scanGo(scan.own), 400);
-    scanTell(scan.tell ?? null);
+    scanTell();
   };
 }
+// Keyboard: the grid is one Tab stop (the address last on), arrows move 16 to a row, Enter or Space opens one.
+function scanCur(i, focus = true) {
+  scan.cells.forEach(c => c.tabIndex = -1);
+  scan.cells[i].tabIndex = 0;
+  if (focus) scan.cells[i].focus();
+}
+$("scan-grid").addEventListener("keydown", e => {
+  const i = scan.cells.indexOf(document.activeElement), d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -16, ArrowDown: 16 }[e.key];
+  if (i < 0 || d === undefined) return;
+  e.preventDefault();
+  if (i + d >= 0 && i + d < scan.n * 256) scanCur(i + d);
+});
 // The header map: one segment per /24 (none for a single one). Click one to go there.
 function scanMap(n) {
   $("scan-map").replaceChildren(...[...Array(n > 1 ? n : 0)].map((_, b) => {
@@ -3456,7 +3676,9 @@ const seenLoad = k => ({ ips: {}, ...seenAll()[k] });
 function seenSave(k, m) {
   const all = seenAll(), now = Date.now();
   m.ips = Object.fromEntries(Object.entries(m.ips).filter(([, t]) => now - t < SEEN_MS));
-  all[k] = m; keep("octet-seen", JSON.stringify(all));
+  // This network and the 19 scanned last before it: a laptop that meets many networks doesn't keep every one forever.
+  const rest = Object.entries(all).filter(([x]) => x !== k).sort(([, x], [, y]) => (y.at ?? 0) - (x.at ?? 0)).slice(0, 19);
+  keep("octet-seen", JSON.stringify(Object.fromEntries([[k, { ...m, at: now }], ...rest])));
 }
 const scanTcp = (ip, port, source) => net("tcping", { address: ip, port, source, timeout: 400 }).catch(() => null);
 // What a cell's tooltip says.
@@ -3473,11 +3695,11 @@ function scanSays(ip, x, a) {
   const who = role ? [role, x?.vendor].filter(Boolean).join(" · ") : x && scan.off && !x.mac ? L("Answers ping", "ตอบ ping")
     : !x && scan.off ? L("No answer to ping, may still be in use", "ไม่ตอบ ping อาจมีเครื่องใช้อยู่") : x ? maker
     : (h === 0 || h === 255) ? L(`Free, valid on a /${prefixOf(a.cfg.subnet)}`, `ว่าง ใช้ได้ในวง /${prefixOf(a.cfg.subnet)}`) : L("Free, click to use", "ว่าง กดเพื่อใช้");
-  return [[ip, x?.ms ? `${x.ms} ms` : ""].filter(Boolean).join(" · "), who, x?.mac].filter(Boolean).join("\n");
+  return [[ip, x?.ms != null ? msOf(x.ms) : ""].filter(Boolean).join(" · "), who, x?.mac].filter(Boolean).join("\n");
 }
 // Footer: the key and the tally.
 function scanTell() {
-  const f = $("scan-foot");
+  const f = $("scan-foot"), focus = f.contains(document.activeElement) && document.activeElement.dataset.k;
   const count = k => scan.cells.filter(c => c.classList.contains(k)).length, used = count("used"), free = count("free"), maybe = count("maybe");
   const key = (k, cls, label, n) => `<span data-k="${k}" role="button" tabindex="0"><i class="key" style="background:${cls}"></i>${label}${n !== undefined ? ` <b>${n}</b>` : ""}</span>`;
   f.innerHTML = !scan.net ? "" : (scan.note ? `<span class="snote">${scan.note}</span>` : "") + (scan.off ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway"))
@@ -3492,6 +3714,7 @@ function scanTell() {
     if (k.dataset.k === "gw" && gw && !scan.has(gw)) k.dataset.tip = L(`${gw}, outside this range`, `${gw} อยู่นอกช่วงที่แสดง`);
     if (k.dataset.k === "maybe") k.dataset.tip = L("The router answers for every address (proxy ARP); these answered nothing else", "Router ตอบแทนทุกเลข (proxy ARP) เลขเหล่านี้ไม่มีอะไรตอบนอกจากนั้น");
   });
+  if (focus) f.querySelector(`[data-k="${focus}"]`)?.focus();   // rebuilt: the key you were on keeps the focus
   scanState();
 }
 // Which cells stand out: the one held, or the one peeked at. A gateway off this /24 has nothing to show.
@@ -3611,7 +3834,7 @@ async function scanPorts(h, cell, ip) {
   m.firstChild.append(spin);
   // Checked all at once; the open ones come in together when it is done, the menu opening down to them like an accordion.
   // How long a port may take: a few of this device's ping times, it answers a connect about as fast.
-  const wait = Math.min(400, Math.max(120, (scan.hosts[h]?.ms || 20) * 4 + 80));
+  const wait = Math.min(400, Math.max(120, (scan.hosts[h]?.ms ?? 20) * 4 + 80));
   const got = await Promise.all(PORTS.map(([port]) => net("tcping", { address: ip, port, source: scan.src || a.cfg.address, timeout: wait }).catch(() => null)));
   if (run !== scan.portRun || scan.menu !== h) return;
   const open = PORTS.map(([port, what], k) => [port, what, got[k]?.open]).filter(x => x[2] !== undefined).sort((x, y) => x[0] - y[0]);
@@ -3620,7 +3843,7 @@ async function scanPorts(h, cell, ip) {
   open.forEach(([port, what, ms]) => {
     const row = document.createElement("div"); row.className = "sp";
     row.innerHTML = `<b></b><span></span><em></em>`;
-    row.children[0].textContent = port; row.children[1].textContent = what; row.children[2].textContent = `${ms} ms`;
+    row.children[0].textContent = port; row.children[1].textContent = what; row.children[2].textContent = msOf(ms);
     if (WEB[port]) {
       const go = document.createElement("button"); go.className = "icon-btn"; go.title = L(`Open ${WEB[port]}://${ip}:${port}`, `เปิด ${WEB[port]}://${ip}:${port}`);
       go.innerHTML = `<i class="ph ph-arrow-square-out"></i>`;
@@ -3656,7 +3879,7 @@ function scanMenu(h, cell, from) {
   m.style.top = `${below + m.offsetHeight > pg.height ? b.top - pg.top - m.offsetHeight - 6 : below}px`;
   m.style.transformOrigin = below + m.offsetHeight > pg.height ? "bottom left" : "top left";
   // The same box grows to what came in (from: its height and top before), an accordion, not a jump.
-  if (again && from && from[0] !== m.offsetHeight) m.animate([{ height: `${from[0]}px`, top: from[1], overflow: "hidden" }, { height: `${m.offsetHeight}px`, top: m.style.top, overflow: "hidden" }],
+  if (again && from && from[0] !== m.offsetHeight && !calm.matches) m.animate([{ height: `${from[0]}px`, top: from[1], overflow: "hidden" }, { height: `${m.offsetHeight}px`, top: m.style.top, overflow: "hidden" }],
     { duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
 }
 document.addEventListener("pointerdown", e => { if (scan.menu !== null && !e.target.closest("#scan-menu, .scell.free, .scell.maybe, .scell.used, .scell.gw")) scanMenu(null); });
@@ -3669,19 +3892,24 @@ function scanShow(on) {
 }
 new ResizeObserver(() => centreUnder($("scan-foot"), $("scan-grid"), $("page-scan"))).observe($("scan-grid"));
 // ---------- Info: a summary to read, copy one value, or copy all as text ----------
-// ponytail: the public address is asked for only when you click it (it leaves this machine), and kept per adapter for the session.
+// The public address is asked for only when you click it (it leaves this machine) or comes with a speed test, and is kept for the session.
 const info = { pub: {} };
+// The public-IP answer is kept per adapter and address: a new address (Apply, a new lease) means asking again.
+const pubKey = a => `${a.id}|${a.cfg.address}`;
 let hostName = "MRTOMATO-PC";   // demo; the app asks Windows
 if (tauri) invoke("computer_name").then(n => { hostName = n; if (page === "info") renderInfo(); }, () => {});
 // Wi-Fi channel from the centre frequency.
 const channelOf = f => !f ? 0 : f < 3000 ? (f === 2484 ? 14 : (f - 2407) / 5) : f < 5925 ? (f - 5000) / 5 : (f - 5950) / 5;
 function infoRows() {
   const a = adapters[sel], c = a.cfg, p = prefixOf(c.subnet), up = a.state === "up";
-  const dns = v => { const w = resolver(v, c.gateway); return w ? (w.logo ? w.title.replace(/ Public DNS| DNS| \(.*\)/g, "") : L(w.text, { Router: "Router", Local: "ในวง", Public: "Public" }[w.text] || w.text)) : ""; };
+  const dns = v => { const w = resolver(v, c.gateway); return w ? (w.logo ? w.title.replace(/ Public DNS| DNS| \(.*\)/g, "") : L(w.text, { Router: "Router", Local: "ในวง", Public: "Public", "This PC": "เครื่องนี้" }[w.text] || w.text)) : ""; };
   // A day-long lease starts and ends at the same clock time, so any day but today carries its date.
   const at = t => new Date(t).toLocaleString(lang === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit",
     ...(new Date(t).toDateString() !== new Date().toDateString() && { day: "numeric", month: "short" }) });
-  const pub = info.pub[a.id];
+  // Windows keeps a lease that never ends as 0xFFFFFFFF seconds (the year 2106).
+  const lease = !a.leaseEnds ? "" : a.leaseEnds >= 4294967295e3 ? L("never expires", "ไม่มีวันหมดอายุ")
+    : a.leaseGot ? L(`${at(a.leaseGot)} to ${at(a.leaseEnds)}`, `${at(a.leaseGot)} ถึง ${at(a.leaseEnds)}`) : L(`until ${at(a.leaseEnds)}`, `ถึง ${at(a.leaseEnds)}`);
+  const pub = info.pub[pubKey(a)];
   return [
     { icon: "plugs-connected", head: L("Connection", "การเชื่อมต่อ"), rows: [
       [L("Computer", "ชื่อเครื่อง"), hostName, ""],
@@ -3701,12 +3929,12 @@ function infoRows() {
     ] : [] },
     { icon: "map-pin", head: L("Address", "ที่อยู่"), tag: c.ipAuto ? "DHCP" : "Manual", rows: [
       ["IP", c.address, "", validIp(c.address) && p >= 0 ? `/${p}` : ""],
-      ...(a.extraIps || []).map((x, i) => [L(`IP ${i + 2}`, `IP ${i + 2}`), x, ""]),
+      ...(a.extraIps || []).map((x, i) => { const q = prefixOf(a.extraSubnets?.[i] || ""); return [L(`IP ${i + 2}`, `IP ${i + 2}`), x, "", q >= 0 ? `/${q}` : ""]; }),
       ["Subnet", c.subnet, ""],
       ["Gateway", c.gateway, ""],
       ...(a.ipv6 || []).map(x => ["IPv6", x, x.startsWith("fe80") ? "link-local" : ""]),
-      ...(c.ipAuto && a.dhcpServer ? [[L("DHCP server", "DHCP server"), a.dhcpServer, a.leaseEnds ? (a.leaseGot ? L(`${at(a.leaseGot)} to ${at(a.leaseEnds)}`, `${at(a.leaseGot)} ถึง ${at(a.leaseEnds)}`) : L(`until ${at(a.leaseEnds)}`, `ถึง ${at(a.leaseEnds)}`)) : ""]] : []),
-      ...(up && validIp(c.gateway) ? [["Public IP", pub === undefined ? L("Look up", "ดูค่า") : pub === null ? L("Looking up…", "กำลังดู…") : pub?.ip || L("Couldn't reach the internet", "ออกอินเทอร์เน็ตไม่ได้"), pub === undefined ? L("asks a web service", "ถามจากเว็บภายนอก") : [pub?.isp, pub?.city].filter(Boolean).join(" · "), "", "pub"]] : []),
+      ...(c.ipAuto && a.dhcpServer ? [[L("DHCP server", "DHCP server"), a.dhcpServer, lease]] : []),
+      ...(up && validIp(c.gateway) ? [["Public IP", pub === undefined ? L("Look up", "ดูค่า") : pub === null ? L("Looking up…", "กำลังดู…") : pub?.ip || L("Couldn't reach the internet", "ออกอินเทอร์เน็ตไม่ได้"), pub === undefined ? L("asks a web service", "ถามจากเว็บภายนอก") : [pub?.isp, pub?.city, viaName(pub), pub?.err].filter(Boolean).join(" · "), "", "pub"]] : []),
     ] },
     { icon: "globe-simple", head: "DNS", tag: c.dnsAuto ? "DHCP" : "Manual", rows: [
       [L("Preferred", "หลัก"), c.dns1, dns(c.dns1)],
@@ -3716,6 +3944,7 @@ function infoRows() {
   ].map(g => ({ ...g, rows: g.rows.filter(r => r[1]) })).filter(g => g.rows.length);
 }
 function renderInfo() {
+  if (!adapters[sel]) { $("info-list").replaceChildren(); info.shape = ""; return; }   // none to show (all hidden, or the read failed)
   const groups = infoRows(), list = $("info-list");
   // Same rows as on screen (only values differ): roll the values that changed and keep the rest still.
   const shape = JSON.stringify(groups.map(g => [g.head, g.tag, g.rows.map(r => [r[0], r[4] || ""])]));
@@ -3774,10 +4003,17 @@ $("info-copy").onclick = () => {
   popIcon(i, "ph ph-check"); roll(sp, L("Copied", "คัดลอกแล้ว"));
   clearTimeout(b.t); b.t = setTimeout(() => { popIcon(i, "ph ph-copy"); roll(sp, L("Copy all", "คัดลอกทั้งหมด")); }, 1400);
 };
+// The adapter way was refused (a VPN's kill switch), so the answer came the normal way: say which adapter that was.
+function viaName(m) {
+  if (m?.via === undefined) return "";
+  const a = adapters.find(x => x.cfg?.address === m.via);
+  return a ? L(`through ${a.name}`, `ผ่าน ${a.name}`) : L("through VPN", "ผ่าน VPN");
+}
 async function infoPublic() {
-  const id = adapters[sel].id;
+  const id = pubKey(adapters[sel]);
   info.pub[id] = null; renderInfo();
-  info.pub[id] = await net("public_ip").catch(() => "");
+  // Out through this adapter, from the same Cloudflare answer the speed test uses.
+  info.pub[id] = await net("public_ip", { index: adapters[sel].index ?? 0, source: adapters[sel].cfg.address }).catch(e => ({ err: String(e) }));   // the reason shows under the row; a click asks again
   if (page === "info") renderInfo();
 }
 function infoShow(on) {

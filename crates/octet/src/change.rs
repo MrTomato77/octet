@@ -7,7 +7,7 @@
 //! On macOS the second copy is started as root through the administrator prompt and runs
 //! networksetup, which only takes a service's name (see `networksetup`).
 
-use crate::adapters::Cfg;
+use crate::adapters::{Addr, Cfg, Gw};
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
 
@@ -16,7 +16,7 @@ use std::net::Ipv4Addr;
 pub enum Request {
     /// `ip` / `dns`: which halves changed. netsh fails on "DHCP is already enabled",
     /// so an unchanged half is left alone. `extra`: the Advanced lists (more addresses,
-    /// more gateways, metrics) changed; `was_extra` / `was_gws` are what the adapter has now,
+    /// more gateways, metrics) changed; `was_extra` / `was_gws` / `was_metric` are what the adapter has now,
     /// so only what was removed is deleted.
     Apply {
         index: u32,
@@ -27,9 +27,11 @@ pub enum Request {
         #[serde(default)]
         extra: bool,
         #[serde(default, rename = "wasExtra")]
-        was_extra: Vec<String>,
+        was_extra: Vec<Addr>,
         #[serde(default, rename = "wasGws")]
-        was_gws: Vec<String>,
+        was_gws: Vec<Gw>,
+        #[serde(default, rename = "wasMetric")]
+        was_metric: String,
     },
     Release { index: u32, name: String },
     Renew { index: u32, name: String },
@@ -77,10 +79,11 @@ fn mask_of(v: &str) -> Result<Ipv4Addr, String> {
 
 /// A metric: empty = automatic (None), else 1-9999.
 #[cfg(not(target_os = "macos"))]
-fn metric(v: &str) -> Result<Option<u16>, String> {
+fn metric(v: &str) -> Result<Option<u32>, String> {
     match v.trim() {
         "" => Ok(None),
-        m => m.parse::<u16>().ok().filter(|m| (1..=9999).contains(m)).map(Some).ok_or_else(|| "A metric is a number from 1 to 9999".into()),
+        // Typed ones are 1-9999 (the UI checks); larger ones come from Windows itself (a VPN's routes) and pass back as they are.
+        m => m.parse::<u32>().ok().filter(|m| *m >= 1).map(Some).ok_or_else(|| "A metric is a number from 1 to 9999".into()),
     }
 }
 
@@ -99,6 +102,16 @@ pub fn commands(r: &Request) -> Result<Vec<Vec<String>>, String> {
         return Err("Adapter name is not usable".into());
     }
     platform(r, index, name)
+}
+
+/// Manual DNS servers in order; none = take them from DHCP. An Alternate typed in with Preferred
+/// left empty still counts (it becomes the first): dropping it would quietly switch DNS to automatic.
+fn dns_servers(cfg: &Cfg) -> Result<Vec<String>, String> {
+    if cfg.dns_auto {
+        return Ok(vec![]);
+    }
+    [(&cfg.dns1, "Preferred DNS"), (&cfg.dns2, "Alternate DNS")].into_iter().filter(|(v, _)| !v.is_empty())
+        .map(|(v, what)| ipv4(v, what).map(|ip| ip.to_string())).collect()
 }
 
 fn cmd(args: &[&str]) -> Vec<String> {
@@ -143,13 +156,7 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                 }
             }
             if *dns {
-                let mut servers = vec![];
-                if !cfg.dns_auto && !cfg.dns1.is_empty() {
-                    servers.push(ipv4(&cfg.dns1, "Preferred DNS")?.to_string());
-                    if !cfg.dns2.is_empty() {
-                        servers.push(ipv4(&cfg.dns2, "Alternate DNS")?.to_string());
-                    }
-                }
+                let servers = dns_servers(cfg)?;
                 // "Empty": the servers come from DHCP again.
                 let mut c = ns(&["-setdnsservers", name]);
                 c.extend(if servers.is_empty() { vec!["Empty".to_string()] } else { servers });
@@ -171,7 +178,7 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
         Request::Enable { on, .. } => {
             vec![cmd(&["netsh", "interface", "set", "interface", &format!("name={name}"), if *on { "admin=enable" } else { "admin=disable" }])]
         }
-        Request::Apply { cfg, ip, dns, extra, was_extra, was_gws, .. } => {
+        Request::Apply { cfg, ip, dns, extra, was_extra, was_gws, was_metric, .. } => {
             if *ip && !cfg.ip_auto && cfg.dns_auto {
                 return Err("A static IP needs manual DNS".into());
             }
@@ -179,9 +186,23 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
             // Every value is checked before any command is built.
             let extras = cfg.extra.iter().map(|a| Ok((ipv4(&a.address, "Extra IP address")?, mask_of(&a.subnet)?))).collect::<Result<Vec<_>, String>>()?;
             let gws = cfg.gws.iter().map(|g| Ok((ipv4(&g.gateway, "Extra gateway")?, metric(&g.metric)?))).collect::<Result<Vec<_>, String>>()?;
-            let was_extra = was_extra.iter().map(|a| ipv4(a, "Current extra IP")).collect::<Result<Vec<_>, String>>()?;
-            let was_gws = was_gws.iter().map(|g| ipv4(g, "Current extra gateway")).collect::<Result<Vec<_>, String>>()?;
-            let (gw_metric, if_metric) = (metric(&cfg.gw_metric)?, metric(&cfg.metric)?);
+            // What the adapter has now, whole: an entry whose mask or metric changed is taken off and put back.
+            let was_extra = was_extra.iter().map(|a| Ok((ipv4(&a.address, "Current extra IP")?, mask_of(&a.subnet)?))).collect::<Result<Vec<_>, String>>()?;
+            let was_gws = was_gws.iter().map(|g| Ok((ipv4(&g.gateway, "Current extra gateway")?, metric(&g.metric).unwrap_or(None)))).collect::<Result<Vec<_>, String>>()?;
+            // netsh answers a repeat with "object already exists" halfway through the run: caught here, before anything.
+            let mut seen: Vec<Ipv4Addr> = cfg.address.parse().ok().filter(|_| !cfg.ip_auto).into_iter().collect();
+            for (a, _) in &extras {
+                if seen.contains(a) { return Err(format!("{a} is listed twice")); }
+                seen.push(*a);
+            }
+            let mut seen: Vec<Ipv4Addr> = cfg.gateway.parse().ok().filter(|_| !cfg.ip_auto).into_iter().collect();
+            for (g, _) in &gws {
+                if seen.contains(g) { return Err(format!("Gateway {g} is listed twice")); }
+                seen.push(*g);
+            }
+            let gw_metric = metric(&cfg.gw_metric)?;
+            // The interface metric is set only when it changed; emptied, it goes back to automatic.
+            let if_metric = if cfg.metric.trim() != was_metric.trim() { Some(metric(&cfg.metric)?) } else { None };
             // `set address` (static or DHCP) clears every typed-in address and gateway, so after
             // it the Advanced lists go back on in full; otherwise only the difference is applied.
             let replaced = *ip;
@@ -208,15 +229,29 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                     out.push(c);
                 }
             }
+            // DNS goes on right after the address: if a later Advanced step fails, the adapter still has its DNS
+            // (a switch to static drops the DHCP-given servers, and a static IP without DNS reaches nothing by name).
+            if *dns {
+                // Done in-process with SetInterfaceDnsSettings (what Windows Settings uses): no netsh,
+                // well under 10 ms. No servers = take them from DHCP.
+                let servers = dns_servers(cfg)?;
+                out.push(cmd(&[DNS, &index.to_string(), &servers.join(","), if cfg.register { "register" } else { "noregister" }]));
+            }
             if *extra || replaced {
-                let keep = |a: &Ipv4Addr, list: &[Ipv4Addr]| replaced || !list.contains(a);
-                for a in was_extra.iter().filter(|a| !replaced && !extras.iter().any(|(x, _)| x == *a)) {
-                    out.push(cmd(&["netsh", "interface", "ipv4", "delete", "address", &iface, &format!("address={a}")]));
+                // Back to DHCP: the router hands out the gateway, and typed-in gateways from before (likely from the
+                // old subnet) don't go back on. New ones typed in the Advanced list still do.
+                let gws: Vec<_> = gws.iter().filter(|g| !(replaced && cfg.ip_auto && was_gws.contains(g))).collect();
+                for a in was_extra.iter().filter(|a| !replaced && !extras.contains(a)) {
+                    out.push(cmd(&["netsh", "interface", "ipv4", "delete", "address", &iface, &format!("address={}", a.0)]));
                 }
-                for g in was_gws.iter().filter(|g| !replaced && !gws.iter().any(|(x, _)| x == *g)) {
-                    out.push(cmd(&["netsh", "interface", "ipv4", "delete", "address", &iface, &format!("gateway={g}")]));
+                for g in was_gws.iter().filter(|g| !replaced && !gws.contains(g)) {
+                    out.push(cmd(&["netsh", "interface", "ipv4", "delete", "address", &iface, &format!("gateway={}", g.0)]));
                 }
-                let new_extra: Vec<_> = extras.iter().filter(|(a, _)| keep(a, &was_extra)).collect();
+                // The last typed-in address gone from a DHCP adapter: coexistence goes off again.
+                if cfg.ip_auto && extras.is_empty() && !was_extra.is_empty() {
+                    out.push(cmd(&["netsh", "interface", "ipv4", "set", "interface", &format!("interface={index}"), "dhcpstaticipcoexistence=disabled"]));
+                }
+                let new_extra: Vec<_> = extras.iter().filter(|a| replaced || !was_extra.contains(a)).collect();
                 // On DHCP, Windows keeps typed-in addresses beside the leased one only with coexistence on.
                 if cfg.ip_auto && !new_extra.is_empty() {
                     out.push(cmd(&["netsh", "interface", "ipv4", "set", "interface", &format!("interface={index}"), "dhcpstaticipcoexistence=enabled"]));
@@ -224,26 +259,17 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                 for (a, m) in new_extra {
                     out.push(cmd(&["netsh", "interface", "ipv4", "add", "address", &iface, &format!("address={a}"), &format!("mask={m}")]));
                 }
-                for (g, m) in gws.iter().filter(|(g, _)| keep(g, &was_gws)) {
+                for (g, m) in gws.into_iter().filter(|g| replaced || !was_gws.contains(g)) {
                     let mut c = cmd(&["netsh", "interface", "ipv4", "add", "address", &iface, &format!("gateway={g}")]);
                     c.push(format!("gwmetric={}", m.unwrap_or(0)));   // 0 = automatic
                     out.push(c);
                 }
-                if let Some(m) = if_metric {
+                // ponytail: an emptied metric sends nothing. netsh has no "automatic" value (metric=0 sets 0), and
+                // Set-NetIPInterface would run PowerShell as admin, which loads modules from folders the user can write.
+                // The way back is SetIpInterfaceEntry in-process (UseAutomaticMetric), once the UI has a metric field.
+                if let Some(Some(m)) = if_metric {
                     out.push(cmd(&["netsh", "interface", "ipv4", "set", "interface", &format!("interface={index}"), &format!("metric={m}")]));
                 }
-            }
-            if *dns {
-                // Done in-process with SetInterfaceDnsSettings (what Windows Settings uses): no netsh,
-                // well under 10 ms. No servers = take them from DHCP.
-                let mut servers = vec![];
-                if !cfg.dns_auto && !cfg.dns1.is_empty() {
-                    servers.push(ipv4(&cfg.dns1, "Preferred DNS")?.to_string());
-                    if !cfg.dns2.is_empty() {
-                        servers.push(ipv4(&cfg.dns2, "Alternate DNS")?.to_string());
-                    }
-                }
-                out.push(cmd(&[DNS, &index.to_string(), &servers.join(","), if cfg.register { "register" } else { "noregister" }]));
             }
             out
         }
@@ -291,12 +317,17 @@ pub fn elevate(r: &Request) -> Result<(), String> {
     #[allow(unreachable_code)]
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let out = std::env::temp_dir().join(format!("octet-{}-{nanos}.out", std::process::id()));
+    // Made here, by this (unelevated) copy: the elevated one only writes into it (`write_out`).
+    let made = std::fs::OpenOptions::new().write(true).create_new(true).open(&out).map_err(|e| format!("Could not prepare the change: {e}"))?;
+    let id = file_id(&made).ok_or("Could not prepare the change")?;
+    drop(made);
     // The request travels on the command line, so nothing can swap it between the
     // UAC prompt and the elevated copy reading it. The .out file only carries error text.
-    let params = format!("--elevated {} \"{}\"", hex(&serde_json::to_vec(r).map_err(|e| e.to_string())?), out.display());
-    let code = run_as_admin(&exe, &params, true)?.unwrap_or(1);
+    let params = format!("--elevated {} \"{}\" {id}", hex(&serde_json::to_vec(r).map_err(|e| e.to_string())?), out.display());
+    let code = run_as_admin(&exe, &params, true);
     let detail = std::fs::read_to_string(&out).unwrap_or_default();
-    let _ = std::fs::remove_file(&out);
+    let _ = std::fs::remove_file(&out);   // also when UAC was declined
+    let code = code?.unwrap_or(1);
     match code {
         0 => Ok(()),
         _ if detail.trim().is_empty() => Err(format!("The change failed (exit code {code})")),
@@ -346,15 +377,52 @@ pub fn run_as_admin(_: &std::path::Path, _: &str, _: bool) -> Result<Option<u32>
     Err("On macOS, Octet asks for your password with each change".into())
 }
 
+/// Which file this is, wherever its path leads: volume and file index ("" off Windows).
+#[cfg(windows)]
+fn file_id(f: &std::fs::File) -> Option<String> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle};
+    let mut i: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    (unsafe { GetFileInformationByHandle(f.as_raw_handle(), &mut i) } != 0)
+        .then(|| format!("{:x}-{:x}-{:x}", i.dwVolumeSerialNumber, i.nFileIndexHigh, i.nFileIndexLow))
+}
+
+#[cfg(not(windows))]
+fn file_id(_: &std::fs::File) -> Option<String> {
+    Some(String::new())
+}
+
 /// Elevated side: run the request, write any failure to `out`. Out "-" (macOS): print it and
 /// exit 0, so the administrator prompt's caller gets the text as the command's output.
-pub fn run_elevated(request_hex: &str, out: &str) -> i32 {
+/// The elevated copy writes its error text only into the file the unelevated side made for it: never creating
+/// one, never through a link, and only into that very file (`id`), so a folder on the way swapped for a junction
+/// can't aim an admin write at another file either.
+fn write_out(out: &str, id: Option<&str>, msg: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        o.share_mode(0).custom_flags(0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT; held alone: nothing writes between check and write
+    }
+    let mut f = o.open(out)?;
+    // Only into an empty file (the one made for it is): a forged launch that names some other file by its id
+    // can't cut what's in it.
+    let m = f.metadata()?;
+    if !m.file_type().is_file() || m.len() != 0 || file_id(&f).as_deref() != id {
+        return Err(std::io::ErrorKind::InvalidInput.into());
+    }
+    f.write_all(msg.as_bytes())
+}
+
+pub fn run_elevated(request_hex: &str, out: &str, id: Option<&str>) -> i32 {
     let fail = |msg: String| {
         if out == "-" {
             print!("{msg}");
             return 0;
         }
-        let _ = std::fs::write(out, msg);
+        let _ = write_out(out, id, &msg);
         1
     };
     let req: Request = match unhex(request_hex).and_then(|b| serde_json::from_slice(&b).ok()) {
@@ -416,7 +484,29 @@ mod tests {
     }
 
     fn apply(cfg: Cfg, ip: bool, dns: bool) -> Request {
-        Request::Apply { index: 12, name: "vEthernet (WSL)".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![] }
+        Request::Apply { index: 12, name: "vEthernet (WSL)".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![], was_metric: String::new() }
+    }
+
+    #[test]
+    fn writes_errors_only_into_a_file_made_for_them() {
+        let p = std::env::temp_dir().join(format!("octet-test-{}.out", std::process::id()));
+        let _ = std::fs::remove_file(&p);
+        let path = p.to_str().unwrap();
+        assert!(super::write_out(path, None, "x").is_err() && !p.exists());
+        std::fs::write(&p, "").unwrap();
+        let id = super::file_id(&std::fs::File::open(&p).unwrap());
+        super::write_out(path, id.as_deref(), "new").unwrap();
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "new");
+        // The right file, but not empty (a forged launch naming some file by its id): left as it is.
+        assert!(super::write_out(path, id.as_deref(), "x").is_err());
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "new");
+        // Another file at that path (a folder on the way swapped for a junction, say) is not the one made for it.
+        std::fs::remove_file(&p).unwrap();
+        std::fs::write(&p, "someone else's").unwrap();
+        assert!(super::write_out(path, id.as_deref(), "x").is_err());
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "someone else's");
+        std::fs::remove_file(&p).unwrap();
+        assert!(super::write_out(std::env::temp_dir().to_str().unwrap(), id.as_deref(), "x").is_err());
     }
 
     #[test]
@@ -428,7 +518,7 @@ mod tests {
         c.extra = vec![Addr { address: "192.168.1.60".into(), subnet: "24".into() }, Addr { address: "10.9.0.1".into(), subnet: "255.255.0.0".into() }];
         // Only the Advanced list changed, on DHCP: coexistence, then the new one; the kept one and the main address untouched.
         let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c.clone(), ip: false, dns: false, extra: true,
-            was_extra: vec!["192.168.1.60".into(), "172.16.0.9".into()], was_gws: vec![] };
+            was_extra: vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }, Addr { address: "172.16.0.9".into(), subnet: "255.255.0.0".into() }], was_gws: vec![], was_metric: String::new() };
         let got: Vec<String> = commands(&r).unwrap().iter().map(|c| c.join(" ")).collect();
         // The elevated copy gets the request as JSON and must build the same commands.
         let sent: Request = serde_json::from_slice(&serde_json::to_vec(&r).unwrap()).unwrap();
@@ -443,7 +533,7 @@ mod tests {
         s.extra = vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }];
         s.gws = vec![Gw { gateway: "192.168.1.2".into(), metric: "20".into() }];
         s.gw_metric = "10".into();
-        let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: s, ip: true, dns: false, extra: true, was_extra: vec!["192.168.1.60".into()], was_gws: vec![] };
+        let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: s, ip: true, dns: false, extra: true, was_extra: vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }], was_gws: vec![], was_metric: String::new() };
         let got: Vec<String> = commands(&r).unwrap().iter().map(|c| c.join(" ")).collect();
         assert_eq!(got, [
             "netsh interface ipv4 set address name=12 source=static address=192.168.1.50 mask=255.255.255.0 gateway=192.168.1.1 gwmetric=10",
@@ -452,10 +542,89 @@ mod tests {
         ]);
         // Bad Advanced values stop everything before any command.
         c.extra[0].subnet = "33".into();
-        assert!(commands(&Request::Apply { index: 1, name: "a".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![] }).is_err());
+        assert!(commands(&Request::Apply { index: 1, name: "a".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new() }).is_err());
         let mut m = cfg();
         m.metric = "0".into();
-        assert!(commands(&Request::Apply { index: 1, name: "a".into(), cfg: m, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![] }).is_err());
+        assert!(commands(&Request::Apply { index: 1, name: "a".into(), cfg: m, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new() }).is_err());
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn advanced_edits_and_failures_land_right() {
+        use crate::adapters::{Addr, Gw};
+        let run = |cfg: Cfg, ip: bool, dns: bool, was_extra: Vec<Addr>, was_gws: Vec<Gw>| -> Result<Vec<String>, String> {
+            commands(&Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip, dns, extra: true, was_extra, was_gws, was_metric: String::new() }).map(|v| v.iter().map(|c| c.join(" ")).collect())
+        };
+        let addr = |a: &str, m: &str| Addr { address: a.into(), subnet: m.into() };
+        let gw = |g: &str, m: &str| Gw { gateway: g.into(), metric: m.into() };
+        // A mask or a metric changed on an entry that stays: it comes off and goes back on with the new value.
+        let mut c = cfg();
+        c.extra = vec![addr("192.168.1.60", "255.255.0.0")];
+        c.gws = vec![gw("192.168.1.2", "20")];
+        assert_eq!(run(c.clone(), false, false, vec![addr("192.168.1.60", "255.255.255.0")], vec![gw("192.168.1.2", "")]).unwrap(), [
+            "netsh interface ipv4 delete address name=12 address=192.168.1.60",
+            "netsh interface ipv4 delete address name=12 gateway=192.168.1.2",
+            "netsh interface ipv4 add address name=12 address=192.168.1.60 mask=255.255.0.0",
+            "netsh interface ipv4 add address name=12 gateway=192.168.1.2 gwmetric=20",
+        ]);
+        // Unchanged: nothing to do.
+        assert!(run(c.clone(), false, false, vec![addr("192.168.1.60", "16")], vec![gw("192.168.1.2", "20")]).unwrap().is_empty());
+        // DNS right after the address, before the Advanced steps that might fail.
+        let got = run(c.clone(), true, true, vec![], vec![]).unwrap();
+        assert!(got[0].contains("set address") && got[1].starts_with("octet:set-dns"), "{got:?}");
+        // A repeat would stop netsh halfway: refused before anything runs.
+        let mut d = c.clone();
+        d.extra.push(addr("192.168.1.60", "24"));
+        assert!(run(d, false, false, vec![], vec![]).is_err());
+        let mut d = c.clone();
+        d.extra = vec![addr("192.168.1.50", "24")];   // the main address
+        assert!(run(d, false, false, vec![], vec![]).is_err());
+        let mut d = c.clone();
+        d.gws = vec![gw("192.168.1.1", "")];   // the main gateway
+        assert!(run(d, false, false, vec![], vec![]).is_err());
+        // Back to DHCP: the old typed-in gateways stay off; a newly typed one goes on.
+        let mut d = c.clone();
+        (d.ip_auto, d.dns_auto) = (true, true);
+        d.extra = vec![];
+        d.gws = vec![gw("192.168.1.2", "20"), gw("192.168.1.3", "")];
+        let got = run(d, true, false, vec![], vec![gw("192.168.1.2", "20")]).unwrap();
+        assert_eq!(got, ["netsh interface ipv4 set address name=12 source=dhcp", "netsh interface ipv4 add address name=12 gateway=192.168.1.3 gwmetric=0"]);
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn interface_metric_set_kept_and_back_to_automatic() {
+        let run = |metric: &str, was: &str| -> Vec<String> {
+            let mut c = cfg();
+            c.metric = metric.into();
+            let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: was.into() };
+            commands(&r).unwrap().iter().map(|c| c.join(" ")).collect()
+        };
+        assert_eq!(run("15", ""), ["netsh interface ipv4 set interface interface=12 metric=15"]);
+        assert!(run("15", "15").is_empty(), "unchanged: nothing sent");
+        assert!(run("", "15").is_empty(), "no PowerShell in the elevated helper");
+        assert!(run("", "").is_empty());
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn coexistence_off_after_the_last_extra_on_dhcp() {
+        use crate::adapters::Addr;
+        let run = |ip_auto: bool, extra: Vec<Addr>, was: Vec<Addr>| -> Vec<String> {
+            let mut c = cfg();
+            (c.ip_auto, c.extra) = (ip_auto, extra);
+            let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: was, was_gws: vec![], was_metric: String::new() };
+            commands(&r).unwrap().iter().map(|c| c.join(" ")).collect()
+        };
+        let a = |s: &str| Addr { address: s.into(), subnet: "24".into() };
+        assert_eq!(run(true, vec![], vec![a("192.168.1.60")]), [
+            "netsh interface ipv4 delete address name=12 address=192.168.1.60",
+            "netsh interface ipv4 set interface interface=12 dhcpstaticipcoexistence=disabled",
+        ]);
+        assert_eq!(run(true, vec![a("192.168.1.61")], vec![a("192.168.1.60"), a("192.168.1.61")]),
+            ["netsh interface ipv4 delete address name=12 address=192.168.1.60"], "one still there: left on");
+        assert_eq!(run(false, vec![], vec![a("192.168.1.60")]),
+            ["netsh interface ipv4 delete address name=12 address=192.168.1.60"], "static: not touched");
     }
 
     #[test]
@@ -471,6 +640,9 @@ mod tests {
         let mut auto = cfg();
         (auto.ip_auto, auto.dns_auto, auto.register) = (true, true, true);
         assert_eq!(commands(&apply(auto, false, true)).unwrap()[0].join(" "), "octet:set-dns 12  register", "automatic DNS = no servers");
+        let mut alt = cfg();
+        alt.dns1 = String::new();
+        assert_eq!(commands(&apply(alt, false, true)).unwrap()[0].join(" "), "octet:set-dns 12 8.8.8.8 noregister", "an Alternate alone is kept, not dropped");
     }
 
     #[test]
@@ -495,7 +667,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn builds_networksetup_by_service_name() {
         let got = |r: &Request| commands(r).map(|c| c.iter().map(|c| c.join(" ")).collect::<Vec<_>>());
-        let wifi = |cfg: Cfg, ip, dns| Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![] };
+        let wifi = |cfg: Cfg, ip, dns| Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![], was_metric: String::new() };
         assert_eq!(got(&wifi(cfg(), true, true)).unwrap(), [
             "networksetup -setmanual Wi-Fi 192.168.1.50 255.255.255.0 192.168.1.1",
             "octet:wait-address 12 192.168.1.50",
@@ -517,7 +689,7 @@ mod tests {
         assert_eq!(got(&Request::FlushDns).unwrap(), ["dscacheutil -flushcache", "killall -HUP mDNSResponder"]);
         let mut x = cfg();
         x.extra = vec![crate::adapters::Addr { address: "10.0.0.2".into(), subnet: "24".into() }];
-        assert!(commands(&Request::Apply { index: 1, name: "Wi-Fi".into(), cfg: x, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![] }).is_err());
+        assert!(commands(&Request::Apply { index: 1, name: "Wi-Fi".into(), cfg: x, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new() }).is_err());
     }
 
     #[test]
