@@ -35,6 +35,9 @@ struct Via {
     index: u32,
     src: Ipv4Addr,
     to: SocketAddr,
+    /// Out through the adapter only. Off once the adapter way was refused: a VPN that blocks traffic around its
+    /// tunnel (a kill switch) leaves the normal way, through the VPN, as the only one.
+    pinned: bool,
 }
 
 /// A TCP socket that can only leave through the adapter (IP_UNICAST_IF, bound to its address), wrapped in TLS.
@@ -58,11 +61,11 @@ fn tcp(via: Via) -> Result<TcpStream, String> {
         }
         let fail = |what: &str| { let e = WSAGetLastError(); closesocket(s); Err(format!("{what}: {}", said(e))) };
         let idx = via.index.to_be(); // IPv4 wants the index in network byte order
-        if setsockopt(s, IPPROTO_IP, IP_UNICAST_IF, (&idx as *const u32).cast(), 4) != 0 {
+        if via.pinned && setsockopt(s, IPPROTO_IP, IP_UNICAST_IF, (&idx as *const u32).cast(), 4) != 0 {
             return fail("IP_UNICAST_IF");
         }
         let (from, to) = (addr(via.src, 0), addr(*t.ip(), t.port()));
-        if bind(s, (&from as *const SOCKADDR_IN).cast(), size_of::<SOCKADDR_IN>() as i32) != 0 {
+        if via.pinned && bind(s, (&from as *const SOCKADDR_IN).cast(), size_of::<SOCKADDR_IN>() as i32) != 0 {
             return fail("bind");
         }
         // Connect with a deadline: a blocking one waits out every SYN retry (some 21 s) on a line that goes nowhere.
@@ -331,13 +334,33 @@ fn meta(c: &mut Tls) -> Result<Value, String> {
 fn resolve(index: u32, src: Ipv4Addr) -> Result<Via, String> {
     // ponytail: the name is looked up the system's way (default route); only the test itself is pinned.
     let to = (HOST, 443).to_socket_addrs().ok().and_then(|mut a| a.find(SocketAddr::is_ipv4)).ok_or("Can't look up speed.cloudflare.com")?;
-    Ok(Via { index, src, to })
+    Ok(Via { index, src, to, pinned: true })
+}
+
+/// The first connection: through the adapter, else the normal way. Returns the way that worked, kept for the rest.
+fn reach(via: Via) -> Result<(Via, Tls), String> {
+    match open(via) {
+        Ok(c) => Ok((via, c)),
+        Err(e) => {
+            let free = Via { pinned: false, ..via };
+            open(free).map(|c| (free, c)).map_err(|_| e)
+        }
+    }
+}
+
+/// Cloudflare's answer, plus `via`: the local address the normal way left from, when the adapter way was refused.
+fn meta_via(via: Via, c: &mut Tls) -> Result<Value, String> {
+    let mut m = meta(c)?;
+    if !via.pinned {
+        m["via"] = json!(c.get_ref().local_addr().map(|a| a.ip().to_string()).unwrap_or_default());
+    }
+    Ok(m)
 }
 
 /// Info's public IP: the same answer the speed test gets, out through the same adapter.
 pub fn whois(index: u32, src: Ipv4Addr) -> Result<Value, String> {
-    let mut c = open(resolve(index, src)?).map_err(|e| format!("Can't reach the internet through this adapter ({e})"))?;
-    meta(&mut c)
+    let (via, mut c) = reach(resolve(index, src)?).map_err(|e| format!("Can't reach the internet through this adapter ({e})"))?;
+    meta_via(via, &mut c)
 }
 
 /// The whole test. Returns once it's over, stopped or failed; a stopped test sends nothing more.
@@ -345,11 +368,9 @@ pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String
     let me = RUN.fetch_add(1, Relaxed) + 1;
     let live = || RUN.load(Relaxed) == me;
     let send = |v: Value| if live() { send(v) };
-    let via = resolve(index, src)?;
     let used = Arc::new(AtomicU64::new(0));
-
-    let mut c = open(via).map_err(|e| format!("Can't reach Cloudflare through this adapter ({e})"))?;
-    if let Ok(mut m) = meta(&mut c) {
+    let (via, mut c) = reach(resolve(index, src)?).map_err(|e| format!("Can't reach Cloudflare through this adapter ({e})"))?;
+    if let Ok(mut m) = meta_via(via, &mut c) {
         m["kind"] = json!("meta");
         send(m);
     }
@@ -390,7 +411,7 @@ mod tests {
     #[cfg(windows)]
     fn says_why_it_cant_connect() {
         let _ = std::net::TcpListener::bind("127.0.0.1:0");   // starts Winsock, as resolving the host does in a real run
-        let via = super::Via { index: 1, src: "192.0.2.1".parse().unwrap(), to: "192.0.2.2:443".parse().unwrap() };
+        let via = super::Via { index: 1, src: "192.0.2.1".parse().unwrap(), to: "192.0.2.2:443".parse().unwrap(), pinned: true };
         let e = super::tcp(via).unwrap_err();
         assert!(e.contains("isn't usable"), "{e}");
     }
@@ -408,7 +429,7 @@ mod tests {
         }).unwrap();
         // A line that goes nowhere fails within the connect deadline, not after every SYN retry.
         let t = std::time::Instant::now();
-        assert!(super::open(super::Via { index: i.parse().unwrap(), src: src.parse().unwrap(), to: "10.255.255.1:443".parse().unwrap() }).is_err());
+        assert!(super::open(super::Via { index: i.parse().unwrap(), src: src.parse().unwrap(), to: "10.255.255.1:443".parse().unwrap(), pinned: true }).is_err());
         println!("dead end: {:?}", t.elapsed());
         assert!(t.elapsed() < std::time::Duration::from_secs(12));
     }
