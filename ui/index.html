@@ -3090,11 +3090,11 @@ function gput(layer, i, tag, attrs, text) {
   if (text !== undefined && el.textContent !== text) el.textContent = text;
 }
 function gcut(layer, n) { const list = gfx[layer]._els ?? []; while (list.length > n) list.pop().remove(); }
-function drawGraph(stamp) {
+function drawGraph(frameAt) {
   // Each frame WebView2 composites and presents costs about the same however little moved, so a slow drift skips
   // the frames where it would move less than half a pixel. Anything quicker (pointer, scale, a rise) gets all 60.
-  if (stamp - gfx.drawn < gfx.wait) { graphRaf = page === "probe" && !covered() ? requestAnimationFrame(drawGraph) : 0; return; }
-  gfx.drawn = stamp;
+  if (frameAt - gfx.drawn < gfx.wait) { graphRaf = page === "probe" && !covered() ? requestAnimationFrame(drawGraph) : 0; return; }
+  gfx.drawn = frameAt;
   const now = clock();
   const svg = $("probe-svg"), run = $("probe-run");
   if (!gfx.rows) {
