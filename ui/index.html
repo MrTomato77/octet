@@ -612,7 +612,8 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .dlg-body { padding: var(--s6); display: grid; gap: var(--s4); }
 .dlg-body h3 { margin: 0; font-size: 16px; font-weight: 600; }
 /* Settings take the place of the form; the adapter and its edits wait underneath */
-.settings-view { position: absolute; inset: 0; z-index: 4; background: var(--surface); overflow: hidden; align-content: start; }
+/* Scrolls only when it must (several hidden adapters and an update's notes at once); nothing is cut off. */
+.settings-view { position: absolute; inset: 0; z-index: 4; background: var(--surface); overflow: hidden auto; scrollbar-width: thin; align-content: start; }
 .settings-view[hidden] { display: none; }
 .settings-view.in { animation: rise var(--t-base) var(--ease-out); }
 .settings-view.out { animation: fade-out var(--t-fast) ease-in forwards; }
@@ -768,8 +769,10 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .pane.in { animation: rise var(--t-base) var(--ease-out); }
 .keys { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: center; align-content: start; font-size: 13px; }
 .keys > span { color: var(--muted); padding-left: var(--s2); }
-.keys h4 { grid-column: 1 / -1; margin: var(--s2) 0 0; font-size: 12px; font-weight: 600; color: var(--faint); }
-.keys h4:first-child { margin-top: 0; }
+/* Group headings, on Shortcuts and on General alike. */
+.keys h4, .set h4 { grid-column: 1 / -1; margin: var(--s2) 0 0; font-size: 12px; font-weight: 600; color: var(--faint); }
+.keys h4:first-child, .set h4:first-child { margin-top: 0; }
+.set h4 { line-height: 16px; margin-bottom: -4px; }   /* close to its rows: a heading, not one more row */
 /* Under Updates, once a newer version is found: the first points of its release notes. */
 .upd-notes, .news ul { margin: 0; padding-left: 16px; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
 .upd-notes { color: var(--ink); margin-top: -2px; }
@@ -1136,6 +1139,7 @@ html.app, html.app body { overflow: hidden; }
             </div>
             <div class="panes">
               <div class="pane set" data-pane="general">
+                <h4 data-t="sgLook">Appearance</h4>
                 <span class="lbl" data-t="theme">Theme</span>
                 <div class="seg opt" role="radiogroup" aria-label="Theme" style="--n: 3">
                   <span class="thumb"></span>
@@ -1149,6 +1153,7 @@ html.app, html.app body { overflow: hidden; }
                   <label class="choice"><input type="radio" name="lang" value="en" checked><span>English</span></label>
                   <label class="choice"><input type="radio" name="lang" value="th"><span>ไทย</span></label>
                 </div>
+                <h4 data-t="sgAccess">Access and memory</h4>
                 <span class="lbl" data-t="admin" data-win>Run as admin</span>
                 <div class="seg opt" role="radiogroup" aria-label="Run as administrator" data-win style="--n: 2">
                   <span class="thumb"></span>
@@ -1157,7 +1162,10 @@ html.app, html.app body { overflow: hidden; }
                 </div>
                 <span class="lbl" data-t="hidden" id="s-hidden-lbl">Hidden</span>
                 <div class="stack" id="s-hidden"></div>
-                <span class="lbl" data-t="updates">Updates</span>
+                <span class="lbl" data-t="scanMem">Scan memory</span>
+                <div class="upd mem"><span class="upd-say"><i class="ph ph-clock-counter-clockwise"></i><span class="t" id="s-mem" tabindex="-1" aria-live="polite"></span></span><button type="button" id="s-mem-clear"><span data-t="clear">Clear</span></button></div>
+                <h4 data-t="sgUpd">Updates</h4>
+                <span class="lbl" data-t="version">Version</span>
                 <div class="upd" id="s-upd"><span class="upd-say"><i class="ph"></i><span class="t"></span><span class="pct"></span></span><button type="button" id="s-upd-go"><span></span></button><span class="upd-bar"></span></div>
                 <span id="s-upd-notes-gap" hidden></span>
                 <ul class="upd-notes" id="s-upd-notes" hidden></ul>
@@ -1167,8 +1175,6 @@ html.app, html.app body { overflow: hidden; }
                   <label class="choice"><input type="radio" name="updauto" value="0" checked><span data-t="off">Off</span></label>
                   <label class="choice"><input type="radio" name="updauto" value="1"><span data-t="atStart">When Octet starts</span></label>
                 </div>
-                <span class="lbl" data-t="scanMem">Scan memory</span>
-                <div class="upd mem"><span class="upd-say"><i class="ph ph-clock-counter-clockwise"></i><span class="t" id="s-mem" tabindex="-1" aria-live="polite"></span></span><button type="button" id="s-mem-clear"><span data-t="clear">Clear</span></button></div>
               </div>
               <div class="pane keys" data-pane="keys" hidden>
                 <h4 data-t="kgAll">Anywhere</h4>
@@ -1348,7 +1354,7 @@ const T = {
     general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: mac ? "Read adapters again" : "Read adapters again (or Ctrl R)",
     kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
     kOctet: "Move between octets", kEsc: "Close a menu, a view or the sidebar", kSpeed: "Open or close the speed test", kPort: "Add a port (Ping)",
-    kgAll: "Anywhere", kgCfg: "The whole configuration", kgType: "Typing an address", updAuto: "Auto-check", off: "Off", atStart: "When Octet starts", relNotes: "Release notes", scanMem: "Scan memory", clear: "Clear",
+    kgAll: "Anywhere", kgCfg: "The whole configuration", kgType: "Typing an address", updAuto: "Auto-check", sgLook: "Appearance", sgAccess: "Access and memory", sgUpd: "Updates", version: "Version", off: "Off", atStart: "When Octet starts", relNotes: "Release notes", scanMem: "Scan memory", clear: "Clear",
     report: "Report a problem", sysInfo: "System", copy: "Copy", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
@@ -1366,7 +1372,7 @@ const T = {
     general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "บันทึก", kRefresh: mac ? "รีเฟรชรายการ" : "รีเฟรชรายการ (หรือ Ctrl R)",
     kSide: "ย่อ/ขยายแถบซ้าย", kCopy: "คัดลอกค่าทั้งหมด", kPaste: "วางค่าทั้งหมด",
     kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนู หน้าที่เปิดอยู่ หรือแถบซ้าย", kSpeed: "เปิด/ปิด Speed Test", kPort: "ใส่พอร์ต (หน้า Ping)",
-    kgAll: "ใช้ได้ทุกหน้า", kgCfg: "ค่าทั้งหมด", kgType: "ตอนพิมพ์ IP", updAuto: "ตรวจอัตโนมัติ", off: "ปิด", atStart: "ตอนเปิด Octet", relNotes: "บันทึกการเปลี่ยนแปลง", scanMem: "ความจำ Scan", clear: "ล้าง",
+    kgAll: "ใช้ได้ทุกหน้า", kgCfg: "ค่าทั้งหมด", kgType: "ตอนพิมพ์ IP", updAuto: "ตรวจอัตโนมัติ", sgLook: "การแสดงผล", sgAccess: "สิทธิ์และความจำ", sgUpd: "อัปเดต", version: "เวอร์ชัน", off: "ปิด", atStart: "ตอนเปิด Octet", relNotes: "บันทึกการเปลี่ยนแปลง", scanMem: "ความจำ Scan", clear: "ล้าง",
     report: "แจ้งปัญหา", sysInfo: "ระบบ", copy: "คัดลอก", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
