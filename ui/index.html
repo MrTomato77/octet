@@ -2008,7 +2008,7 @@ $("apply").onclick = async () => {
   const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway", "gwMetric"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]),
     // The first gateway's metric only goes on with `set address`, so a change to it counts as an IP change (static only:
     // on DHCP it isn't counted as a change at all).
-    extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: cfgOf(a).extra, wasGws: cfgOf(a).gws })   // whole entries: a changed mask or metric is re-applied
+    extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: cfgOf(a).extra, wasGws: cfgOf(a).gws, wasMetric: cfgOf(a).metric })   // whole entries: a changed mask or metric is re-applied
     .then(() => null, e => String(e));
   work.then(async err => {
     rows.forEach(el => el.classList.remove("working"));
