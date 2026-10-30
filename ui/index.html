@@ -1298,9 +1298,14 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   // A name nobody answers for takes seconds on a real network (DNS, LLMNR and NetBIOS all time out).
   : cmd === "hostname" && !(demo.names[a.address] ?? demo.taken[a.address]) ? 2500 : 300));
 const net = (cmd, args) => tauri ? invoke(cmd, args) : demoInvoke(cmd, args);
+// The first read starts here, so it runs while the rest of the page is built; the first reload() takes it.
+let firstRead = tauri ? invoke("read_adapters") : null;
+firstRead?.catch(() => {});   // its error is reported by that reload(), not as an unhandled rejection
 async function reload() {
   const id = adapters[sel]?.id;
-  adapters.splice(0, adapters.length, ...await invoke("read_adapters"));
+  const read = firstRead || invoke("read_adapters");
+  firstRead = null;
+  adapters.splice(0, adapters.length, ...await read);
   const i = adapters.findIndex(a => a.id === id && !hidden.has(a.id));
   sel = i >= 0 ? i : firstVisible();
   keep("octet-rows", adapters.filter(a => !hidden.has(a.id)).length);   // next launch draws this many skeleton rows
