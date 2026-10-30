@@ -22,12 +22,18 @@ fn newer(theirs: &str, ours: &str) -> bool {
     n(theirs) > n(ours)
 }
 
-/// The latest release's version when it is newer than this one.
-pub fn check() -> Result<Option<String>, String> {
+/// The latest release when it is newer than this one: its version, and the first few points of its notes.
+pub fn check() -> Result<Option<serde_json::Value>, String> {
     let body = https_get("api.github.com", &format!("/repos/{REPO}/releases/latest")).ok_or("Could not reach GitHub")?;
     let v: serde_json::Value = serde_json::from_slice(&body).map_err(|e| e.to_string())?;
     let tag = v["tag_name"].as_str().ok_or("No release found")?;
-    Ok(newer(tag, env!("CARGO_PKG_VERSION")).then(|| tag.trim_start_matches('v').to_string()))
+    Ok(newer(tag, env!("CARGO_PKG_VERSION")).then(|| serde_json::json!({ "version": tag.trim_start_matches('v'), "notes": notes(v["body"].as_str().unwrap_or("")) })))
+}
+
+/// Up to three bullet points from release notes (Markdown), as plain text.
+fn notes(md: &str) -> Vec<String> {
+    md.lines().filter_map(|l| l.trim_start().strip_prefix("- ").or_else(|| l.trim_start().strip_prefix("* ")))
+        .map(|l| l.replace("**", "").replace('`', "").trim().to_string()).filter(|l| !l.is_empty()).take(3).collect()
 }
 
 fn verify(key: &[u8; 32], msg: &[u8], sig: &[u8]) -> bool {
@@ -150,6 +156,7 @@ mod tests {
     fn versions_compare_as_numbers() {
         assert!(newer("v0.1.10", "0.1.9"));
         assert!(newer("0.2.0", "0.1.99"));
+        assert_eq!(super::notes("## Changes\n- **VPN:** works\n  * `Scan` faster\n- \ntext\n- a\n- b"), ["VPN: works", "Scan faster", "a"]);
         assert!(!newer("v0.1.7", "0.1.7"));
         assert!(!newer("0.1.6", "0.1.7"));
     }

@@ -766,8 +766,18 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .panes { min-height: 248px; }
 .pane[hidden], .set [hidden] { display: none; }
 .pane.in { animation: rise var(--t-base) var(--ease-out); }
-.keys { display: grid; grid-template-columns: auto auto 1fr; gap: var(--s2) 6px; align-items: center; font-size: 13px; }
-.keys > span:last-child, .keys > span:nth-child(3n) { color: var(--muted); padding-left: var(--s2); }
+.keys { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: center; align-content: start; font-size: 13px; }
+.keys > span { color: var(--muted); padding-left: var(--s2); }
+.keys h4 { grid-column: 1 / -1; margin: var(--s2) 0 0; font-size: 12px; font-weight: 600; color: var(--faint); }
+.keys h4:first-child { margin-top: 0; }
+/* Under Updates: what the new version brings, then the start-up check and when it last asked. */
+.upd-more { display: grid; gap: 6px; margin-top: -2px; }
+.upd-line { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.upd-line .faint { font-size: 12px; white-space: nowrap; }
+.upd-notes, .news ul { margin: 0; padding-left: 16px; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
+.upd-notes { color: var(--ink); }
+.mem { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-height: 32px; font-size: 13px; }
+.about .news { display: grid; gap: 4px; justify-items: start; }
 kbd { font: 12px/20px var(--font); min-width: 24px; padding: 0 6px; text-align: center; border: 1px solid var(--border-strong);
   border-bottom-width: 2px; border-radius: var(--r-input); background: var(--bg); justify-self: start; }
 .about { display: grid; gap: var(--s4); align-content: start; }
@@ -1152,16 +1162,28 @@ html.app, html.app body { overflow: hidden; }
                 <div class="stack" id="s-hidden"></div>
                 <span class="lbl" data-t="updates">Updates</span>
                 <div class="upd" id="s-upd"><span class="upd-say"><i class="ph"></i><span class="t"></span><span class="pct"></span></span><button type="button" id="s-upd-go"><span></span></button><span class="upd-bar"></span></div>
+                <span></span>
+                <div class="upd-more">
+                  <ul class="upd-notes" id="s-upd-notes" hidden></ul>
+                  <div class="upd-line"><label class="check"><input type="checkbox" id="s-upd-auto"><span data-t="updAuto">Check when Octet starts</span></label><span class="faint" id="s-upd-at"></span></div>
+                </div>
+                <span class="lbl" data-t="scanMem">Scan memory</span>
+                <div class="mem"><span class="muted" id="s-mem" tabindex="-1" aria-live="polite"></span><button type="button" class="link" id="s-mem-clear" data-t="clear">Clear</button></div>
               </div>
               <div class="pane keys" data-pane="keys" hidden>
+                <h4 data-t="kgAll">Anywhere</h4>
                 <kbd>Ctrl</kbd><kbd>Enter</kbd><span data-t="kApply">Apply changes</span>
                 <kbd>F5</kbd><span></span><span data-t="kRefresh">Read adapters again</span>
                 <kbd>Ctrl</kbd><kbd>1-5</kbd><span data-t="kPages">Go to a page</span>
+                <kbd>Ctrl</kbd><kbd>T</kbd><span data-t="kSpeed">Open or close the speed test</span>
                 <kbd>Ctrl</kbd><kbd>B</kbd><span data-t="kSide">Expand or collapse the sidebar</span>
+                <kbd>Esc</kbd><span></span><span data-t="kEsc">Close a menu or the sidebar</span>
+                <h4 data-t="kgCfg">The whole configuration</h4>
                 <kbd>Ctrl</kbd><kbd>C</kbd><span data-t="kCopy">Copy the whole configuration</span>
                 <kbd>Ctrl</kbd><kbd>V</kbd><span data-t="kPaste">Paste a whole configuration</span>
+                <h4 data-t="kgType">Typing an address</h4>
                 <kbd>.</kbd><kbd>&larr; &rarr;</kbd><span data-t="kOctet">Move between octets</span>
-                <kbd>Esc</kbd><span></span><span data-t="kEsc">Close a menu or the sidebar</span>
+                <kbd>:</kbd><span></span><span data-t="kPort">Add a port (Ping)</span>
               </div>
               <div class="pane about" data-pane="about" hidden>
                 <div class="brand">
@@ -1173,9 +1195,11 @@ html.app, html.app body { overflow: hidden; }
                   <span class="lbl" data-t="license">License</span>
                   <span class="val">MIT · <button type="button" class="link" data-link="notices" data-t="notices">Third-party notices</button></span>
                   <span class="lbl" data-t="source">Source</span>
-                  <span class="val"><button type="button" class="link" data-link="repo">github.com/MrTomato77/octet</button></span>
-                  <span class="lbl" data-t="updates">Updates</span>
-                  <span class="val"><button type="button" class="link" data-link="releases" data-t="releases">See releases</button></span>
+                  <span class="val"><button type="button" class="link" data-link="repo">github.com/MrTomato77/octet</button> · <button type="button" class="link" data-link="issue" data-t="report">Report a problem</button></span>
+                  <span class="lbl" data-t="sysInfo">System</span>
+                  <span class="val"><span class="muted" id="s-sys"></span><button type="button" class="link" id="s-sys-copy" data-t="copy">Copy</button></span>
+                  <span class="lbl" id="s-news-lbl"></span>
+                  <div class="val news"><ul id="s-news"></ul><button type="button" class="link" data-link="releases" data-t="releases">See releases</button></div>
                   <span class="lbl" data-t="privacy">Privacy</span>
                   <span class="val muted" data-t="privacyText">No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.</span>
                   <span class="lbl" data-t="credits">Credits</span>
@@ -1321,9 +1345,11 @@ const T = {
     dhcp: "DHCP", manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
     dns1: "Preferred", dns2: "Alternate", register: "Register in DNS", revert: "Revert", apply: "Apply",
     theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark", updates: "Updates", admin: "Run as admin", adminAsk: "When needed", adminAlways: "Always",
-    general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: "Read adapters again",
+    general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: mac ? "Read adapters again" : "Read adapters again (or Ctrl R)",
     kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
-    kOctet: "Move between octets", kEsc: "Close a menu or the sidebar", tagline: "IPv4 and DNS settings, in seconds.",
+    kOctet: "Move between octets", kEsc: "Close a menu, a view or the sidebar", kSpeed: "Open or close the speed test", kPort: "Add a port (Ping)",
+    kgAll: "Anywhere", kgCfg: "The whole configuration", kgType: "Typing an address", updAuto: "Check when Octet starts", scanMem: "Scan memory", clear: "Clear",
+    report: "Report a problem", sysInfo: "System", copy: "Copy", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
     up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabProbe: "Ping", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
@@ -1337,9 +1363,11 @@ const T = {
     dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
     dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "Register ใน DNS", revert: "ย้อนกลับ", apply: "บันทึก",
     theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", updates: "อัปเดต", admin: "สิทธิ์ Admin", adminAsk: "ขอเมื่อต้องใช้", adminAlways: "ทุกครั้ง",
-    general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "บันทึก", kRefresh: "รีเฟรชรายการ",
+    general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "บันทึก", kRefresh: mac ? "รีเฟรชรายการ" : "รีเฟรชรายการ (หรือ Ctrl R)",
     kSide: "ย่อ/ขยายแถบซ้าย", kCopy: "คัดลอกค่าทั้งหมด", kPaste: "วางค่าทั้งหมด",
-    kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนูหรือแถบซ้าย", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
+    kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนู หน้าที่เปิดอยู่ หรือแถบซ้าย", kSpeed: "เปิด/ปิด Speed Test", kPort: "ใส่พอร์ต (หน้า Ping)",
+    kgAll: "ใช้ได้ทุกหน้า", kgCfg: "ค่าทั้งหมด", kgType: "ตอนพิมพ์ IP", updAuto: "ตรวจตอนเปิด Octet", scanMem: "ความจำ Scan", clear: "ล้าง",
+    report: "แจ้งปัญหา", sysInfo: "ระบบ", copy: "คัดลอก", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
     up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabProbe: "Ping", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
@@ -2366,7 +2394,7 @@ const viewShown = v => !v.hidden && !v.classList.contains("out");   // fading ou
 const settingsOpen = () => viewShown($("settings"));
 function openSettings() {
   if (settingsOpen()) return closeSettings();
-  closeSpeed(); renderHidden(); hideTip(); setTools(false);
+  closeSpeed(); renderHidden(); renderMem(); renderAbout(); hideTip(); setTools(false);
   const v = $("settings");
   v.classList.remove("out"); v.hidden = false; replay(v, "in"); cover(v, true);
   $("open-settings").classList.add("on"); $("open-settings").setAttribute("aria-current", "page");
@@ -2408,6 +2436,7 @@ document.querySelectorAll("input[name=lang]").forEach(x => x.onchange = () => {
     if (draft) { renderAdapterFacts(); renderForm(); } else renderAdapter();
     if (adapters[sel]) renderInfo();
     scanTell(); paintProbe();   // the pages drawn by script, so they don't wait for new data to change language
+    updShow(); renderMem(); renderAbout();
   });
 });
 // Always run as administrator: saved now, and Octet restarts elevated if it isn't already.
@@ -2455,8 +2484,10 @@ function updShow() {
   el.dataset.s = upd.s; el.style.setProperty("--p", upd.p);
   el.querySelector(".pct").textContent = upd.s === "getting" ? `${Math.round(upd.p * 100)}%` : "";
   // The same state can still have new words: the version arrives after the first paint.
-  const same = was === upd.s && el.dataset.say === say;
-  el.dataset.say = say;
+  // The button's word counts too: "Octet 0.2.1" reads the same in both languages, "Check" doesn't.
+  const same = was === upd.s && el.dataset.say === say + go;
+  el.dataset.say = say + go;
+  updMore();
   if (same) return;
   // The icon pops in, turned a little, as the words roll over.
   const i = el.querySelector(".upd-say i");
@@ -2484,7 +2515,7 @@ const updApi = tauri ? {
   install: v => invoke("update_install", { version: v }),
   restart: () => invoke("update_restart"),
 } : {
-  check: async () => { await updWait(900); return upd.seen ? null : (upd.seen = true, "0.1.8"); },
+  check: async () => { await updWait(900); return upd.seen ? null : (upd.seen = true, { version: "0.2.2", notes: ["Ping keeps its graph when you switch pages", "Scan names more devices"] }); },
   install: async () => { for (let p = 0; p < 1; p = Math.min(1, p + 0.07)) { await updWait(120); upd.p = p; updShow(); } },
   restart: async () => { upd.seen = false; },
 };
@@ -2493,8 +2524,9 @@ $("s-upd-go").onclick = async () => {
   try {
     if (["idle", "latest", "failed"].includes(upd.s)) {
       upd.s = "checking"; updShow();
-      const v = await updApi.check();
-      upd.v = v; upd.s = v ? "new" : "latest"; updShow();
+      const r = await updApi.check();
+      upd.v = r?.version; upd.notes = r?.notes || []; upd.s = r ? "new" : "latest";
+      keep("octet-upd-at", Date.now()); updShow();
     } else if (upd.s === "new") {
       upd.s = "getting"; upd.p = 0; updShow();
       await updApi.install(upd.v);
@@ -2507,6 +2539,19 @@ $("s-upd-go").onclick = async () => {
     upd.s = "failed"; upd.err = String(e); upd.p = 0; updShow();
   }
 };
+// Under the row: the new version's first points (from its release notes), the start-up check, and when it last asked.
+function updMore() {
+  const notes = ["new", "getting", "ready"].includes(upd.s) ? upd.notes || [] : [];
+  $("s-upd-notes").replaceChildren(...notes.map(t => Object.assign(document.createElement("li"), { textContent: t })));
+  $("s-upd-notes").hidden = !notes.length;
+  const at = +pref("octet-upd-at"), d = new Date(at), today = d.toDateString() === new Date().toDateString();
+  const when = d.toLocaleString(lang === "th" ? "th-TH" : "en-GB", today ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" });
+  $("s-upd-at").textContent = at ? L(`Last checked ${when}`, `ตรวจล่าสุด ${when}`) : "";
+}
+$("s-upd-auto").checked = pref("octet-upd-auto") === "1";
+$("s-upd-auto").onchange = e => keep("octet-upd-auto", e.target.checked ? "1" : "0");
+// Off unless asked: Octet talks to nothing outside your network on its own.
+if (pref("octet-upd-auto") === "1") setTimeout(() => upd.s === "idle" && $("s-upd-go").click(), 4000);
 updShow();
 // Links open in the default browser; inside the app only these known pages can be opened.
 const links = {
@@ -2514,7 +2559,29 @@ const links = {
   releases: "https://github.com/MrTomato77/octet/releases",
   notices: "https://github.com/MrTomato77/octet/blob/main/THIRD-PARTY-NOTICES.md",
   simpleip: "https://github.com/KurtisLiggett/Simple-IP-Config",
+  issue: "https://github.com/MrTomato77/octet/issues/new",   // the app adds the version and system (Rust, main.rs)
 };
+// About: what this version brought, and the system in one line for a ticket or an issue.
+const NEWS = { v: "0.2.1",
+  en: ["Public IP and the speed test work with a VPN on", "Scan sweeps a /24 in about 2 s, and flows to 100%", "Gateway metrics are read, so Apply keeps them"],
+  th: ["Public IP และ Speed Test ใช้ได้ตอนเปิด VPN", "Scan สแกน /24 เสร็จในราว 2 วินาที ลื่นจนถึง 100%", "อ่าน metric ของ Gateway แล้ว กดบันทึกค่าไม่หาย"] };
+function renderAbout() {
+  $("s-news-lbl").textContent = L(`New in ${NEWS.v}`, `ใหม่ใน ${NEWS.v}`);
+  $("s-news").replaceChildren(...NEWS[lang].map(t => Object.assign(document.createElement("li"), { textContent: t })));
+  (tauri ? invoke("system_info") : Promise.resolve(`${$("s-version").textContent} · ${L("Demo in a browser", "เดโมในเบราว์เซอร์")}`))
+    .then(s => $("s-sys").textContent = s, () => {});
+}
+$("s-sys-copy").onclick = () => navigator.clipboard.writeText(`Octet ${$("s-sys").textContent}`).then(() => {
+  const b = $("s-sys-copy"); roll(b, L("Copied", "คัดลอกแล้ว"));   // said on the button: Settings covers the status line
+  clearTimeout(b.t); b.t = setTimeout(() => roll(b, T[lang].copy), 1400);
+}, () => {});
+// Scan memory: addresses seen in use within the hour, across the networks scanned (seenAll, under Scan).
+function renderMem() {
+  const now = Date.now(), n = Object.values(seenAll()).reduce((s, m) => s + Object.values(m.ips || {}).filter(t => now - t < SEEN_MS).length, 0);
+  $("s-mem").textContent = n ? L(`${n} address${n > 1 ? "es" : ""} seen in the last hour`, `จำไว้ ${n} IP จากชั่วโมงที่ผ่านมา`) : L("Nothing remembered", "ไม่ได้จำอะไรไว้");
+  $("s-mem-clear").hidden = !n;
+}
+$("s-mem-clear").onclick = () => { keep("octet-seen", "{}"); renderMem(); $("s-mem").focus(); };   // the button goes: focus stays in the row
 document.querySelectorAll("[data-link]").forEach(b => b.onclick = () =>
   tauri ? invoke("open_link", { which: b.dataset.link }).catch(e => say(String(e), "bad")) : window.open(links[b.dataset.link], "_blank", "noopener"));
 // Dialogs close with a short fade instead of vanishing.
@@ -2561,6 +2628,7 @@ document.addEventListener("keydown", e => {
   // A question is up: only its own keys. Nothing behind it changes, and Ctrl+Enter can't start a second Apply under it.
   if (document.querySelector("dialog[open]")) { if (e.key === "F5" || isMod(e) && e.key.toLowerCase() === "r") e.preventDefault(); return; }
   if (e.key.toLowerCase() === "b" && isMod(e)) { e.preventDefault(); $("collapse").click(); }
+  if (e.key.toLowerCase() === "t" && isMod(e)) { e.preventDefault(); openSpeed(); }
   if (e.key === "F5" || isMod(e) && e.key.toLowerCase() === "r") { e.preventDefault(); $("refresh").click(); }
   if (isMod(e) && e.key >= "1" && e.key <= String(ptabs.length) && !settingsOpen()) { e.preventDefault(); showPage(ptabs[e.key - 1].dataset.page); }
   if (e.key === "Escape" && settingsOpen()) { closeSettings(); return; }

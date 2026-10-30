@@ -142,7 +142,7 @@ fn speed_stop() {
 
 /// Settings, Updates: the newer version on GitHub, or None.
 #[tauri::command]
-async fn update_check() -> Result<Option<String>, String> {
+async fn update_check() -> Result<Option<serde_json::Value>, String> {
     blocking(update::check).await
 }
 
@@ -204,9 +204,22 @@ fn open_link(which: String) -> Result<(), String> {
         "releases" => "https://github.com/MrTomato77/octet/releases",
         "notices" => "https://github.com/MrTomato77/octet/blob/main/THIRD-PARTY-NOTICES.md",
         "simpleip" => "https://github.com/KurtisLiggett/Simple-IP-Config",
+        // A new issue with the version and system filled in; nothing from the page goes into the address.
+        "issue" => {
+            let body = format!("**Octet:** {}\n\n**What happened:**\n\n", system_info());
+            let enc: String = body.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
+            return open_url(&format!("https://github.com/MrTomato77/octet/issues/new?body={enc}"));
+        }
         _ => return Err("Unknown link".into()),
     };
     open_url(url)
+}
+
+/// About: the version, the OS and the WebView, to paste into a ticket or an issue.
+#[tauri::command]
+fn system_info() -> String {
+    let web = tauri::webview_version().unwrap_or_else(|_| "?".into());
+    format!("{} · {} · {} {web} · {}", env!("CARGO_PKG_VERSION"), adapters::os_name(), if cfg!(windows) { "WebView2" } else { "WebKit" }, std::env::consts::ARCH)
 }
 
 // ---- "Always run as administrator": a marker file in %APPDATA%\Octet ----
@@ -341,7 +354,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

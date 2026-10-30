@@ -169,6 +169,11 @@ pub struct Adapter {
     pub cfg: Cfg,
 }
 
+/// The OS by name and build, for About and a bug report.
+pub fn os_name() -> String {
+    native::os_name()
+}
+
 pub fn read() -> Result<Vec<Adapter>, String> {
     native::read().map(shape)
 }
@@ -309,6 +314,16 @@ mod native {
     }
     fn mask(prefix: u8) -> String {
         Ipv4Addr::from(u32::MAX.checked_shl(32 - prefix as u32).unwrap_or(0)).to_string()
+    }
+
+    /// "Windows 11 24H2 (26100.2033)": the product line from the build, as Windows' own winver does.
+    pub fn os_name() -> String {
+        const NT: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+        let build = reg_text(NT, "CurrentBuild").unwrap_or_default();
+        let line = if build.parse::<u32>().unwrap_or(0) >= 22000 { "Windows 11" } else { "Windows 10" };
+        let ver = reg_text(NT, "DisplayVersion").map(|v| format!(" {v}")).unwrap_or_default();
+        let ubr = reg_dword(NT, "UBR").map(|u| format!(".{u}")).unwrap_or_default();
+        format!("{line}{ver} ({build}{ubr})")
     }
 
     /// A REG_SZ or REG_MULTI_SZ value (multi-strings joined with ',').
@@ -855,6 +870,11 @@ mod native {
 mod native {
     use super::{Raw, Wifi};
     use crate::mac;
+
+    pub fn os_name() -> String {
+        let v = std::process::Command::new("/usr/bin/sw_vers").arg("-productVersion").output().ok();
+        format!("macOS {}", v.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default())
+    }
 
     pub fn read() -> Result<Vec<Raw>, String> {
         let (names, links) = (mac::display_names(), mac::links());
