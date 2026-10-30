@@ -769,10 +769,13 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .pane.in { animation: rise var(--t-base) var(--ease-out); }
 .keys { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: center; align-content: start; font-size: 13px; }
 .keys > span { color: var(--muted); padding-left: var(--s2); }
-/* Group headings, on Shortcuts and on General alike. */
-.keys h4, .set h4 { grid-column: 1 / -1; margin: var(--s2) 0 0; font-size: 12px; font-weight: 600; color: var(--faint); }
+/* Group headings, on General and Shortcuts alike: an icon, the name, and a hairline to the edge. */
+.keys h4, .set h4 { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin: var(--s2) 0 0;
+  font-size: 13px; line-height: 18px; font-weight: 600; color: var(--ink); }
+.keys h4 i, .set h4 i { font-size: 15px; color: var(--muted); }
+.keys h4::after, .set h4::after { content: ""; flex: 1; height: 1px; margin-left: 4px; background: var(--border); }
 .keys h4:first-child, .set h4:first-child { margin-top: 0; }
-.set h4 { line-height: 16px; margin-bottom: -4px; }   /* close to its rows: a heading, not one more row */
+.set h4 { margin-bottom: -2px; }   /* close to its rows: a heading, not one more row */
 /* Under Updates, once a newer version is found: the first points of its release notes. */
 .upd-notes, .news ul { margin: 0; padding-left: 16px; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
 .upd-notes { color: var(--ink); margin-top: -2px; }
@@ -1139,7 +1142,7 @@ html.app, html.app body { overflow: hidden; }
             </div>
             <div class="panes">
               <div class="pane set" data-pane="general">
-                <h4 data-t="sgLook">Appearance</h4>
+                <h4><i class="ph ph-palette" aria-hidden="true"></i><span data-t="sgLook">Appearance</span></h4>
                 <span class="lbl" data-t="theme">Theme</span>
                 <div class="seg opt" role="radiogroup" aria-label="Theme" style="--n: 3">
                   <span class="thumb"></span>
@@ -1153,7 +1156,7 @@ html.app, html.app body { overflow: hidden; }
                   <label class="choice"><input type="radio" name="lang" value="en" checked><span>English</span></label>
                   <label class="choice"><input type="radio" name="lang" value="th"><span>ไทย</span></label>
                 </div>
-                <h4 data-t="sgAccess">Access and memory</h4>
+                <h4><i class="ph ph-shield-check" aria-hidden="true"></i><span data-t="sgAccess">Access and memory</span></h4>
                 <span class="lbl" data-t="admin" data-win>Run as admin</span>
                 <div class="seg opt" role="radiogroup" aria-label="Run as administrator" data-win style="--n: 2">
                   <span class="thumb"></span>
@@ -1164,7 +1167,7 @@ html.app, html.app body { overflow: hidden; }
                 <div class="stack" id="s-hidden"></div>
                 <span class="lbl" data-t="scanMem">Scan memory</span>
                 <div class="upd mem"><span class="upd-say"><i class="ph ph-clock-counter-clockwise"></i><span class="t" id="s-mem" tabindex="-1" aria-live="polite"></span></span><button type="button" id="s-mem-clear"><span data-t="clear">Clear</span></button></div>
-                <h4 data-t="sgUpd">Updates</h4>
+                <h4><i class="ph ph-arrow-circle-up" aria-hidden="true"></i><span data-t="sgUpd">Updates</span></h4>
                 <span class="lbl" data-t="version">Version</span>
                 <div class="upd" id="s-upd"><span class="upd-say"><i class="ph"></i><span class="t"></span><span class="pct"></span></span><button type="button" id="s-upd-go"><span></span></button><span class="upd-bar"></span></div>
                 <span id="s-upd-notes-gap" hidden></span>
@@ -1177,17 +1180,17 @@ html.app, html.app body { overflow: hidden; }
                 </div>
               </div>
               <div class="pane keys" data-pane="keys" hidden>
-                <h4 data-t="kgAll">Anywhere</h4>
+                <h4><i class="ph ph-app-window" aria-hidden="true"></i><span data-t="kgAll">Anywhere</span></h4>
                 <kbd>Ctrl</kbd><kbd>Enter</kbd><span data-t="kApply">Apply changes</span>
                 <kbd>F5</kbd><span></span><span data-t="kRefresh">Read adapters again</span>
                 <kbd>Ctrl</kbd><kbd>1-5</kbd><span data-t="kPages">Go to a page</span>
                 <kbd>Ctrl</kbd><kbd>T</kbd><span data-t="kSpeed">Open or close the speed test</span>
                 <kbd>Ctrl</kbd><kbd>B</kbd><span data-t="kSide">Expand or collapse the sidebar</span>
                 <kbd>Esc</kbd><span></span><span data-t="kEsc">Close a menu or the sidebar</span>
-                <h4 data-t="kgCfg">The whole configuration</h4>
+                <h4><i class="ph ph-clipboard-text" aria-hidden="true"></i><span data-t="kgCfg">The whole configuration</span></h4>
                 <kbd>Ctrl</kbd><kbd>C</kbd><span data-t="kCopy">Copy the whole configuration</span>
                 <kbd>Ctrl</kbd><kbd>V</kbd><span data-t="kPaste">Paste a whole configuration</span>
-                <h4 data-t="kgType">Typing an address</h4>
+                <h4><i class="ph ph-cursor-text" aria-hidden="true"></i><span data-t="kgType">Typing an address</span></h4>
                 <kbd>.</kbd><kbd>&larr; &rarr;</kbd><span data-t="kOctet">Move between octets</span>
                 <kbd>:</kbd><span></span><span data-t="kPort">Add a port (Ping)</span>
               </div>
