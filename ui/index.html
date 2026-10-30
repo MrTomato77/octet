@@ -1908,8 +1908,8 @@ function renderList(enter = false) {
       b.querySelector("i").animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 400, easing: "ease-out" });
     }
     seen[a.id] = a.state;
-    // The adapter already open, clicked again while the speed test covers it: back to that adapter (as Escape does).
-    b.onclick = () => { if (i === sel && speedOpen()) return closeSpeed(); closeSettings(); Promise.resolve(select(i)).then(() => speedOpen() && paintSpeed()); if (!isRail()) setRail(true); };
+    // The adapter already open, clicked again while the speed test covers it: back to that adapter, and the test to Start.
+    b.onclick = () => { if (i === sel && speedOpen()) { speedIdle(); return closeSpeed(); } closeSettings(); Promise.resolve(select(i)).then(() => speedOpen() && paintSpeed()); if (!isRail()) setRail(true); };
     li.append(b); ul.append(li);
   });
   let moved = false;
@@ -3095,7 +3095,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && pr
 // ---------- Speed test: its own view, opened from the sidebar ----------
 // Download, then upload, against Cloudflare, out through the adapter on screen only (Rust pins the socket to it).
 // Nothing runs until Start. Another adapter, or closing the view, stops a test that is running.
-const speed = { state: "idle", res: {}, used: 0, stop: null, leg: "", run: 0, aid: null, lat: [] };
+const speed = { state: "idle", res: {}, used: 0, stop: null, leg: "", run: 0, aid: null, lat: [], gap: 250 };
 // A phone hotspot (an iPhone's /28, Android's 192.168.43.x): data is metered, so it says so before it starts.
 // Windows' own word first (a phone hotspot it recognised, or a network you set as metered); else a guess from the
 // address: an iPhone or older Android hotspot, or a subnet too small for anything but a few devices.
@@ -3161,10 +3161,15 @@ function speedEnd(state) {
 $("sp-go").onclick = () => speed.live && speed.state !== "run" && speedStart();
 $("speed-again").onclick = () => speed.state === "run" ? speedEnd("stopped") : speed.state === "done" && speedStart();
 for (const id of ["sp-go"]) $(id).onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $(id).onclick(); } };
+// Back to Start: a running test stops and the results go.
+function speedIdle() {
+  if (speed.state === "run") speedEnd("stopped");
+  Object.assign(speed, { state: "idle", res: {}, used: 0, aid: null }); speedDraw(); paintSpeed();
+}
 function paintSpeed() {
   const a = adapters[sel], s = speed.state;
   // Another adapter on screen: a test for the last one stops, and its results go with it.
-  if (a && speed.aid && a.id !== speed.aid) { if (s === "run") speedEnd("stopped"); Object.assign(speed, { state: "idle", res: {}, used: 0, aid: null }); speedDraw(); return paintSpeed(); }
+  if (a && speed.aid && a.id !== speed.aid) return speedIdle();
   const live = a?.state === "up" && validIp(a.cfg.address || "");
   $("speed-via").textContent = a ? `${a.name}${a.cfg.address ? " · " + a.cfg.address : ""}` : "";
   const warn = s !== "run" && live && metered(a);
@@ -3311,7 +3316,13 @@ function speedDraw() {
   $("speed-lap").textContent = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${(secs % 60).toFixed(2).padStart(5, "0")}`;
   // The numbers run to each new reading (an odometer, not a jump); on the summary the upload counts up as its dial fills.
   const inMs = s === "run" && !speed.leg, aim = s === "run" ? (inMs ? speed.res.ms : speed.res[speed.leg]) : s === "done" ? speed.res.down : undefined;
-  speed.d1 = aim === undefined ? undefined : speed.d1 === undefined || calm.matches || Math.abs(aim - speed.d1) < 0.05 ? aim : speed.d1 + (aim - speed.d1) * 0.12;
+  // A steady run from where it is to each new reading, timed to land as the next one comes (the gap between readings
+  // is measured): always on its way, not a rush then a wait. Easing toward it did half of each move in the first 80 ms.
+  if (aim !== speed.da) {
+    if (speed.da !== undefined && aim !== undefined) speed.gap += (Math.min(1000, at - speed.dt0) - speed.gap) * 0.3;
+    speed.df = speed.d1 ?? aim; speed.da = aim; speed.dt0 = at;
+  }
+  speed.d1 = aim === undefined ? undefined : calm.matches ? aim : speed.df + (aim - speed.df) * Math.min(1, (at - speed.dt0) / speed.gap);
   $("speed-now").textContent = speed.d1 === undefined ? "-" : inMs ? Math.round(speed.d1) : speed.d1.toFixed(1);
   $("sp-now2").textContent = s === "done" ? ((speed.res.up ?? 0) * inOut(slice(z, 0.35, 1, x => x))).toFixed(1) : "-";
   const moving = [speed.mt, speed.zt].some(o => at - o.t0 < o.ms) || Math.abs(to - speedN) > 0 || (aim !== undefined && speed.d1 !== aim);
