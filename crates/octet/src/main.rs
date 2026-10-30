@@ -7,6 +7,8 @@ mod mac;
 mod net;
 mod speed;
 mod update;
+#[cfg(test)]
+mod read_bench;
 
 use change::Request;
 use std::net::Ipv4Addr;
