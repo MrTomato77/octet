@@ -2449,6 +2449,7 @@ dependencies = [
 name = "octet"
 version = "0.2.1"
 dependencies = [
+ "brotli",
  "ed25519-compact",
  "libc",
  "native-tls",

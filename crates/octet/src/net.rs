@@ -136,9 +136,12 @@ pub fn vendor(mac: &str) -> Option<&'static str> {
     if hex.len() < 12 || first & 0b11 != 0 {
         return None;
     }
-    // Parsed once, a few ms; each lookup is then three binary searches instead of a scan of 50k lines.
+    // Unpacked and parsed once, a few ms; each lookup is then three binary searches instead of a scan of 50k lines.
     let table = OUI.get_or_init(|| {
-        let mut t: Vec<_> = include_str!("../data/oui.txt").lines().filter_map(|l| l.split_once('\t')).collect();
+        let mut text = String::new();
+        let packed = include_bytes!(concat!(env!("OUT_DIR"), "/oui.txt.br"));
+        let _ = std::io::Read::read_to_string(&mut brotli::Decompressor::new(&packed[..], 64 * 1024), &mut text);
+        let mut t: Vec<_> = text.leak().lines().filter_map(|l| l.split_once('\t')).collect();
         t.sort_unstable_by_key(|r| r.0);
         t
     });
