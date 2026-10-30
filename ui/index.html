@@ -2576,9 +2576,9 @@ const links = {
   issue: "https://github.com/MrTomato77/octet/issues/new",   // the app adds the version and system (Rust, main.rs)
 };
 // About: what this version brought, and the system in one line for a ticket or an issue.
-const NEWS = { v: "0.2.1",
-  en: ["Public IP and the speed test work with a VPN on", "Scan sweeps a /24 in about 2 s, and flows to 100%", "Gateway metrics are read, so Apply keeps them"],
-  th: ["Public IP และ Speed Test ใช้ได้ตอนเปิด VPN", "Scan สแกน /24 เสร็จในราว 2 วินาที ลื่นจนถึง 100%", "อ่าน metric ของ Gateway แล้ว กดบันทึกค่าไม่หาย"] };
+const NEWS = { v: "0.2.2",
+  en: ["Settings, General: rows grouped under headings", "Octet.exe is about 1 MB smaller", "Smoother speed test, scan and ping graph"],
+  th: ["การตั้งค่า หน้าทั่วไป: จัดเป็นหมวดมีหัวข้อ", "Octet.exe เล็กลงราว 1 MB", "Speed Test, Scan และกราฟ Ping ลื่นขึ้น"] };
 // The app asks Tauri for its version (above); the demo, here and on the website, shows the version these notes are for.
 if (!tauri) { $("s-version").textContent = NEWS.v; updShow(); }
 function renderAbout() {
