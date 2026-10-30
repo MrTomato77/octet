@@ -878,10 +878,12 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 
 /* Apply in progress and refresh changes: a highlight runs across the row */
 .working { position: relative; overflow: hidden; }
-.working::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
-  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--accent) 24%, transparent), transparent) 0 0 / 50% 100% no-repeat; }
+.working::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 50%; pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--accent) 24%, transparent), transparent); }
 .working::after { animation: sweep-row 900ms var(--ease-out) infinite; }
-@keyframes sweep-row { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+/* Moved by transform, not background-position: the compositor slides it, nothing is repainted each frame.
+   The row's own overflow and corners clip it. */
+@keyframes sweep-row { from { transform: translateX(-100%); } to { transform: translateX(200%); } }
 /* Apply success: changed-marks fold away one after another */
 .ip.settle .diff { animation: fold 180ms ease-in forwards; animation-delay: calc(var(--i) * 60ms); }
 @keyframes fold { to { transform: rotate(45deg) scale(0); } }
@@ -3136,10 +3138,14 @@ function drawGraph() {
     gput("cursor", 0, "line", { x1: probe.cx, x2: probe.cx, y1: 0, y2: h, opacity: 0.6 * probe.show });
     gput("knob", 0, "circle", { cx: near.x, cy: near.y, r: 4, opacity: probe.show });
     const ago = Math.max(0, Math.round((now - near.q.t) / 1000));
-    tip.innerHTML = `${msOf(near.q.v)}<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
-    tip.style.transform = `translateX(${Math.min(Math.max(probe.cx + 10, 4), w - tip.offsetWidth - 4)}px)`;
+    // Rewritten and measured only when its text changes: a rewrite then a width read is a layout, every frame.
+    const html = `${msOf(near.q.v)}<small>${ago ? L(`${ago} s ago`, `${ago} วิที่แล้ว`) : L("now", "ตอนนี้")}</small>`;
+    if (tip._html !== html) { tip.innerHTML = tip._html = html; tip._w = 0; }
+    tip._w ||= tip.offsetWidth;   // again while it reads 0 (written while the page was hidden)
+    tip.style.transform = `translateX(${Math.min(Math.max(probe.cx + 10, 4), w - tip._w - 4)}px)`;
   } else { gcut("cursor", 0); gcut("knob", 0); }
-  tip.style.opacity = probe.show > 0.01 ? probe.show : 0;
+  const op = probe.show > 0.01 ? probe.show : 0;
+  if (tip._op !== op) tip.style.opacity = tip._op = op;
   if (svg._vb !== `${w} ${h}`) svg.setAttribute("viewBox", `0 0 ${svg._vb = `${w} ${h}`}`);
   graphRaf = page === "probe" && !covered() ? requestAnimationFrame(drawGraph) : 0;
 }
@@ -3343,7 +3349,10 @@ function speedDraw() {
   const dt = Math.min(48, at - (speedAt || at)) / 1000; speedAt = at;
   speedV += ((to - speedN) * 90 - speedV * 12) * dt; speedN += speedV * dt;
   if (calm.matches || (Math.abs(to - speedN) < 0.0005 && Math.abs(speedV) < 0.002)) { speedN = to; speedV = 0; }
-  const set = (id, o) => { const el = $(id); for (const k in o) el.setAttribute(k, o[k]); };
+  // Positions are read before anything is written: a read after a write forces a fresh layout, each frame.
+  const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / VH) || 1;
+  const head = svg.closest(".dlg-body").querySelector(".dlg-head").getBoundingClientRect(), foot = $("speed-note").getBoundingClientRect();
+  const set = (id, o) => { const el = $(id), was = el._a ??= {}; for (const k in o) if (was[k] !== o[k]) el.setAttribute(k, was[k] = o[k]); };
   // Opening: face 0-.3, power stem to needle .1-.75, LED ring to track 0-.8 (overshoots a little), hub .3-.8, scale and reading .55-1, stop .7-1.
   const grow = slice(m, 0, 0.8, open ? over : inOut), turn = slice(m, 0.1, 0.75), late = slice(m, 0.55, 1);
   const r = mix(63, SR, grow), sweep = mix(360, 270, slice(m, 0, 0.8)), c = 2 * Math.PI * r, rot = `rotate(${90 + (360 - sweep) / 2} ${SC} ${SY})`;
@@ -3377,7 +3386,6 @@ function speedDraw() {
   set("sp-hub", { r: 6 * slice(m, 0.3, 0.8) * (1 - slice(z, 0, 0.35)) });
   // Done: the dial shrinks and slides left (download), its twin slides out to the right (upload).
   // The two result dials use the whole width, not just the 240 units of the view box: each takes half, with room between.
-  const svg = $("speed-dial"), bx = svg.getBoundingClientRect(), k = Math.min(bx.width / 240, bx.height / VH) || 1;
   const X2 = Math.max(62, bx.width / k / 4), S2 = Math.min(1.05, (X2 - 14) / SR);
   const zs = slice(z, 0, 0.75), sc = mix(1, S2, zs), tx = mix(0, -X2, zs), ty = 0;
   const place = x => `translate(${SC + x} ${SY + ty}) scale(${sc}) translate(${-SC} ${-SY})`;
@@ -3394,7 +3402,6 @@ function speedDraw() {
   set("sp-cap1", { x: SC - X2, y: capY, opacity: tw }); set("sp-cap2", { x: SC + X2, y: capY, opacity: tw });
   $("sp-go").style.display = open ? "none" : "";
   // Before Start the rows under the dial are empty, so the button sits in the middle of the view instead; it rises into place as it opens.
-  const head = svg.closest(".dlg-body").querySelector(".dlg-head").getBoundingClientRect(), foot = $("speed-note").getBoundingClientRect();
   const centre = (head.bottom + foot.top) / 2 - (bx.top - (speed.lift ?? 0) + (bx.height - VH * k) / 2 + (SY - VY) * k);
   speed.lift = centre * (1 - slice(m, 0, 0.8));
   svg.style.transform = `translateY(${speed.lift + 12 * slice(m, 0, 0.8) * (1 - zs)}px)`;
@@ -3711,9 +3718,13 @@ function scanTell() {
   const f = $("scan-foot"), focus = f.contains(document.activeElement) && document.activeElement.dataset.k;
   const count = k => scan.cells.filter(c => c.classList.contains(k)).length, used = count("used"), free = count("free"), maybe = count("maybe");
   const key = (k, cls, label, n) => `<span data-k="${k}" role="button" tabindex="0"><i class="key" style="background:${cls}"></i>${label}${n !== undefined ? ` <b>${n}</b>` : ""}</span>`;
-  f.innerHTML = !scan.net ? "" : (scan.note ? `<span class="snote">${scan.note}</span>` : "") + (scan.off ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway"))
+  const html = !scan.net ? "" : (scan.note ? `<span class="snote">${scan.note}</span>` : "") + (scan.off ? "" : key("me", "var(--ok)", L("This PC", "เครื่องนี้")) + key("gw", "var(--gw)", "Gateway"))
     + key("used", "color-mix(in oklch, var(--accent) 70%, transparent)", L("In use", "ใช้อยู่"), used) + key("free", "color-mix(in oklch, var(--faint) 40%, transparent)", scan.off ? L("No answer", "ไม่ตอบ") : L("Free", "ว่าง"), free).repeat(maybe && !free ? 0 : 1)
     + (maybe ? key("maybe", "color-mix(in oklch, var(--faint) 40%, transparent)", L("Likely free", "น่าจะว่าง"), maybe) : "");
+  // Called every frame of a scan: when only the counts moved, only they are written, not the whole footer.
+  const shape = html.replace(/<b>\d+<\/b>/g, "<b></b>"), rebuilt = f._shape !== shape;
+  if (rebuilt) { f.innerHTML = html; f._shape = shape; }
+  else { const n = [...html.matchAll(/<b>(\d+)<\/b>/g)]; f.querySelectorAll("b").forEach((b, i) => { if (b.textContent !== n[i][1]) b.textContent = n[i][1]; }); }
   const gw = adapters[sel]?.cfg.gateway, busy = scan.done < scan.total;
   f.classList.toggle("busy", busy);
   if (busy) { scan.hold = null; scanOnly(null); }
@@ -3721,9 +3732,10 @@ function scanTell() {
   f.querySelectorAll("[data-k]").forEach(k => {
     k.classList.toggle("on", k.dataset.k === scan.hold);
     if (k.dataset.k === "gw" && gw && !scan.has(gw)) k.dataset.tip = L(`${gw}, outside this range`, `${gw} อยู่นอกช่วงที่แสดง`);
+    else if (k.dataset.k === "gw") delete k.dataset.tip;   // the key outlives a gateway change now that it isn't rebuilt each call
     if (k.dataset.k === "maybe") k.dataset.tip = L("The router answers for every address (proxy ARP); these answered nothing else", "Router ตอบแทนทุกเลข (proxy ARP) เลขเหล่านี้ไม่มีอะไรตอบนอกจากนั้น");
   });
-  if (focus) f.querySelector(`[data-k="${focus}"]`)?.focus();   // rebuilt: the key you were on keeps the focus
+  if (focus && rebuilt) f.querySelector(`[data-k="${focus}"]`)?.focus();   // rebuilt: the key you were on keeps the focus
   scanState();
 }
 // Which cells stand out: the one held, or the one peeked at. A gateway off this /24 has nothing to show.
