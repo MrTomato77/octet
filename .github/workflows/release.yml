@@ -9,6 +9,10 @@ on:
     branches: [main]
     # Docs and screenshots don't change the exe. (Path filters never apply to tag pushes.)
     paths-ignore: ["**.md", "assets/**"]
+  # Pull requests into main test and build too (both jobs, so the Mac build is checked before merging).
+  pull_request:
+    branches: [main]
+    paths-ignore: ["**.md", "assets/**"]
 permissions:
   contents: write
 jobs:
