@@ -364,9 +364,8 @@ mod native {
         Device::Disabled(desc.unwrap_or_default())
     }
 
-    /// GetAdaptersAddresses for one address family, as a buffer of IP_ADAPTER_ADDRESSES_LH.
-    fn gaa(family: u16) -> Result<Vec<u64>, String> {
-        let flags = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST;
+    /// GetAdaptersAddresses for one address family with the caller's flags, as a buffer of IP_ADAPTER_ADDRESSES_LH.
+    fn gaa(family: u16, flags: GET_ADAPTERS_ADDRESSES_FLAGS) -> Result<Vec<u64>, String> {
         let mut size = 16 * 1024u32;
         let mut buf: Vec<u64> = Vec::new(); // u64 keeps the 8-byte alignment the structs need
         for _ in 0..3 {
@@ -383,10 +382,15 @@ mod native {
         Err("GetAdaptersAddresses kept growing".into())
     }
 
+    /// What ipv6s() asks for: unicast addresses only, which makes the call ~20x faster.
+    /// No INCLUDE_ALL_INTERFACES: an interface listed only with it has no IPv6 binding, so no IPv6 address.
+    pub(super) const V6_FLAGS: GET_ADAPTERS_ADDRESSES_FLAGS = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST
+        | GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_SKIP_DNS_INFO | GAA_FLAG_SKIP_FRIENDLY_NAME;
+
     /// IPv6 addresses by adapter GUID (Info shows them; nothing edits them).
-    fn ipv6s() -> HashMap<String, Vec<String>> {
+    pub(super) fn ipv6s(flags: GET_ADAPTERS_ADDRESSES_FLAGS) -> HashMap<String, Vec<String>> {
         let mut out: HashMap<String, Vec<String>> = HashMap::new();
-        let Ok(buf) = gaa(AF_INET6) else { return out };
+        let Ok(buf) = gaa(AF_INET6, flags) else { return out };
         let mut p = buf.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
         while !p.is_null() {
             let a = unsafe { &*p };
@@ -408,7 +412,7 @@ mod native {
 
     /// Live IPv4 settings of every interface the IP stack knows, by adapter GUID.
     fn live() -> Result<HashMap<String, Raw>, String> {
-        let buf = gaa(AF_INET)?;
+        let buf = gaa(AF_INET, GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST)?;
         let mut out = HashMap::new();
         let mut p = buf.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
         while !p.is_null() {
@@ -562,7 +566,7 @@ mod native {
     pub fn read() -> Result<Vec<Raw>, String> {
         // Each asks Windows something that takes some 20 ms: asked side by side, a read takes one of those, not three.
         let (live, mut wlans, mut v6, metered) = std::thread::scope(|s| {
-            let (w, v, m) = (s.spawn(wlans), s.spawn(ipv6s), s.spawn(crate::net::metered));
+            let (w, v, m) = (s.spawn(wlans), s.spawn(|| ipv6s(V6_FLAGS)), s.spawn(crate::net::metered));
             (live(), w.join().unwrap_or_default(), v.join().unwrap_or_default(), m.join().unwrap_or_default())
         });
         let mut live = live?;
@@ -765,6 +769,17 @@ mod tests {
         let (a, b, c) = time(&|| read().unwrap(), 50);
         println!("TIME native     ms: min {a:.2} median {b:.2} max {c:.2}");
         assert_eq!(diffs, 0);
+    }
+
+    /// The lean IPv6 flags give the same map as the full ones:
+    /// `cargo test --release -p octet lean_ipv6_flags_read_the_same -- --ignored`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn lean_ipv6_flags_read_the_same() {
+        use windows_sys::Win32::NetworkManagement::IpHelper::*;
+        let full = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST;
+        assert_eq!(native::ipv6s(full), native::ipv6s(native::V6_FLAGS));
     }
 
     /// Reads this machine: `cargo test -p octet reads_this_machine -- --ignored --nocapture`.
