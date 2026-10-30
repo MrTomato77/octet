@@ -219,7 +219,11 @@ fn open_link(which: String) -> Result<(), String> {
 #[tauri::command]
 fn system_info() -> String {
     let web = tauri::webview_version().unwrap_or_else(|_| "?".into());
-    format!("{} · {} · {} {web} · {}", env!("CARGO_PKG_VERSION"), adapters::os_name(), if cfg!(windows) { "WebView2" } else { "WebKit" }, std::env::consts::ARCH)
+    // The chip as each OS names it: x64 and ARM64 on Windows, Intel and Apple silicon on a Mac.
+    let chip = match (cfg!(windows), std::env::consts::ARCH) {
+        (true, "x86_64") => "x64", (true, "aarch64") => "ARM64", (false, "x86_64") => "Intel", (false, "aarch64") => "Apple silicon", (_, a) => a,
+    };
+    format!("{} · {} · {} {web} · {chip}", env!("CARGO_PKG_VERSION"), adapters::os_name(), if cfg!(windows) { "WebView2" } else { "WebKit" })
 }
 
 // ---- "Always run as administrator": a marker file in %APPDATA%\Octet ----

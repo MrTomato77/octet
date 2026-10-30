@@ -770,14 +770,11 @@ dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
 .keys > span { color: var(--muted); padding-left: var(--s2); }
 .keys h4 { grid-column: 1 / -1; margin: var(--s2) 0 0; font-size: 12px; font-weight: 600; color: var(--faint); }
 .keys h4:first-child { margin-top: 0; }
-/* Under Updates: what the new version brings, then the start-up check and when it last asked. */
-.upd-more { display: grid; gap: 6px; margin-top: -2px; }
-.upd-line { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
-.upd-line .faint { font-size: 12px; white-space: nowrap; }
+/* Under Updates, once a newer version is found: the first points of its release notes. */
 .upd-notes, .news ul { margin: 0; padding-left: 16px; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
-.upd-notes { color: var(--ink); }
-.mem { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-height: 32px; font-size: 13px; }
-.about .news { display: grid; gap: 4px; justify-items: start; }
+.upd-notes { color: var(--ink); margin-top: -2px; }
+.about .news { display: grid; }
+.brand-name .link { margin-left: auto; font-size: 12px; }
 kbd { font: 12px/20px var(--font); min-width: 24px; padding: 0 6px; text-align: center; border: 1px solid var(--border-strong);
   border-bottom-width: 2px; border-radius: var(--r-input); background: var(--bg); justify-self: start; }
 .about { display: grid; gap: var(--s4); align-content: start; }
@@ -1162,13 +1159,16 @@ html.app, html.app body { overflow: hidden; }
                 <div class="stack" id="s-hidden"></div>
                 <span class="lbl" data-t="updates">Updates</span>
                 <div class="upd" id="s-upd"><span class="upd-say"><i class="ph"></i><span class="t"></span><span class="pct"></span></span><button type="button" id="s-upd-go"><span></span></button><span class="upd-bar"></span></div>
-                <span></span>
-                <div class="upd-more">
-                  <ul class="upd-notes" id="s-upd-notes" hidden></ul>
-                  <div class="upd-line"><label class="check"><input type="checkbox" id="s-upd-auto"><span data-t="updAuto">Check when Octet starts</span></label><span class="faint" id="s-upd-at"></span></div>
+                <span id="s-upd-notes-gap" hidden></span>
+                <ul class="upd-notes" id="s-upd-notes" hidden></ul>
+                <span class="lbl" data-t="updAuto">Auto-check</span>
+                <div class="seg opt" role="radiogroup" aria-label="Check for updates when Octet starts" style="--n: 2">
+                  <span class="thumb"></span>
+                  <label class="choice"><input type="radio" name="updauto" value="0" checked><span data-t="off">Off</span></label>
+                  <label class="choice"><input type="radio" name="updauto" value="1"><span data-t="atStart">When Octet starts</span></label>
                 </div>
                 <span class="lbl" data-t="scanMem">Scan memory</span>
-                <div class="mem"><span class="muted" id="s-mem" tabindex="-1" aria-live="polite"></span><button type="button" class="link" id="s-mem-clear" data-t="clear">Clear</button></div>
+                <div class="upd mem"><span class="upd-say"><i class="ph ph-clock-counter-clockwise"></i><span class="t" id="s-mem" tabindex="-1" aria-live="polite"></span></span><button type="button" id="s-mem-clear"><span data-t="clear">Clear</span></button></div>
               </div>
               <div class="pane keys" data-pane="keys" hidden>
                 <h4 data-t="kgAll">Anywhere</h4>
@@ -1188,7 +1188,7 @@ html.app, html.app body { overflow: hidden; }
               <div class="pane about" data-pane="about" hidden>
                 <div class="brand">
                   <img src="icon.png" alt="" width="40" height="40">
-                  <div class="brand-name"><b>Octet</b><span class="ver" id="s-version">0.1.0</span></div>
+                  <div class="brand-name"><b>Octet</b><span class="ver" id="s-version"></span><button type="button" class="link" data-link="releases" data-t="relNotes">Release notes</button></div>
                   <span class="muted" data-t="tagline">IPv4 and DNS settings, in seconds.</span>
                 </div>
                 <div class="set">
@@ -1199,7 +1199,7 @@ html.app, html.app body { overflow: hidden; }
                   <span class="lbl" data-t="sysInfo">System</span>
                   <span class="val"><span class="muted" id="s-sys"></span><button type="button" class="link" id="s-sys-copy" data-t="copy">Copy</button></span>
                   <span class="lbl" id="s-news-lbl"></span>
-                  <div class="val news"><ul id="s-news"></ul><button type="button" class="link" data-link="releases" data-t="releases">See releases</button></div>
+                  <div class="val news"><ul id="s-news"></ul></div>
                   <span class="lbl" data-t="privacy">Privacy</span>
                   <span class="val muted" data-t="privacyText">No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.</span>
                   <span class="lbl" data-t="credits">Credits</span>
@@ -1348,7 +1348,7 @@ const T = {
     general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: mac ? "Read adapters again" : "Read adapters again (or Ctrl R)",
     kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
     kOctet: "Move between octets", kEsc: "Close a menu, a view or the sidebar", kSpeed: "Open or close the speed test", kPort: "Add a port (Ping)",
-    kgAll: "Anywhere", kgCfg: "The whole configuration", kgType: "Typing an address", updAuto: "Check when Octet starts", scanMem: "Scan memory", clear: "Clear",
+    kgAll: "Anywhere", kgCfg: "The whole configuration", kgType: "Typing an address", updAuto: "Auto-check", off: "Off", atStart: "When Octet starts", relNotes: "Release notes", scanMem: "Scan memory", clear: "Clear",
     report: "Report a problem", sysInfo: "System", copy: "Copy", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
@@ -1366,7 +1366,7 @@ const T = {
     general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "บันทึก", kRefresh: mac ? "รีเฟรชรายการ" : "รีเฟรชรายการ (หรือ Ctrl R)",
     kSide: "ย่อ/ขยายแถบซ้าย", kCopy: "คัดลอกค่าทั้งหมด", kPaste: "วางค่าทั้งหมด",
     kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนู หน้าที่เปิดอยู่ หรือแถบซ้าย", kSpeed: "เปิด/ปิด Speed Test", kPort: "ใส่พอร์ต (หน้า Ping)",
-    kgAll: "ใช้ได้ทุกหน้า", kgCfg: "ค่าทั้งหมด", kgType: "ตอนพิมพ์ IP", updAuto: "ตรวจตอนเปิด Octet", scanMem: "ความจำ Scan", clear: "ล้าง",
+    kgAll: "ใช้ได้ทุกหน้า", kgCfg: "ค่าทั้งหมด", kgType: "ตอนพิมพ์ IP", updAuto: "ตรวจอัตโนมัติ", off: "ปิด", atStart: "ตอนเปิด Octet", relNotes: "บันทึกการเปลี่ยนแปลง", scanMem: "ความจำ Scan", clear: "ล้าง",
     report: "แจ้งปัญหา", sysInfo: "ระบบ", copy: "คัดลอก", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
@@ -2482,7 +2482,8 @@ function updShow() {
   }[upd.s];
   el.dataset.tip = upd.s === "failed" ? upd.err : "";
   el.dataset.s = upd.s; el.style.setProperty("--p", upd.p);
-  el.querySelector(".pct").textContent = upd.s === "getting" ? `${Math.round(upd.p * 100)}%` : "";
+  const when = ["idle", "latest"].includes(upd.s) && updWhen();
+  el.querySelector(".pct").textContent = upd.s === "getting" ? `${Math.round(upd.p * 100)}%` : when ? L(`· checked ${when}`, `· ตรวจ ${when}`) : "";
   // The same state can still have new words: the version arrives after the first paint.
   // The button's word counts too: "Octet 0.2.1" reads the same in both languages, "Check" doesn't.
   const same = was === upd.s && el.dataset.say === say + go;
@@ -2539,17 +2540,19 @@ $("s-upd-go").onclick = async () => {
     upd.s = "failed"; upd.err = String(e); upd.p = 0; updShow();
   }
 };
-// Under the row: the new version's first points (from its release notes), the start-up check, and when it last asked.
+// Under the row, once a newer version is found: the first points of its release notes.
 function updMore() {
   const notes = ["new", "getting", "ready"].includes(upd.s) ? upd.notes || [] : [];
   $("s-upd-notes").replaceChildren(...notes.map(t => Object.assign(document.createElement("li"), { textContent: t })));
-  $("s-upd-notes").hidden = !notes.length;
-  const at = +pref("octet-upd-at"), d = new Date(at), today = d.toDateString() === new Date().toDateString();
-  const when = d.toLocaleString(lang === "th" ? "th-TH" : "en-GB", today ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" });
-  $("s-upd-at").textContent = at ? L(`Last checked ${when}`, `ตรวจล่าสุด ${when}`) : "";
+  $("s-upd-notes").hidden = $("s-upd-notes-gap").hidden = !notes.length;
 }
-$("s-upd-auto").checked = pref("octet-upd-auto") === "1";
-$("s-upd-auto").onchange = e => keep("octet-upd-auto", e.target.checked ? "1" : "0");
+// When it last asked, quietly beside the version: a time today, a date before.
+function updWhen() {
+  const at = +pref("octet-upd-at"), d = new Date(at);
+  return !at ? "" : d.toLocaleString(lang === "th" ? "th-TH" : "en-GB", d.toDateString() === new Date().toDateString() ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" });
+}
+document.querySelector(`input[name=updauto][value="${pref("octet-upd-auto") === "1" ? 1 : 0}"]`).checked = true; segIndex("updauto");
+document.querySelectorAll("input[name=updauto]").forEach(x => x.onchange = () => { segIndex("updauto"); keep("octet-upd-auto", x.value); });
 // Off unless asked: Octet talks to nothing outside your network on its own.
 if (pref("octet-upd-auto") === "1") setTimeout(() => upd.s === "idle" && $("s-upd-go").click(), 4000);
 updShow();
@@ -2565,21 +2568,27 @@ const links = {
 const NEWS = { v: "0.2.1",
   en: ["Public IP and the speed test work with a VPN on", "Scan sweeps a /24 in about 2 s, and flows to 100%", "Gateway metrics are read, so Apply keeps them"],
   th: ["Public IP และ Speed Test ใช้ได้ตอนเปิด VPN", "Scan สแกน /24 เสร็จในราว 2 วินาที ลื่นจนถึง 100%", "อ่าน metric ของ Gateway แล้ว กดบันทึกค่าไม่หาย"] };
+// The app asks Tauri for its version (above); the demo, here and on the website, shows the version these notes are for.
+if (!tauri) { $("s-version").textContent = NEWS.v; updShow(); }
 function renderAbout() {
   $("s-news-lbl").textContent = L(`New in ${NEWS.v}`, `ใหม่ใน ${NEWS.v}`);
   $("s-news").replaceChildren(...NEWS[lang].map(t => Object.assign(document.createElement("li"), { textContent: t })));
   (tauri ? invoke("system_info") : Promise.resolve(`${$("s-version").textContent} · ${L("Demo in a browser", "เดโมในเบราว์เซอร์")}`))
-    .then(s => $("s-sys").textContent = s, () => {});
+    .then(s => {
+      // Shown short (the OS and the chip; the version is in the header); Copy and the tooltip carry it all.
+      const p = s.split(" · ");
+      $("s-sys").textContent = p.length > 3 ? `${p[1]} · ${p.at(-1)}` : s; $("s-sys").dataset.full = s; $("s-sys").dataset.tip = s;
+    }, () => {});
 }
-$("s-sys-copy").onclick = () => navigator.clipboard.writeText(`Octet ${$("s-sys").textContent}`).then(() => {
+$("s-sys-copy").onclick = () => navigator.clipboard.writeText(`Octet ${$("s-sys").dataset.full}`).then(() => {
   const b = $("s-sys-copy"); roll(b, L("Copied", "คัดลอกแล้ว"));   // said on the button: Settings covers the status line
   clearTimeout(b.t); b.t = setTimeout(() => roll(b, T[lang].copy), 1400);
 }, () => {});
 // Scan memory: addresses seen in use within the hour, across the networks scanned (seenAll, under Scan).
 function renderMem() {
   const now = Date.now(), n = Object.values(seenAll()).reduce((s, m) => s + Object.values(m.ips || {}).filter(t => now - t < SEEN_MS).length, 0);
-  $("s-mem").textContent = n ? L(`${n} address${n > 1 ? "es" : ""} seen in the last hour`, `จำไว้ ${n} IP จากชั่วโมงที่ผ่านมา`) : L("Nothing remembered", "ไม่ได้จำอะไรไว้");
-  $("s-mem-clear").hidden = !n;
+  $("s-mem").textContent = n ? L(`${n} address${n > 1 ? "es" : ""} from the last hour`, `จำไว้ ${n} IP จากชั่วโมงที่ผ่านมา`) : L("Nothing remembered", "ไม่ได้จำอะไรไว้");
+  $("s-mem-clear").classList.toggle("gone", !n); $("s-mem-clear").disabled = !n;   // folds away like Updates' button
 }
 $("s-mem-clear").onclick = () => { keep("octet-seen", "{}"); renderMem(); $("s-mem").focus(); };   // the button goes: focus stays in the row
 document.querySelectorAll("[data-link]").forEach(b => b.onclick = () =>
