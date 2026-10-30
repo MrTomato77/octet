@@ -466,14 +466,10 @@ mod native {
             while !u.is_null() {
                 let x = unsafe { &*u };
                 if let Some(ip) = unsafe { ipv4(&x.Address) } {
-                    // Duplicate address detection failed: another device has it. It stays the main address (it is
-                    // what's set, and the form must show it), with the conflict flagged.
+                    // Duplicate address detection failed: another device has it. It stays listed (it is what's set,
+                    // and the form must show it), with the conflict flagged; read() puts the main address first.
                     if x.DadState == 2 {   // IpDadStateDuplicate
                         raw.conflict = ip.to_string();
-                        raw.ip.insert(0, ip.to_string());
-                        raw.subnet.insert(0, mask(x.OnLinkPrefixLength));
-                        u = x.Next;
-                        continue;
                     }
                     // The leased address is the main one, wherever Windows lists it: a typed-in extra can
                     // come first, and the leased one would then be offered for deletion (which netsh refuses).
@@ -498,6 +494,15 @@ mod native {
             out.insert(id, raw);
         }
         Ok(out)
+    }
+
+    /// Moves `ip` and its mask to the front of the list, where the main address goes.
+    pub(super) fn to_front(raw: &mut Raw, ip: &str) {
+        if let Some(i) = raw.ip.iter().position(|x| x == ip) {
+            let (a, m) = (raw.ip.remove(i), raw.subnet.remove(i));
+            raw.ip.insert(0, a);
+            raw.subnet.insert(0, m);
+        }
     }
 
     /// Metrics: of each default route by (interface index, gateway), and of each interface whose metric
@@ -746,6 +751,13 @@ mod native {
                     }
                     raw.gw_metric = raw.gateway.iter().map(|g| g.parse().ok().and_then(|g| routes.get(&(raw.index, g))).copied().unwrap_or(0)).collect();
                     raw.if_metric = if_metrics.get(&raw.index).copied().unwrap_or(0);
+                    // With a conflict, the list's order can't be trusted to put the main address first: a static
+                    // adapter's main one is the first in its saved list (what `set address` wrote, and what Windows'
+                    // own dialog shows), not whichever address another device happens to hold.
+                    if !raw.conflict.is_empty() && !raw.dhcp
+                        && let Some(main) = reg_text(&tcp, "IPAddress").and_then(|t| t.split(',').next().map(String::from)) {
+                        to_front(&mut raw, &main);
+                    }
                     out.push(raw);
                 }
                 Device::Disabled(description) => {
@@ -873,6 +885,17 @@ mod tests {
         assert_eq!((a.cfg.gateway.as_str(), a.cfg.gw_metric.as_str(), a.cfg.metric.as_str()), ("10.0.0.1", "", "15"));
         assert_eq!(a.cfg.gws, [Gw { gateway: "10.0.0.2".into(), metric: "25".into() }, Gw { gateway: "10.0.0.3".into(), metric: String::new() }]);
         assert_eq!(a.extra_gws, ["10.0.0.2", "10.0.0.3"]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn conflicting_extra_stays_an_extra() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let mut raw = Raw { ip: s(&["10.0.0.6", "10.0.0.5"]), subnet: s(&["255.255.0.0", "255.255.255.0"]), conflict: "10.0.0.6".into(), ..Default::default() };
+        native::to_front(&mut raw, "10.0.0.5");
+        assert_eq!((raw.ip, raw.subnet), (s(&["10.0.0.5", "10.0.0.6"]), s(&["255.255.255.0", "255.255.0.0"])));
+        let a = &shape(vec![Raw { ip: s(&["10.0.0.5", "10.0.0.6"]), subnet: s(&["24", "16"]), conflict: "10.0.0.6".into(), ..Default::default() }])[0];
+        assert_eq!((a.cfg.address.as_str(), a.extra_ips.as_slice(), a.conflict.as_str()), ("10.0.0.5", &s(&["10.0.0.6"])[..], "10.0.0.6"));
     }
 
     #[test]
