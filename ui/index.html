@@ -3798,6 +3798,9 @@ function infoRows() {
   // A day-long lease starts and ends at the same clock time, so any day but today carries its date.
   const at = t => new Date(t).toLocaleString(lang === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit",
     ...(new Date(t).toDateString() !== new Date().toDateString() && { day: "numeric", month: "short" }) });
+  // Windows keeps a lease that never ends as 0xFFFFFFFF seconds (the year 2106).
+  const lease = !a.leaseEnds ? "" : a.leaseEnds >= 4294967295e3 ? L("never expires", "ไม่มีวันหมดอายุ")
+    : a.leaseGot ? L(`${at(a.leaseGot)} to ${at(a.leaseEnds)}`, `${at(a.leaseGot)} ถึง ${at(a.leaseEnds)}`) : L(`until ${at(a.leaseEnds)}`, `ถึง ${at(a.leaseEnds)}`);
   const pub = info.pub[pubKey(a)];
   return [
     { icon: "plugs-connected", head: L("Connection", "การเชื่อมต่อ"), rows: [
@@ -3822,7 +3825,7 @@ function infoRows() {
       ["Subnet", c.subnet, ""],
       ["Gateway", c.gateway, ""],
       ...(a.ipv6 || []).map(x => ["IPv6", x, x.startsWith("fe80") ? "link-local" : ""]),
-      ...(c.ipAuto && a.dhcpServer ? [[L("DHCP server", "DHCP server"), a.dhcpServer, a.leaseEnds ? (a.leaseGot ? L(`${at(a.leaseGot)} to ${at(a.leaseEnds)}`, `${at(a.leaseGot)} ถึง ${at(a.leaseEnds)}`) : L(`until ${at(a.leaseEnds)}`, `ถึง ${at(a.leaseEnds)}`)) : ""]] : []),
+      ...(c.ipAuto && a.dhcpServer ? [[L("DHCP server", "DHCP server"), a.dhcpServer, lease]] : []),
       ...(up && validIp(c.gateway) ? [["Public IP", pub === undefined ? L("Look up", "ดูค่า") : pub === null ? L("Looking up…", "กำลังดู…") : pub?.ip || L("Couldn't reach the internet", "ออกอินเทอร์เน็ตไม่ได้"), pub === undefined ? L("asks a web service", "ถามจากเว็บภายนอก") : [pub?.isp, pub?.city].filter(Boolean).join(" · "), "", "pub"]] : []),
     ] },
     { icon: "globe-simple", head: "DNS", tag: c.dnsAuto ? "DHCP" : "Manual", rows: [

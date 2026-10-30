@@ -159,7 +159,8 @@ pub struct Adapter {
     pub extra_subnets: Vec<String>,
     /// Default gateways after the first.
     pub extra_gws: Vec<String>,
-    /// For Info: the connection's DNS suffix, IPv6 addresses, the DHCP lease (ms since 1970, 0 = none), Wi-Fi details.
+    /// For Info: the connection's DNS suffix, IPv6 addresses, the DHCP lease (ms since 1970, 0 = none;
+    /// an end of 4294967295000, Windows' 0xFFFFFFFF seconds, is a lease that never ends), Wi-Fi details.
     pub suffix: String,
     pub ipv6: Vec<String>,
     pub lease_got: u64,
@@ -222,6 +223,8 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
             let dhcp_server = Some(r.dhcp_server)
                 .filter(|s| r.dhcp && s.parse::<Ipv4Addr>().is_ok_and(|ip| !ip.is_broadcast()))
                 .unwrap_or_default();
+            // On APIPA (169.254) no DHCP server answered: the lease Windows still keeps is an old one.
+            let apipa = r.dhcp && address.parse::<Ipv4Addr>().is_ok_and(|a| a.is_link_local());
             Adapter {
                 id: r.id,
                 index: r.index,
@@ -242,8 +245,8 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                 extra_gws: gws.iter().skip(1).map(|g| g.gateway.clone()).collect(),
                 suffix: r.suffix,
                 ipv6: r.ipv6,
-                lease_got: r.lease_got,
-                lease_ends: r.lease_ends,
+                lease_got: if apipa { 0 } else { r.lease_got },
+                lease_ends: if apipa { 0 } else { r.lease_ends },
                 wifi: r.wifi,
                 cfg: Cfg {
                     ip_auto: r.dhcp,
@@ -870,6 +873,16 @@ mod tests {
         assert_eq!((a.cfg.gateway.as_str(), a.cfg.gw_metric.as_str(), a.cfg.metric.as_str()), ("10.0.0.1", "", "15"));
         assert_eq!(a.cfg.gws, [Gw { gateway: "10.0.0.2".into(), metric: "25".into() }, Gw { gateway: "10.0.0.3".into(), metric: String::new() }]);
         assert_eq!(a.extra_gws, ["10.0.0.2", "10.0.0.3"]);
+    }
+
+    #[test]
+    fn apipa_shows_no_old_lease() {
+        let json = |ip: &str| format!(r#"[{{"id":"{{1}}","index":4,"name":"LAN","description":"","mac":"","status":"Up","dhcp":true,"dhcpServer":"","register":false,
+          "ip":["{ip}"],"subnet":["255.255.0.0"],"gateway":[],"dns":[],"staticDns":false,"leaseGot":1000,"leaseEnds":2000}}]"#);
+        let a = &parse(json("169.254.10.20").as_bytes()).unwrap()[0];
+        assert_eq!((a.lease_got, a.lease_ends), (0, 0));
+        let a = &parse(json("10.1.2.3").as_bytes()).unwrap()[0];
+        assert_eq!((a.lease_got, a.lease_ends), (1000, 2000));
     }
 
     /// The native reader must agree with the PowerShell one on this machine, field by field,
