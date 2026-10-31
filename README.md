@@ -64,12 +64,16 @@ Details on each of these, the macOS differences, and how to build: **[docs/guide
 
 ## Star history
 
+**Thank you** to everyone who uses Octet, reports a bug, suggests an idea or tries a new build. Every star tells us the app is worth making better.
+
+<div align="center">
 <a href="https://www.star-history.com/#MrTomato77/octet&Date">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=MrTomato77/octet&type=Date&theme=dark">
     <img alt="Star history of MrTomato77/octet" src="https://api.star-history.com/svg?repos=MrTomato77/octet&type=Date" width="600">
   </picture>
 </a>
+</div>
 
 ## License
 
