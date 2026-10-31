@@ -47,6 +47,13 @@ A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simpl
 <sub>Everything about the adapter, one click to copy</sub><br><br>
 </td>
 </tr>
+<tr>
+<td colspan="2" align="center">
+<img src="assets/speed.png" width="440" alt="Speed test: the needle at 85 Mbps mid-download, with latency bars either side"><br>
+<b>Speed test</b><br>
+<sub>Download, upload and latency under load, out this adapter</sub><br><br>
+</td>
+</tr>
 </table>
 
 - Follows the system: cable, Wi-Fi and address changes show up on their own.
