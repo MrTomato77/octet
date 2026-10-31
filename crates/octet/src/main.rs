@@ -205,11 +205,11 @@ fn open_link(which: String) -> Result<(), String> {
         "releases" => "https://github.com/MrTomato77/octet/releases",
         "notices" => "https://github.com/MrTomato77/octet/blob/main/THIRD-PARTY-NOTICES.md",
         "simpleip" => "https://github.com/KurtisLiggett/Simple-IP-Config",
-        // A new issue with the version and system filled in; nothing from the page goes into the address.
+        // The bug form (.github/ISSUE_TEMPLATE/bug.yml) with the version and system filled in; nothing from the
+        // page goes into the address.
         "issue" => {
-            let body = format!("**Octet:** {}\n\n**What happened:**\n\n", system_info());
-            let enc: String = body.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
-            return open_url(&format!("https://github.com/MrTomato77/octet/issues/new?body={enc}"));
+            let enc: String = system_info().bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
+            return open_url(&format!("https://github.com/MrTomato77/octet/issues/new?template=bug.yml&octet={enc}"));
         }
         _ => return Err("Unknown link".into()),
     };

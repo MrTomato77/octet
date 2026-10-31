@@ -20,4 +20,4 @@ https://github.com/MrTomato77/octet. Please don't open a public issue for it.
   its Ed25519 signature checks out against the key built into the app, and only if it is newer
   than the copy running.
 - No server of its own, no telemetry. What reaches your network and the internet is listed under
-  *Privacy* in the [README](README.md).
+  *Privacy* in [docs/guide.md](docs/guide.md#privacy).

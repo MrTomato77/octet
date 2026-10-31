@@ -1,0 +1,11 @@
+name: Idea
+description: Something Octet could do, or do better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What you'd like, and the job it helps with.
+    validations:
+      required: true

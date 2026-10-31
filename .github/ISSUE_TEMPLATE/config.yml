@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: https://github.com/MrTomato77/octet/blob/main/SECURITY.md
+    about: Report it privately, not as a public issue. SECURITY.md says how.
