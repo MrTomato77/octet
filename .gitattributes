@@ -1,1 +1,4 @@
 ui/index.html linguist-detectable=false
+# Third-party icon CSS, not ours: kept out of the Languages bar.
+scripts/phosphor/** linguist-vendored
+ui/vendor/** linguist-vendored
