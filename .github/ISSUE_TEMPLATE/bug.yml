@@ -1,0 +1,29 @@
+name: Bug report
+description: Something in Octet doesn't work as it should.
+labels: [bug]
+body:
+  # Filled in when you report from the app (main.rs `open_link`, "issue"): the id is its query parameter.
+  - type: input
+    id: octet
+    attributes:
+      label: Octet and system
+      description: Settings → About shows it, e.g. 0.2.2 · Windows 11 · WebView2 · x64
+    validations:
+      required: true
+  - type: dropdown
+    id: adapter
+    attributes:
+      label: Adapter
+      options: [Wi-Fi, Ethernet, USB / Thunderbolt adapter, VPN or virtual, Other]
+  - type: dropdown
+    id: tab
+    attributes:
+      label: Where
+      options: [IP & DNS, Advanced, Ping, Scan, Info, Speed test, Settings / updates, Other]
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: Steps to see it again help most. Screenshots welcome; blur any addresses you'd rather keep private.
+    validations:
+      required: true

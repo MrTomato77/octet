@@ -1,0 +1,14 @@
+# Octet runs network changes as admin, so its dependencies get watched. Minor and patch updates
+# come grouped into one PR per ecosystem; security fixes come as soon as they're published.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      crates: { update-types: [minor, patch] }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
+    groups:
+      actions: { update-types: [minor, patch] }
