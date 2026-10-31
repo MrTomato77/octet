@@ -1,0 +1,23 @@
+# The README's Downloads badge: Octet.exe and Octet.dmg across every release, counted once a day. GitHub's own total
+# (and shields.io's) adds the .sig, .sha256 and notices files too, about twice the real number.
+# The count goes to badges/downloads.json on its own branch, replaced each day, read by a shields.io endpoint badge.
+name: downloads
+on:
+  schedule: [{ cron: "17 3 * * *" }]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          n=$(gh api "repos/$REPO/releases" --paginate --jq '.[].assets[] | select(.name == "Octet.exe" or .name == "Octet.dmg") | .download_count' | awk '{ s += $1 } END { print s + 0 }')
+          mkdir out && cd out
+          printf '{"schemaVersion":1,"label":"downloads","message":"%s","color":"22c55e"}\n' "$n" > downloads.json
+          git init -q -b badges && git add downloads.json
+          git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -q -m "Downloads: $n"
+          git push -q -f "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" badges

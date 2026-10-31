@@ -7,7 +7,7 @@
 A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simple-IP-Config), written in Rust. For Windows and macOS.
 
 [![Release](https://img.shields.io/github/v/release/MrTomato77/octet?style=flat-square&color=3b82f6)](https://github.com/MrTomato77/octet/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/MrTomato77/octet/total?style=flat-square&color=22c55e)](https://github.com/MrTomato77/octet/releases)
+[![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FMrTomato77%2Foctet%2Fbadges%2Fdownloads.json&style=flat-square)](https://github.com/MrTomato77/octet/releases)
 ![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4?style=flat-square&logo=windows)
 ![macOS 11+](https://img.shields.io/badge/macOS-11%2B-555?style=flat-square&logo=apple)
 [![License: MIT](https://img.shields.io/badge/license-MIT-gray?style=flat-square)](LICENSE)
