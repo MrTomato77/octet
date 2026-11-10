@@ -70,14 +70,6 @@ async fn read_adapters() -> Result<Vec<adapters::Adapter>, String> {
     blocking(adapters::read).await
 }
 
-#[tauri::command]
-async fn sharing_state() -> Result<serde_json::Value, String> {
-    #[cfg(windows)]
-    return blocking(|| serde_json::to_value(ics::state()?).map_err(|e| e.to_string())).await;
-    #[cfg(not(windows))]
-    Err("Internet Sharing is only available on Windows".into())
-}
-
 /// One change at a time: a second click must not raise a second UAC prompt.
 static CHANGING: AtomicBool = AtomicBool::new(false);
 
@@ -94,6 +86,22 @@ async fn change(request: Request) -> Result<(), String> {
 #[tauri::command]
 async fn flush_dns() -> Result<(), String> {
     blocking(|| if net::flush_dns() { Ok(()) } else { Err("Could not flush the DNS cache".into()) }).await
+}
+
+/// Internet Sharing: who is on the shared adapter's cable, as [ip, mac] pairs.
+#[tauri::command]
+async fn neighbours(index: u32) -> Result<Vec<(String, String)>, String> {
+    #[cfg(windows)]
+    return blocking(move || Ok(net::neighbours(index).into_iter().map(|(ip, mac)| (ip.to_string(), mac)).collect())).await;
+    #[cfg(not(windows))]
+    { let _ = index; Ok(vec![]) }
+}
+
+/// Internet Sharing: MikroTiks on the shared adapter's cable, heard through MNDP (works before they have an IP).
+#[tauri::command]
+async fn mndp(address: String) -> Result<Vec<net::Mndp>, String> {
+    let ip: Ipv4Addr = address.parse().map_err(|_| "Not an IPv4 address".to_string())?;
+    blocking(move || net::mndp(ip, 1500)).await
 }
 
 /// Before Apply: does another device already answer ARP for this address?
@@ -371,7 +379,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, sharing_state, change, flush_dns, who_has, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, neighbours, mndp, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

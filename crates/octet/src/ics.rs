@@ -1,5 +1,5 @@
 //! Internet Connection Sharing through the documented NetSharingManager COM API.
-//! `state` reads unelevated; `set` runs in the elevated copy.
+//! `set` runs in the elevated copy.
 
 use serde::Serialize;
 use windows::core::{GUID, IUnknown, Interface};
@@ -75,11 +75,6 @@ fn entries() -> Result<Vec<Entry>, String> {
     read().map_err(|e| format!("Could not read Internet Sharing: {e}"))
 }
 
-pub fn state() -> Result<Vec<Connection>, String> {
-    let _com = Com::new()?;
-    Ok(entries()?.into_iter().map(|e| e.state).collect())
-}
-
 fn validate(public: u32, private: u32, connections: &[Connection]) -> Result<[usize; 2], String> {
     if public == 0 || private == 0 || public == private { return Err("Sharing needs two different adapters".into()); }
     let find = |index| connections.iter().position(|c| c.index == Some(index)).ok_or_else(|| format!("Sharing adapter {index} is gone"));
@@ -100,7 +95,7 @@ fn validate(public: u32, private: u32, connections: &[Connection]) -> Result<[us
 /// Public = the adapter with the internet, private = the one the device hangs off. Turning on, a failed
 /// private side turns the public side back off; turning off disables both. Windows sets the private
 /// adapter's address itself (usually 192.168.137.1); the UI puts the old one back after Stop.
-pub fn set(public: u32, private: u32, on: bool) -> Result<(), String> {
+pub fn set(public: u32, private: u32, on: bool, scope: Option<&str>) -> Result<(), String> {
     let _com = Com::new()?;
     let entries = entries()?;
     let states: Vec<_> = entries.iter().map(|e| Connection { guid: String::new(), index: e.state.index, name: e.state.name.clone(), role: e.state.role }).collect();
@@ -112,6 +107,9 @@ pub fn set(public: u32, private: u32, on: bool) -> Result<(), String> {
             q.config.DisableSharing().map_err(|e| fail(q, e))?;
             return p.config.DisableSharing().map_err(|e| fail(p, e));
         }
+        if let Some(ip) = scope {
+            set_scope(ip)?;
+        }
         if p.state.role.is_none() {
             p.config.EnableSharing(ICSSHARINGTYPE_PUBLIC).map_err(|e| fail(p, e))?;
         }
@@ -119,6 +117,20 @@ pub fn set(public: u32, private: u32, on: bool) -> Result<(), String> {
             let _ = p.config.DisableSharing();
             return Err(fail(q, e));
         }
+    }
+    Ok(())
+}
+
+/// The private side's address (/24) Windows hands out from. ICS reads it when sharing starts, so it goes
+/// in before EnableSharing; the value stays for the next share, which is how Windows' own UI keeps it.
+fn set_scope(ip: &str) -> Result<(), String> {
+    use windows_sys::Win32::System::Registry::{HKEY_LOCAL_MACHINE, REG_SZ, RegSetKeyValueW};
+    let key = windows::core::HSTRING::from(r"SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters");
+    let data: Vec<u16> = ip.encode_utf16().chain([0]).collect();
+    for name in ["ScopeAddress", "ScopeAddressBackup"] {
+        let name = windows::core::HSTRING::from(name);
+        let code = unsafe { RegSetKeyValueW(HKEY_LOCAL_MACHINE, key.as_ptr(), name.as_ptr(), REG_SZ, data.as_ptr().cast(), (data.len() * 2) as u32) };
+        if code != 0 { return Err(format!("Could not set the sharing address (error {code})")); }
     }
     Ok(())
 }

@@ -40,7 +40,7 @@ pub enum Request {
     /// macOS only: emptying the DNS cache needs root there (Windows does it in-process).
     FlushDns,
     /// Windows only: Internet Connection Sharing from `public` (has the internet) to `private`.
-    Share { public: u32, private: u32, on: bool },
+    Share { public: u32, private: u32, on: bool, #[serde(default)] scope: Option<Ipv4Addr> },
 }
 
 fn ipv4(v: &str, what: &str) -> Result<Ipv4Addr, String> {
@@ -113,7 +113,15 @@ pub fn commands(r: &Request) -> Result<Vec<Vec<String>>, String> {
         Request::FlushDns if cfg!(target_os = "macos") => return Ok(vec![cmd(&["dscacheutil", "-flushcache"]), cmd(&["killall", "-HUP", "mDNSResponder"])]),
         Request::FlushDns => return Ok(vec![]),
         #[cfg(windows)]
-        Request::Share { public, private, on } => return Ok(vec![cmd(&[SHARE, &public.to_string(), &private.to_string(), if *on { "on" } else { "off" }])]),
+        Request::Share { public, private, on, scope } => {
+            let mut c = vec![SHARE.to_string(), public.to_string(), private.to_string(), (if *on { "on" } else { "off" }).into()];
+            if let Some(ip) = scope.filter(|_| *on) {
+                let o = ip.octets();
+                if !ip.is_private() || o[3] == 0 || o[3] == 255 { return Err(format!("{ip} is not a private host address for sharing")); }
+                c.push(ip.to_string());
+            }
+            return Ok(vec![c]);
+        }
         #[cfg(not(windows))]
         Request::Share { .. } => return Err("Internet Sharing is Windows only".into()),
     };
@@ -453,7 +461,7 @@ fn run(cmds: Vec<Vec<String>>) -> Result<(), String> {
                 GW => crate::win::gateway(index, &c[3], c.get(4).map(|m| m.parse().map_err(|_| "Bad metric")).transpose()?)?,
                 ENABLE => crate::win::enable(index, c[2] == "on")?,
                 METRIC => crate::win::set_metric(index, if c[2] == "auto" { None } else { Some(c[2].parse().map_err(|_| "Bad metric")?) })?,
-                SHARE => crate::ics::set(index, c[2].parse().map_err(|_| "Bad interface index")?, c[3] == "on")?,
+                SHARE => crate::ics::set(index, c[2].parse().map_err(|_| "Bad interface index")?, c[3] == "on", c.get(4).map(String::as_str))?,
                 _ => unreachable!(),
             }
             continue;
@@ -508,6 +516,17 @@ mod tests {
     fn enable_uses_native_index_even_after_rename() {
         let commands = commands(&Request::Enable { index: 12, name: "renamed adapter".into(), on: false }).unwrap();
         assert_eq!(commands, [cmd(&[ENABLE, "12", "off"])]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn share_request_from_the_ui() {
+        let r: Request = serde_json::from_str(r#"{"op":"share","public":18,"private":11,"on":true}"#).unwrap();
+        assert_eq!(commands(&r).unwrap(), [cmd(&[SHARE, "18", "11", "on"])]);
+        let r: Request = serde_json::from_str(r#"{"op":"share","public":18,"private":11,"on":true,"scope":"10.9.8.1"}"#).unwrap();
+        assert_eq!(commands(&r).unwrap(), [cmd(&[SHARE, "18", "11", "on", "10.9.8.1"])]);
+        let r: Request = serde_json::from_str(r#"{"op":"share","public":18,"private":11,"on":true,"scope":"8.8.8.8"}"#).unwrap();
+        assert!(commands(&r).is_err(), "public address");
     }
 
     fn apply(cfg: Cfg, ip: bool, dns: bool) -> Request {

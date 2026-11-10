@@ -238,16 +238,72 @@ button, input, select { font: inherit; color: inherit; }
 .arow .to i { grid-area: 1 / 1; transition: opacity 140ms, transform 180ms var(--ease-out); }
 .arow .to .ph-x { opacity: 0; transform: rotate(-90deg) scale(0.6); }
 /* Added lines (not the first, not the empty one at the end) can be removed from here. */
-.arow:not(:first-child):not(.ph):hover .to { cursor: pointer; }
-.arow:not(:first-child):not(.ph):hover .to .ph-arrow-right { opacity: 0; transform: scale(0.6); }
-.arow:not(:first-child):not(.ph):hover .to .ph-x { opacity: 1; transform: none; }
-.arow:not(:first-child):not(.ph) .to:hover { background: var(--hover); color: var(--bad); }
+.arow:not(:first-child):not(.ph):not(.locked):hover .to { cursor: pointer; }
+.arow:not(:first-child):not(.ph):not(.locked):hover .to .ph-arrow-right { opacity: 0; transform: scale(0.6); }
+.arow:not(:first-child):not(.ph):not(.locked):hover .to .ph-x { opacity: 1; transform: none; }
+.arow:not(:first-child):not(.ph):not(.locked) .to:hover { background: var(--hover); color: var(--bad); }
 /* Changed-marks belong to IP & DNS; here the lines themselves are the change. */
 #adv-list .ip.changed .diff { display: none; }
 .arow.ph .ip, .arow.ph .prefix { border-style: dashed; }
 .arow.ph .ip:focus-within, .arow.ph .prefix:focus { border-style: solid; }
 .arow .ip.shared input { color: var(--faint); }
 .page[hidden] { display: none; }
+/* Advanced, last: Internet Sharing from another adapter to this one */
+/* ---------- Share (Windows Internet Sharing) ---------- */
+.share { --ok-soft: color-mix(in oklch, var(--ok) 22%, transparent); --ok-line: color-mix(in oklch, var(--ok) 32%, transparent); flex-direction: column; }
+.share:not([hidden]) { display: flex; }
+/* the link: source left, this adapter right, the wire between; on, it draws in and packets ride it */
+.sh-link { padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); margin-bottom: var(--s2); }
+.sh-ends { display: flex; align-items: center; }
+.sh-end { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sh-end.dst { flex-direction: row-reverse; text-align: right; } .sh-end.dst b { justify-content: flex-end; }
+.sh-end b { display: flex; font-weight: 600; white-space: nowrap; } .sh-end small { display: block; color: var(--faint); font-size: 12px; white-space: nowrap; }
+.sh-tile { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; font-size: 18px; background: var(--hover); color: var(--muted); flex-shrink: 0; transition: background 300ms, color 300ms; }
+.sh-link.on .sh-tile { background: var(--ok-soft); color: var(--ok); } .sh-link.on .dst .sh-tile { transition-delay: 450ms; }
+.sh-wire { position: relative; flex: 1; min-width: 24px; height: 2px; margin: 0 14px; border-radius: 1px; overflow: hidden; background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 7px); }
+.sh-wire .fill { position: absolute; inset: 0; background: var(--ok-line); transform: scaleX(0); transform-origin: left; transition: transform 500ms cubic-bezier(0.65, 0, 0.35, 1); }
+.sh-wire .flow { position: absolute; inset: -1px 0; opacity: 0; transition: opacity 200ms 500ms; background: radial-gradient(circle, var(--ok) 0 1.8px, transparent 2.4px) 0 50% / 16px 4px repeat-x; }
+.sh-link.on .sh-wire .fill { transform: none; } .sh-link.on .sh-wire .flow { opacity: 1; animation: sh-ride 800ms linear infinite; }
+@keyframes sh-ride { to { background-position: 16px 50%; } }
+/* under the card: the source picker (one box whose frame grows down into the list) and the address */
+.sh-under { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin-bottom: var(--s2); }
+.sh-selw { position: relative; height: var(--row-h); }
+.sh-selbox { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; flex-direction: column; border: 1px solid var(--border-strong); border-radius: var(--r-input); background: var(--surface); transition: border-color 160ms; }   /* the same field colour as the address beside it */
+.sh-selbtn { display: flex; align-items: center; gap: 8px; height: calc(var(--row-h) - 2px); padding: 0 10px; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.sh-selbtn .sh-src-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-selbtn .ph-caret-down { font-size: 11px; color: var(--faint); transition: transform 320ms cubic-bezier(0.65, 0, 0.35, 1); } .sh-selbox.open .ph-caret-down { transform: rotate(180deg); }
+.sh-list { min-height: 0; display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 320ms cubic-bezier(0.65, 0, 0.35, 1), opacity 200ms; }
+.sh-selbox.open .sh-list { grid-template-rows: 1fr; opacity: 1; }
+.sh-menu { min-height: 0; overflow: hidden; padding: 0 4px; border-top: 1px solid transparent; transition: border-color 320ms; } .sh-selbox.open .sh-menu { border-top-color: var(--border); }
+.sh-menu button { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 6px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }   /* 4 + 6 = the button's 10: rows line up with it */
+.sh-menu button:first-child { margin-top: 4px; } .sh-menu button:last-child { margin-bottom: 4px; }
+.sh-menu button:hover, .sh-menu button:focus-visible { background: var(--hover); outline: none; } .sh-menu small { margin-left: auto; color: var(--faint); font-size: 12px; }
+.sh-selbox.one .sh-selbtn { cursor: default; } .sh-selbox.one .ph-caret-down { visibility: hidden; }   /* one source: nothing to pick */
+.sh-selbox.ro { border-color: var(--border); } .sh-selbox.ro .sh-selbtn { color: var(--muted); cursor: default; } .sh-selbox.ro .ph-caret-down { visibility: hidden; }
+.sh-ip { display: flex; align-items: center; gap: 4px; min-width: 0; } .sh-ip > span:first-child { flex: 1; min-width: 0; display: flex; } .sh-ip .ip.short { flex: none; width: var(--octets-w); }   /* the same octet width as IP & DNS, so no digit is cut */ .sh-ip .ip span.sep { width: 10px; }
+.sh-ip .slash { width: 10px; text-align: center; color: var(--faint); } .sh-ip .prefix { width: 34px; }
+/* devices: the empty box until someone turns up */
+.sh-devs { flex: 1; min-height: 0; display: grid; margin-top: calc(var(--group-gap) - var(--s2)); }   /* a group of its own: 24 px above, as below */
+.sh-devs > * { grid-area: 1 / 1; transition: opacity 240ms; }
+.sh-devs.has .sh-empty, .sh-devs:not(.has) .sh-devlist { opacity: 0; pointer-events: none; }
+.sh-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--faint); font-size: 12px; border: 1px dashed var(--border); border-radius: 10px; text-align: center; padding: 0 var(--s4); }
+.sh-empty i { font-size: 22px; }
+.sh-devlist { overflow: hidden auto; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
+/* a row lines its tile up with the card's (12 px in + its border); opened, the row and its actions become one card */
+.sh-item { border: 1px solid transparent; border-radius: 10px; transition: background-color 180ms, border-color 180ms; }
+.sh-item:hover, .sh-item:focus-within { background: var(--hover); }
+.sh-dev { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; font-variant-numeric: tabular-nums; cursor: pointer; animation: sh-pop 320ms cubic-bezier(0.33, 1, 0.68, 1) backwards; }
+.sh-dev .sh-tile { width: 28px; height: 28px; font-size: 15px; border-radius: 7px; }
+.sh-dev b { font-weight: 600; } .sh-dev .mac { font: 11px ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--faint); } .sh-dev .mk { margin-left: auto; color: var(--muted); font-size: 12px; text-align: right; }
+.sh-dev.noip b { color: var(--muted); font-weight: 400; }
+.sh-dev { position: relative; cursor: default; }
+.sh-tools .icon-btn { width: 30px; height: 30px; } .sh-tools .icon-btn:hover, .sh-tools .icon-btn:focus-visible { background: var(--select); }   /* the row is already hover-grey */
+.sh-tools { position: absolute; right: 8px; display: flex; gap: 2px; opacity: 0; pointer-events: none; transition: opacity 150ms; }
+.sh-item:hover .sh-tools, .sh-item:focus-within .sh-tools { opacity: 1; pointer-events: auto; }
+.sh-item:hover .mk, .sh-item:focus-within .mk { opacity: 0; } .sh-dev .mk { transition: opacity 150ms; }
+@keyframes sh-pop { from { opacity: 0; transform: translateY(6px); } }
+#share-go { min-width: 104px; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .sh-link.on .sh-wire .flow, .sh-dev { animation: none; } .sh-wire .fill, .sh-list, .sh-selbtn .ph-caret-down, .sh-tools, .sh-dev .mk { transition: none; } }
 .mac [data-win] { display: none !important; }
 .page.leaving { pointer-events: none; }
 .page.soon { display: grid; place-content: center; justify-items: center; gap: var(--s2); min-height: 280px; color: var(--muted); font-size: 13px; }
@@ -996,6 +1052,7 @@ html.app, html.app body { overflow: hidden; }
           <span id="ptab-pill" aria-hidden="true"></span>
           <button class="ptab" role="tab" data-page="ip" aria-selected="true" aria-controls="page-ip" title="Ctrl+1"><span data-t="tabIp">IP &amp; DNS</span><span class="diff" aria-hidden="true"></span></button>
           <button class="ptab" role="tab" data-page="adv" aria-selected="false" aria-controls="page-adv" tabindex="-1" title="Ctrl+2"><span data-t="tabAdv">Advanced</span></button>
+          <button class="ptab" role="tab" data-page="share" data-win aria-selected="false" aria-controls="page-share" tabindex="-1"><span data-t="tabShare">Share</span></button>
           <button class="ptab" role="tab" data-page="probe" aria-selected="false" aria-controls="page-probe" tabindex="-1" title="Ctrl+3"><span data-t="tabProbe">Ping</span></button>
           <button class="ptab" role="tab" data-page="scan" aria-selected="false" aria-controls="page-scan" tabindex="-1" title="Ctrl+4"><span data-t="tabScan">Scan</span></button>
           <button class="ptab" role="tab" data-page="info" aria-selected="false" aria-controls="page-info" tabindex="-1" title="Ctrl+5"><span data-t="tabInfo">Info</span></button>
@@ -1043,6 +1100,18 @@ html.app, html.app body { overflow: hidden; }
           <div class="ahead" aria-hidden="true"><span class="host">IP address</span><span class="slash"></span><span class="cidr">CIDR</span><span class="to"></span><span class="host">Gateway</span></div>
           <div class="alist" id="adv-list" role="list" aria-label="Addresses"></div>
         </div>
+        <div class="page share" id="page-share" data-page="share" role="tabpanel" data-win hidden>
+          <div class="sh-link" id="sh-link"><div class="sh-ends">
+            <div class="sh-end"><div class="sh-tile"><i class="ph sh-src-ic"></i></div><div><b class="sh-src-name"></b><small class="sh-src-sub"></small></div></div>
+            <span class="sh-wire"><span class="fill"></span><span class="flow"></span></span>
+            <div class="sh-end dst"><div class="sh-tile"><i class="ph ph-plugs" id="sh-dst-ic"></i></div><div><b id="sh-dst-name"></b><small id="sh-dst-sub"></small></div></div>
+          </div></div>
+          <div class="sh-under">
+            <div class="sh-selw"><div class="sh-selbox" id="sh-pick"><button class="sh-selbtn" id="sh-from" aria-haspopup="menu" aria-expanded="false"><i class="ph sh-src-ic"></i><span class="sh-src-name"></span><i class="ph ph-caret-down"></i></button><div class="sh-list"><div class="sh-menu" id="sh-menu" role="menu"></div></div></div></div>
+            <div class="sh-ip"><span id="sh-iphost"></span><span class="slash">/</span><input class="prefix" value="24" disabled aria-label="Prefix length"></div>
+          </div>
+          <div class="sh-devs" id="sh-devs"><div class="sh-empty" id="sh-empty"><i class="ph ph-plugs"></i><span id="sh-empty-text"></span></div><div class="sh-devlist" id="sh-devlist" role="list"></div></div>
+        </div>
         <div class="page" id="page-probe" data-page="probe" role="tabpanel" hidden>
           <div class="pchips" id="probe-list" role="tablist" aria-label="Targets"><span class="thumb" id="probe-thumb"></span></div>
           <div class="pgraph" id="probe-graph" role="img" aria-label="Round trips in ms, last 60 seconds"><svg id="probe-svg" preserveAspectRatio="none"></svg><svg id="probe-run" preserveAspectRatio="none"></svg><div class="ptip" id="probe-tip"></div></div>
@@ -1063,6 +1132,7 @@ html.app, html.app body { overflow: hidden; }
       <div class="actions">
         <span class="status" id="status" role="status"></span>
         <span class="sfoot" id="scan-foot" hidden></span>
+        <span class="ifoot" id="share-foot" hidden><span class="ifoot-say" id="share-say"></span><button class="btn primary" id="share-go"></button></span>
         <span class="ifoot" id="info-foot" hidden><span class="ifoot-say" id="info-say"></span><button class="btn" id="info-copy"><i class="ph ph-copy"></i><span></span></button></span>
         <span class="pfoot" id="probe-foot" hidden><span><i class="ph ph-chart-line"></i><span data-t="pAvg">Avg</span><b id="ps-avg">-</b><i class="u">ms</i></span><span><i class="ph ph-arrow-line-up"></i><span data-t="pMax">Max</span><b id="ps-max">-</b><i class="u">ms</i></span><span><i class="ph ph-wave-sine"></i><span data-t="pJit">Jitter</span><b id="ps-jit">-</b><i class="u">ms</i></span><span><i class="ph ph-link-break"></i><span data-t="pLoss">Loss</span><b id="ps-loss">-</b></span></span>
         <button class="btn" id="revert" disabled><i class="ph ph-arrow-counter-clockwise"></i><span data-t="revert">Revert</span></button>
@@ -1326,9 +1396,16 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   }
   if (cmd === "tcping") return res(a.port === 9 ? null : a.port === 23 ? { closed: 2 } : { open: /^(10|192\.168)\./.test(a.address) ? 2 + Math.floor(Math.random() ** 3 * 6) : 16 + Math.floor(Math.random() ** 2 * 9) });
   if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" || demo.proxyArp && a.address !== adapters[sel].cfg.gateway ? null : { ms: /^(10|192\.168)\./.test(a.address) ? 1 + Math.floor(Math.random() ** 3 * 5) : 14 + Math.floor(Math.random() ** 2 * 8), ttl: /^(10|192\.168)\./.test(a.address) ? 64 : 117 });
+  // Sharing: the RB5009 asks for an address and turns up in the shared range; a phone joins a little later.
+  if (cmd === "neighbours") { const b = (sharing()?.scope || "192.168.137.1").split(".").slice(0, 3).join("."), t = (Date.now() - (sharing()?.at || 0)) / 1000;
+    return res([t > 2 && [b + ".23", "D0-EA-11-5E-FD-33"], t > 8 && [b + ".88", "3C-22-FB-10-0A-91"]].filter(Boolean)); }
+  // MNDP: the router announces itself as soon as the cable is in, before it has an address on this side.
+  if (cmd === "mndp") return res(adapters[sel]?.state === "up" ? [{ mac: "D0-EA-11-5E-FD-33", identity: "MikroTik", version: "7.16.2 (stable)", board: "RB5009UG+S+", address: "" }] : []);
   if (cmd === "change") {
     if (demo.outcome === "cancel") return rej("Cancelled");
     if (demo.outcome === "fail") return rej("The object already exists.");
+    const r = a.request, x = r.op === "share" && r.on && adapters[sel];   // demo adapters carry no index
+    if (x) x.cfg.address = r.scope;   // like Windows: sharing pins the adapter to its address
     return res();
   }
   rej(`demo: ${cmd}`);
@@ -1366,7 +1443,7 @@ const T = {
     report: "Report a problem", sysInfo: "System", copy: "Copy", tagline: "IPv4 and DNS settings, in seconds.",
     license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
-    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabProbe: "Ping", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
+    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabShare: "Share", tabProbe: "Ping", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
     soonAdv: "Extra addresses, gateways and metric", soonProbe: "Ping with a live graph", soonScan: "Free addresses on this subnet", soonInfo: "A summary to copy and send",
     kPages: "Go to a page", addIp: "Add address", addGw: "Add gateway", byDhcp: "Set by DHCP.", toManual: "Switch to Manual",
     metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateways",
@@ -1384,7 +1461,7 @@ const T = {
     report: "แจ้งปัญหา", sysInfo: "ระบบ", copy: "คัดลอก", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
     license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
-    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabProbe: "Ping", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
+    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabShare: "แชร์เน็ต", tabProbe: "Ping", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
     soonAdv: "หลาย IP, หลาย Gateway และ Metric", soonProbe: "Ping พร้อมกราฟสด", soonScan: "IP ที่ยังว่างใน subnet นี้", soonInfo: "สรุปข้อมูลไว้คัดลอกส่งต่อ",
     kPages: "ไปที่หน้า", addIp: "เพิ่ม IP", addGw: "เพิ่ม Gateway", byDhcp: "ได้จาก DHCP", toManual: "เปลี่ยนเป็นกำหนดเอง",
     metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateway",
@@ -1842,6 +1919,7 @@ function countMac(el, mac) {
 function renderAdapterFacts() {
   const a = adapters[sel];
   if (!a) return;
+  if (page === "share") renderShare();
   retext($("a-name"), a.name); $("a-name").title = a.name;
   const ssid = a.state === "up" && a.ssid ? `(${a.ssid})` : "";
   retext($("a-ssid"), ssid);
@@ -2213,6 +2291,242 @@ tools.onclick = async e => {
   if (act === "ncpa" && tauri) { invoke("open_ncpa").catch(e => say(String(e), "bad")); return; }
   if (["release", "renew", "cycle"].includes(act) && leasable(a)) { leaseAction(act); return; }
   say(act === "ncpa" ? "Opens ncpa.cpl (demo)" : noLease(a));
+};
+
+// ---------- Share (Windows Internet Sharing) ----------
+// The adapter with the internet shares it to this one, so a device on its cable (a router fresh from reset,
+// say) gets an address and the internet. Windows gives this adapter the address picked here; what it had
+// before is kept and put back on Stop.
+const sharing = () => { try { return JSON.parse(pref("octet-share")); } catch { return null; } };
+const shareSources = a => adapters.filter(x => x !== a && x.state === "up" && x.cfg.gateway);
+const srcSub = x => x.ssid || x.cfg.address;
+let shFrom, shScope = pref("octet-share-ip") || "192.168.1.1", shDevs = [], shMndp = [], shKey = "";
+const privateIp = v => /^(10\.\d+|172\.(1[6-9]|2\d|3[01])|192\.168)\.\d+\.\d+$/.test(v) && !/\.(0|255)$/.test(v);
+const shIp = ipField($("sh-iphost"), "shareip", true, false, v => { shScope = v; renderShare(); });
+"192.168.1.1".split(".").forEach((p, i) => shIp.inputs[i].placeholder = p);
+
+// Text rolls as a whole line (kerning stays) while its width glides, so the wire beside it stretches instead of jumping.
+function textWidth(e, t) {
+  const m = document.createElement("span"); m.style.cssText = "position:absolute;visibility:hidden;white-space:pre"; m.textContent = t;
+  e.append(m); const w = m.getBoundingClientRect().width; m.remove(); return w;
+}
+function shRoll(e, next) {
+  if (e._to === next) return;   // already rolling there (a second render mid-roll would read the half-done text)
+  const from = e._to ?? e.textContent, token = (e._roll = (e._roll || 0) + 1);
+  e._to = next;
+  const done = () => { if (e._roll === token) { e.textContent = next; e.style.width = e.style.marginLeft = ""; if (e.style.display === "flow-root") e.style.display = ""; delete e._to; } };
+  if (calm.matches || from === next || !from) return done();
+  const w0 = textWidth(e, from), w1 = textWidth(e, next), dur = 420;
+  const box = document.createElement("span"), inn = document.createElement("span"), out = document.createElement("span");
+  const right = getComputedStyle(e).justifyContent === "flex-end" || getComputedStyle(e).textAlign === "right";
+  box.style.cssText = `display:block;text-align:${right ? "right" : "left"};position:relative;overflow:hidden;width:${Math.max(w0, w1)}px;flex:none;${right ? "float:right" : ""}`;   /* a right float overflows to the left, like flex-end does */
+  if (right && getComputedStyle(e).display === "block") e.style.display = "flow-root";   // holds the float's height   /* no auto margin: flex-end then overflows to the left, keeping the right edge still */
+  inn.style.cssText = "display:inline-block;white-space:pre"; out.style.cssText = `position:absolute;${right ? "right" : "left"}:0;top:0;white-space:pre`;
+  inn.textContent = next; out.textContent = from; box.append(inn, out); e.replaceChildren(box);
+  out.animate([{ transform: "none", opacity: 1 }, { transform: "translateY(-0.8em)", opacity: 0 }], { duration: dur * 0.7, easing: "ease-in", fill: "forwards" });
+  inn.animate([{ transform: "translateY(0.8em)", opacity: 0, clipPath: "inset(0 100% 0 0)" }, { transform: "none", opacity: 1, clipPath: "inset(0 0 0 0)" }], { duration: dur, delay: 60, easing: "cubic-bezier(0.33, 1, 0.68, 1)", fill: "backwards" });
+  e.style.width = w1 + "px"; if (right) e.style.marginLeft = "auto";   // a sized block sits left; on the right end it must stay right
+  e.animate([{ width: w0 + "px" }, { width: w1 + "px" }], { duration: dur + 60, easing: "cubic-bezier(0.65, 0, 0.35, 1)" });
+  setTimeout(done, dur + 120);   // a timer, not .finished: background windows pause animations
+}
+// Icons share no paths to morph, so the old one turns and blurs away and the new one grows out of the same spot.
+function shMorph(e, cls) {
+  if ((e._to ?? e.className) === cls) return;
+  e._to = cls; setTimeout(() => { if (e._to === cls) delete e._to; }, 420);
+  if (calm.matches || !e.className.includes("ph-")) { e.className = cls; return; }
+  e.getAnimations().forEach(x => x.cancel());
+  e.animate([{ transform: "none", filter: "blur(0)", opacity: 1 }, { transform: "scale(0.8) rotate(-60deg)", filter: "blur(3px)", opacity: 0 }], { duration: 140, easing: "ease-in", fill: "forwards" });
+  setTimeout(() => {
+    e.className = cls; e.getAnimations().forEach(x => x.cancel());
+    e.animate([{ transform: "scale(0.8) rotate(60deg)", filter: "blur(3px)", opacity: 0 }, { transform: "none", filter: "blur(0)", opacity: 1 }], { duration: 260, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)", fill: "backwards" });
+  }, 140);
+}
+const shMenu = (open, keys = false) => {
+  $("sh-pick").classList.toggle("open", open); $("sh-from").setAttribute("aria-expanded", open);
+  if (open && keys) $("sh-menu").querySelector("button")?.focus({ preventScroll: true });
+};
+$("sh-from").onclick = e => { e.stopPropagation(); if ($("sh-pick").matches(".ro, .one")) return; shMenu(!$("sh-pick").classList.contains("open"), !e.detail); };
+document.addEventListener("click", () => shMenu(false));
+menuKeys($("sh-menu"), $("sh-from"), () => shMenu(false));
+// Picking: the card rolls to the new source; in the picker the picked row rides the folding edge up into the button.
+$("sh-menu").onclick = e => {
+  e.stopPropagation();
+  const row = e.target.closest("button"); if (!row) return;
+  const x = adapters.find(y => String(y.id) === row.dataset.id); if (!x) return;
+  shFrom = x.id; shKey = adapters[sel].id + "|" + x.id;
+  const btn = $("sh-from"), label = [btn.querySelector(".sh-src-ic"), btn.querySelector(".sh-src-name")];
+  const put = () => { label[0].className = "ph sh-src-ic " + kindIcon[kind(x)]; label[1].textContent = x.name; renderShare(); };
+  paintSource(x, true, true);
+  if (calm.matches) { shMenu(false); put(); return; }
+  const box = $("sh-pick"), pr = box.getBoundingClientRect(), rr = row.getBoundingClientRect(), br = btn.getBoundingClientRect();
+  const ghost = row.cloneNode(true);
+  ghost.style.cssText = `position:absolute;left:${rr.left - pr.left - 1}px;top:${rr.top - pr.top - 1}px;width:${rr.width}px;height:${rr.height}px;margin:0;pointer-events:none;background:none;display:flex;align-items:center;gap:8px;padding:0 6px;border:0;box-sizing:border-box;font:inherit;color:var(--ink)`;
+  ghost.querySelector("small").style.cssText = "margin-left:auto;color:var(--faint);font-size:12px";
+  box.append(ghost); row.style.visibility = "hidden";
+  const dy = (br.top + br.height / 2) - (rr.top + rr.height / 2), ease = "cubic-bezier(0.65, 0, 0.35, 1)";
+  label.forEach(l => l.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: "forwards" }));
+  ghost.animate([{ transform: "none" }, { transform: `translateY(${dy}px)` }], { duration: 320, easing: ease, fill: "forwards" });
+  ghost.querySelector("small").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 190, fill: "forwards" });
+  shMenu(false);
+  setTimeout(() => { put(); label.forEach(l => l.getAnimations().forEach(an => an.cancel())); ghost.remove(); btn.focus({ preventScroll: true }); }, 320);
+};
+// The card's left end (and the picker): the source. `move` rolls it; otherwise it is just set.
+function paintSource(x, move, cardOnly = false) {
+  const name = x?.name ?? L("No internet", "ไม่มีเน็ต"), sub = x ? srcSub(x) ?? "" : L("to share", "ให้แชร์"), ic = "ph sh-src-ic " + (x?.cfg ? kindIcon[kind(x)] : "ph-globe-simple");
+  document.querySelectorAll(cardOnly ? ".sh-link .sh-src-name" : ".sh-src-name").forEach(e => { const t = !x && e.closest(".sh-selbtn") ? L("None", "ไม่มี") : name; move ? shRoll(e, t) : (e.textContent = t); });
+  document.querySelectorAll(".sh-link .sh-src-sub").forEach(e => move ? shRoll(e, sub) : (e.textContent = sub));
+  document.querySelectorAll(cardOnly ? ".sh-link .sh-src-ic" : ".sh-src-ic").forEach(e => move ? shMorph(e, ic) : (e.className = ic));
+}
+function renderShare() {
+  const a = adapters[sel]; if (!a) return;
+  const s = sharing(), mine = !!s && s.id === a.id, other = !!s && !mine, list = shareSources(a);
+  if (!mine && !list.some(x => x.id === shFrom)) shFrom = list[0]?.id;
+  const src = mine ? adapters.find(x => x.index === s.pub) ?? { name: s.from } : adapters.find(x => x.id === shFrom);
+  // another adapter or a source that changed elsewhere is a fresh paint, not a pick: no roll
+  // A new adapter or source rolls both ends of the card, the same motion as picking a source.
+  const key = a.id + "|" + (src?.id ?? src?.name ?? ""), move = !!shKey && page === "share";
+  if (key !== shKey) { if (!shKey.startsWith(a.id + "|")) { shDevs = []; shMndp = []; } paintSource(src, move); shKey = key; }   // another adapter: its own devices only
+  // ponytail: Windows pins the shared adapter to the chosen address, so another address means sharing stopped
+  // (ICS turned off elsewhere, a reboot). Read INetSharingManager instead if this ever guesses wrong.
+  const gone = mine && a.state === "up" && !!a.cfg.address && a.cfg.address !== (s.scope || "192.168.137.1");
+  $("sh-link").classList.toggle("on", mine && !gone);
+  const dstIc = "ph " + kindIcon[kind(a)];
+  if (move) { shMorph($("sh-dst-ic"), dstIc); shRoll($("sh-dst-name"), a.name); } else { $("sh-dst-ic").className = dstIc; $("sh-dst-name").textContent = a.name; }
+  shRoll($("sh-dst-sub"), a.state === "up" ? L("Cable in", "เสียบสายแล้ว") : a.state === "disabled" ? L("Turned off", "ปิดอยู่") : L("No cable", "ไม่ได้เสียบสาย"));
+  $("sh-pick").classList.toggle("ro", mine || !list.length);
+  $("sh-pick").classList.toggle("one", !mine && list.length === 1);
+  if (!$("sh-pick").classList.contains("open")) {
+    const offer = mine ? [] : list.filter(x => x.id !== shFrom);
+    $("sh-menu").innerHTML = offer.map(x => `<button role="menuitemradio" aria-checked="false" data-id="${x.id}"><i class="ph ${kindIcon[kind(x)]}"></i><span></span><small></small></button>`).join("");
+    [...$("sh-menu").children].forEach((b, i) => { b.querySelector("span").textContent = offer[i].name; b.querySelector("small").textContent = srcSub(offer[i]); });
+  }
+  const ip = mine ? (s.scope || "192.168.137.1") : shScope;
+  if (shIp.inputs.map(x => x.value).join(".") !== ip || shIp.inputs[0].disabled !== mine) shIp.set(ip, !mine);
+  const bad = !mine && !!shScope && !privateIp(shScope);
+  shIp.box.classList.toggle("invalid", bad);
+  const go = $("share-go");
+  go.innerHTML = mine ? `<i class="ph ph-stop"></i><span>${L("Stop", "หยุดแชร์")}</span>` : `<i class="ph ph-share"></i><span>${L("Share", "แชร์")}</span>`;
+  go.className = mine ? "btn" : "btn primary";
+  go.disabled = busyNow || (!mine && (other || !src || bad || a.state === "disabled"));
+  shSay(a, s, mine, other, bad, gone);
+  shDevPaint(a, mine);
+}
+// Centred text: fade out, swap, fade in. One line at a time, so it never wraps mid-change.
+function shFade(e, t) {
+  if ((e._to ?? e.textContent) === t) return;
+  if (calm.matches || !e.textContent) { e.textContent = t; return; }
+  e._to = t; e.getAnimations().forEach(x => x.cancel());
+  e.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: "ease-in", fill: "forwards" });
+  setTimeout(() => { if (e._to !== t) return; e.textContent = t; delete e._to; e.getAnimations().forEach(x => x.cancel()); e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" }); }, 120);
+}
+function shSay(a, s, mine, other, bad, gone) {
+  if (gone) { const g = L("Windows stopped sharing · Stop puts your settings back", "Windows หยุดแชร์ไปแล้ว · กดหยุดเพื่อคืนค่าเดิม"); if ($("share-say").textContent !== g) $("share-say").textContent = g; return; }
+  const t = mine ? Math.max(0, Math.floor((Date.now() - (s.at || Date.now())) / 1000)) : 0;
+  const text = mine ? `<i class="ph ph-clock"></i> ${t >= 60 ? Math.floor(t / 60) + " " + L("min", "นาที") + " " : ""}${t % 60} ${L("s", "วิ")}`
+    : other ? L(`Already sharing to ${s.name}`, `กำลังแชร์ไปที่ ${s.name} อยู่`)
+    : bad ? L("Use a private address, e.g. 192.168.1.1", "ใช้ IP วงภายใน เช่น 192.168.1.1")
+    : `<i class="ph ph-shield-check"></i> ${L("Current settings come back on Stop", "กดหยุดแล้วค่าเดิมกลับมา")}`;
+  if ($("share-say").innerHTML !== text) $("share-say").innerHTML = text;
+}
+// Devices: the neighbour table while sharing, plus any MikroTik heard through MNDP. That one shows up even
+// before it has an address, which tells you its DHCP client sits on another port.
+const shCopy = t => navigator.clipboard.writeText(t).then(() => say(L(`Copied ${t}`, `คัดลอก ${t} แล้ว`), "ok"), () => say(L("Couldn't copy", "คัดลอกไม่ได้"), "bad"));
+// Ping: the device goes into the Ping tab's own line and is picked there.
+function shPing(ip) {
+  showPage("probe");
+  const own = probe.rows[2]; if (!own) return;
+  probe.own = ip; Object.assign(own, { target: ip, got: [], pts: [] });
+  own.f.set(ip, true); own.el.classList.remove("empty"); pickRow(own);
+}
+function shDevPaint(a, mine) {
+  const host = $("sh-devlist"), want = shDevs.map(d => d.mac + d.ip).join();
+  if (host.dataset.k !== want) {
+    const had = new Set([...host.children].map(r => r.dataset.mac));
+    host.replaceChildren(...shDevs.map(d => {
+      const item = document.createElement("div"); item.className = "sh-item"; item.dataset.mac = d.mac; item.setAttribute("role", "listitem");
+      const r = document.createElement("div"); r.className = "sh-dev" + (d.ip ? "" : " noip"); r.dataset.mac = d.mac;
+      if (had.has(d.mac)) r.style.animation = "none";
+      r.innerHTML = `<div class="sh-tile"><i class="ph ${d.board ? "ph-network" : "ph-desktop"}"></i></div><div><b></b><div class="mac"></div></div><span class="mk"></span>`;
+      r.querySelector("b").textContent = d.ip || L("No IP yet", "ยังไม่ได้ IP");
+      r.querySelector(".mac").textContent = d.mac;
+      r.querySelector(".mk").textContent = [d.board || d.maker, d.version && "v" + d.version.split(" ")[0]].filter(Boolean).join(" · ");
+      r.title = d.ip ? "" : L("On the cable but it hasn't asked for an address: turn on its DHCP client on this port", "เสียบอยู่แต่ยังไม่ขอ IP: เปิด DHCP client ที่พอร์ตนี้");
+      // Pointing at the row (or tabbing into it) swaps the maker for four icons; nothing grows.
+      const tools = document.createElement("span"); tools.className = "sh-tools";
+      const act = (icon, tip, go) => { const b = document.createElement("button"); b.className = "icon-btn"; b.innerHTML = `<i class="ph ${icon}"></i>`; b.dataset.tip = tip; b.setAttribute("aria-label", tip); b.onclick = e => { e.stopPropagation(); go(); }; tools.append(b); };
+      if (d.ip) act("ph-arrow-square-out", L("Open in browser", "เปิดในเบราว์เซอร์"), () => openDevice(d.ip, 80, false));
+      if (d.ip) act("ph-copy", L(`Copy ${d.ip}`, `คัดลอก ${d.ip}`), () => shCopy(d.ip));
+      act("ph-barcode", L("Copy MAC", "คัดลอก MAC"), () => shCopy(d.mac));
+      if (d.ip) act("ph-pulse", L("Ping it", "Ping เครื่องนี้"), () => shPing(d.ip));
+      r.append(tools);
+      item.append(r);
+      return item;
+    }));
+    host.dataset.k = want;
+  }
+  $("sh-devs").classList.toggle("has", shDevs.length > 0);
+  shFade($("sh-empty-text"), a.state === "disabled" ? L("Turn this adapter on first", "เปิดอะแดปเตอร์นี้ก่อน") : a.state !== "up" ? L("Plug a cable into this adapter", "เสียบสายเข้ากับอะแดปเตอร์นี้")
+    : mine ? L("Waiting for a device…", "รออุปกรณ์…") : L("Devices show up here once sharing starts", "อุปกรณ์จะขึ้นที่นี่เมื่อเริ่มแชร์"));
+}
+// While the tab is open: neighbours every 3 s (sharing only), MNDP every 9 s, and while sharing a quiet ARP sweep
+// of the /24 every 30 s (a device that never talks still answers ARP).
+// ponytail: watches the selected adapter only; a background watcher if sharing should report from other tabs.
+let shTick = 0, shBusy = false;
+async function shareLook() {
+  const a = adapters[sel], s = sharing(), mine = !!s && s.id === a?.id;
+  if (!a || page !== "share" || shBusy) return;
+  shBusy = true;
+  try {
+    const own = a.cfg.address || "";
+    const n = mine && a.state === "up" ? await net("neighbours", { index: a.index }).catch(() => []) : [];
+    const found = n.filter(([ip]) => ip !== own).map(([ip, mac]) => ({ ip, mac }));
+    if (a.state !== "up") shMndp = [];
+    else if (own && shTick % 3 === 0) shMndp = await net("mndp", { address: own }).catch(() => shMndp);
+    const net24 = ip => ip.split(".").slice(0, 3).join(".");
+    for (const m of shMndp) {
+      const f = found.find(d => d.mac === m.mac);
+      if (f) Object.assign(f, { board: m.board, version: m.version });
+      else found.push({ ip: m.address && own && net24(m.address) === net24(own) ? m.address : "", mac: m.mac, board: m.board, version: m.version });
+    }
+    for (const d of found) if (!d.board) d.maker = shDevs.find(o => o.mac === d.mac)?.maker ?? await maker(d.mac);
+    if (mine && a.state === "up" && shTick % 10 === 0) shSweep(a);
+    shTick++;
+    if (adapters[sel] === a && page === "share") { shDevs = found; shDevPaint(a, mine); }
+  } finally { shBusy = false; }
+}
+function shSweep(a) {
+  const base = a.cfg.address.split(".").slice(0, 3).join(".");
+  const ips = Array.from({ length: 254 }, (_, i) => `${base}.${i + 1}`).filter(ip => ip !== a.cfg.address);
+  let at = 0;
+  const lane = async () => { while (at < ips.length && page === "share") await scanAsk(ips[at++], a); };
+  Promise.all(Array.from({ length: 16 }, lane));
+}
+setInterval(shareLook, 3000);
+setInterval(() => { const a = adapters[sel], s = sharing(); if (a && s && s.id === a.id && page === "share") shSay(a, s, true, false, false, !$("sh-link").classList.contains("on")); }, 1000);
+$("share-go").onclick = async () => {
+  const a = adapters[sel], s = sharing();
+  say(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true); $("share-go").disabled = true;
+  try {
+    if (s) {
+      if ($("sh-link").classList.contains("on")) await change({ op: "share", public: s.pub, private: a.index, on: false });   // already off: just restore
+      try { localStorage.removeItem("octet-share"); } catch {}
+      await change({ op: "apply", index: a.index, name: a.name, cfg: s.cfg, ip: true, dns: true, extra: true, wasExtra: [], wasGws: [], wasMetric: cfgOf(a).metric });
+    } else {
+      const src = adapters.find(x => x.id === shFrom), scope = shScope || "192.168.1.1";
+      keep("octet-share-ip", scope);
+      // first: a half-done share can still be stopped
+      keep("octet-share", JSON.stringify({ id: a.id, index: a.index, name: a.name, pub: src.index, from: src.name, cfg: cfgOf(a), scope, at: Date.now() }));
+      try { await change({ op: "share", public: src.index, private: a.index, on: true, scope }); }
+      catch (e) { try { localStorage.removeItem("octet-share"); } catch {} throw e; }
+    }
+    shDevs = []; shMndp = [];
+    if (tauri) await reload();
+    lock(false); renderAdapter(true); renderList(); renderShare();
+    say(s ? L("Sharing stopped · settings put back", "หยุดแชร์แล้ว · คืนค่าเดิมแล้ว") : L("Sharing on", "เริ่มแชร์แล้ว"), "ok");
+  } catch (e) {
+    if (tauri) await reload().catch(() => {});
+    lock(false); renderAdapter(true); renderShare(); say(String(e), "bad");
+  }
 };
 
 // A dial-up link (PPPoE) has no DHCP at all, so no buttons. Anywhere else a server may be missing
@@ -2696,6 +3010,7 @@ function showPage(next) {
   for (const b of ptabs) { const on = b.dataset.page === page; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; }
   placePill(true);
   if (next === "adv") renderAdv();
+  if (next === "share") { renderShare(); shareLook(); }
   probeShow(next === "probe");
   scanShow(next === "scan");
   infoShow(next === "info");
@@ -2718,7 +3033,7 @@ function showPage(next) {
 // The bar holds one page's footer at a time. Switching, the old one sinks away (as the old page leaves),
 // then the new one rises; they never share the row, so nothing gets pushed aside mid-swap.
 let footNow = $("status"), footRun = 0;
-const footOf = p => $({ probe: "probe-foot", scan: "scan-foot", info: "info-foot" }[p] || "status");
+const footOf = p => $({ probe: "probe-foot", scan: "scan-foot", info: "info-foot", share: "share-foot" }[p] || "status");
 function footSwap(el, atSwap) {
   const old = footNow, run = ++footRun;
   footNow = el;
@@ -2810,7 +3125,7 @@ function advRow() {
   const to = document.createElement("button"); to.type = "button"; to.className = "to"; to.tabIndex = -1;
   to.innerHTML = `<i class="ph ph-arrow-right"></i><i class="ph ph-x"></i>`;
   to.setAttribute("aria-label", "Remove this address"); to.title = "Remove";
-  to.onclick = () => { const n = at(); if (n < 1 || row === adv.ph) return; putAddr(n, { ...addrAt(n), address: "" }); foldIfEmpty(row); };
+  to.onclick = () => { const n = at(); if (n < 1 || row === adv.ph || row.locked) return; putAddr(n, { ...addrAt(n), address: "" }); foldIfEmpty(row); };
   el.append(ipHost, sl, pre, to, gwHost);
   // The empty row turns real on the first keystroke.
   const real = () => { if (row === adv.ph) promote(row); return at(); };
@@ -2871,16 +3186,21 @@ function paintAdv(roll = false) {
   if (!ed) Object.assign(draft, { address: cur.address, subnet: cur.subnet, gateway: cur.gateway });
   $("adv-list").classList.toggle("dhcp", !ed);
   const c = draft, rs = routes(c), was = routes(cfgOf(adapters[sel])), bad = problems();
+  // While sharing here, the address Windows gave this adapter for it is Windows' to remove (Stop does), not yours.
+  const s = sharing(), icsOwn = s && s.id === adapters[sel].id ? [s.cfg.address, ...(s.cfg.extra || []).map(e => e.address)] : null;
   adv.rows.forEach((row, i) => {
     const r = rs[i]; if (!r) return;
+    row.locked = !!icsOwn && i > 0 && !!r.address && !icsOwn.includes(r.address);
+    row.el.classList.toggle("locked", row.locked);
+    row.el.title = row.locked ? L("Internet Sharing's address · Stop sharing to remove it", "IP ของการแชร์อินเทอร์เน็ต · กดหยุดแชร์เพื่อเอาออก") : "";
     const typing = row.el.contains(document.activeElement);
     if (!typing) {
       row.gi = r.shared ? -1 : r.gi;
-      row.ipf.set(r.address, ed || i > 0, roll);
+      row.ipf.set(r.address, (ed || i > 0) && !row.locked, roll);
       row.pre.value = prefixOf(r.subnet) >= 0 ? prefixOf(r.subnet) : "";
       row.gwf.set(r.gw, (ed || i > 0) && !r.shared, roll);
     }
-    row.pre.disabled = !ed && i === 0;
+    row.pre.disabled = !ed && i === 0 || row.locked;
     row.gwf.box.classList.toggle("shared", r.shared);
     row.gwf.box.title = r.shared ? L("Same gateway as the address above (same subnet)", "gateway เดียวกับ IP ข้างบน (subnet เดียวกัน)") : "";
     const o = was[i];
@@ -2896,6 +3216,7 @@ function renderAdv(roll = false) {
   while (adv.rows.length > n) rowOut(adv.rows.pop().el);
   if (!adv.ph) { adv.ph = newPh(); host.append(adv.ph.el); rowIn(adv.ph.el); }
   paintAdv(roll);
+  renderShare();
   advDrawn = true;
   if (window.pagesReady) advEdges();
 }

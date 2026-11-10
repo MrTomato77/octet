@@ -26,6 +26,29 @@ pub fn arp(ip: Ipv4Addr) -> Option<String> {
     (r == 0 && len >= 6).then(|| mac[..len as usize].iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
 }
 
+/// Devices this adapter has talked to lately (its neighbour table): for Internet Sharing, the one plugged in.
+/// Unicast only, IP and MAC.
+#[cfg(windows)]
+pub fn neighbours(index: u32) -> Vec<(Ipv4Addr, String)> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{FreeMibTable, GetIpNetTable2};
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, NlnsIncomplete, NlnsUnreachable};
+    let mut out = vec![];
+    unsafe {
+        let mut t = std::ptr::null_mut();
+        if GetIpNetTable2(AF_INET, &mut t) != 0 { return out; }
+        for r in std::slice::from_raw_parts((*t).Table.as_ptr(), (*t).NumEntries as usize) {
+            let ip = Ipv4Addr::from(r.Address.Ipv4.sin_addr.S_un.S_addr.to_ne_bytes());
+            let mac = &r.PhysicalAddress[..r.PhysicalAddressLength as usize];
+            if r.InterfaceIndex == index && r.State != NlnsIncomplete && r.State != NlnsUnreachable && mac.len() == 6 && mac[0] & 1 == 0
+                && !ip.is_multicast() && !ip.is_broadcast() && ip.octets()[3] != 255 {
+                out.push((ip, mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-")));
+            }
+        }
+        FreeMibTable(t.cast());
+    }
+    out
+}
+
 /// The name a device on the network goes by (reverse DNS, which on Windows
 /// also asks LLMNR and NetBIOS). None when nobody answers.
 #[cfg(windows)]
@@ -540,5 +563,71 @@ mod tests {
     #[test]
     fn loopback_has_a_name() {
         assert!(super::hostname(std::net::Ipv4Addr::LOCALHOST).is_some());
+    }
+}
+
+/// A MikroTik heard through MNDP (its neighbour discovery, UDP 5678). RouterOS sends it out of every port
+/// by default, with or without an IP address, so the router shows up the moment the cable goes in.
+#[derive(serde::Serialize, Debug, PartialEq, Default)]
+pub struct Mndp {
+    pub mac: String,
+    pub identity: String,
+    pub version: String,
+    pub board: String,
+    pub address: String,
+}
+
+/// Packet: 4 bytes of header, then type/length/value fields, big-endian u16s.
+pub fn mndp_parse(p: &[u8]) -> Option<Mndp> {
+    let mut m = Mndp::default();
+    let mut at = 4;
+    while at + 4 <= p.len() {
+        let (kind, len) = (u16::from_be_bytes([p[at], p[at + 1]]), u16::from_be_bytes([p[at + 2], p[at + 3]]) as usize);
+        let v = p.get(at + 4..at + 4 + len)?;
+        let text = || String::from_utf8_lossy(v).into_owned();
+        match kind {
+            1 if len == 6 => m.mac = v.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"),
+            5 => m.identity = text(),
+            7 => m.version = text(),
+            12 => m.board = text(),
+            17 if len == 4 => m.address = Ipv4Addr::new(v[0], v[1], v[2], v[3]).to_string(),
+            _ => {}
+        }
+        at += 4 + len;
+    }
+    (!m.mac.is_empty()).then_some(m)
+}
+
+/// Asks the shared adapter's cable who is there (an empty MNDP packet makes RouterOS answer at once)
+/// and listens for `wait_ms`. Bound to the adapter's own address, so the question goes out of that port only.
+/// ponytail: port 5678 is shared with Winbox; if Winbox holds it this returns the error and the UI just skips it.
+pub fn mndp(local: Ipv4Addr, wait_ms: u64) -> Result<Vec<Mndp>, String> {
+    use std::time::{Duration, Instant};
+    let s = std::net::UdpSocket::bind((local, 5678)).map_err(|e| format!("MNDP: {e}"))?;
+    s.set_broadcast(true).map_err(|e| e.to_string())?;
+    let _ = s.send_to(&[0, 0, 0, 0], (Ipv4Addr::BROADCAST, 5678));
+    let end = Instant::now() + Duration::from_millis(wait_ms);
+    let mut found: Vec<Mndp> = vec![];
+    let mut buf = [0u8; 1500];
+    while let Some(left) = end.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()) {
+        s.set_read_timeout(Some(left)).map_err(|e| e.to_string())?;
+        let Ok((n, _)) = s.recv_from(&mut buf) else { break };
+        if let Some(m) = mndp_parse(&buf[..n]) && !found.iter().any(|f| f.mac == m.mac) { found.push(m); }
+    }
+    Ok(found)
+}
+
+#[cfg(test)]
+mod mndp_tests {
+    #[test]
+    fn reads_a_routeros_announcement() {
+        let tlv = |k: u16, v: &[u8]| [&k.to_be_bytes()[..], &(v.len() as u16).to_be_bytes(), v].concat();
+        let p = [vec![0, 0, 0, 1], tlv(1, &[0xD0, 0xEA, 0x11, 0x5E, 0xFD, 0x33]), tlv(5, b"MikroTik"), tlv(7, b"7.16.2 (stable)"),
+            tlv(12, b"RB5009UG+S+"), tlv(10, &[1, 2, 3, 4]), tlv(17, &[192, 168, 88, 1])].concat();
+        let m = super::mndp_parse(&p).unwrap();
+        assert_eq!((m.mac.as_str(), m.identity.as_str(), m.version.as_str(), m.board.as_str(), m.address.as_str()),
+            ("D0-EA-11-5E-FD-33", "MikroTik", "7.16.2 (stable)", "RB5009UG+S+", "192.168.88.1"));
+        assert!(super::mndp_parse(&p[..p.len() - 2]).is_none(), "cut-off field");
+        assert!(super::mndp_parse(&[0, 0, 0, 0]).is_none(), "the empty question itself");
     }
 }
