@@ -48,8 +48,13 @@ A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simpl
 </td>
 </tr>
 <tr>
-<td colspan="2" align="center">
-<img src="assets/speed.png" width="440" alt="Speed test: the needle at 85 Mbps mid-download, with latency bars either side"><br>
+<td width="50%" valign="top" align="center">
+<img src="assets/share.png" alt="Share tab: Wi-Fi shared to Ethernet, with a MikroTik RB5009 that joined"><br>
+<b>Share</b> <sub>(Windows)</sub><br>
+<sub>Give a router or another PC this laptop's internet</sub><br><br>
+</td>
+<td width="50%" valign="top" align="center">
+<img src="assets/speed.png" alt="Speed test: the needle at 85 Mbps mid-download, with latency bars either side"><br>
 <b>Speed test</b><br>
 <sub>Download, upload and latency under load, out this adapter</sub><br><br>
 </td>
@@ -59,7 +64,7 @@ A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simpl
 - Follows the system: cable, Wi-Fi and address changes show up on their own.
 - Renew (and release, on Windows), flush DNS, enable / disable adapters, DNS presets, and a speed test.
 - Copy or paste a whole setup as one line: `192.168.1.50/24 gw 192.168.1.1 dns 1.1.1.1, 8.8.8.8`
-- Ctrl+1 to Ctrl+5 (⌘ on a Mac) switch tabs. English and ไทย.
+- Ctrl+1 to Ctrl+6 switch tabs (⌘1 to ⌘4 on a Mac, which has no Advanced or Share). English and ไทย.
 
 ## Good to know
 

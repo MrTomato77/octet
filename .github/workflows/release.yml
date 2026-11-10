@@ -1,5 +1,5 @@
-# Builds Octet.exe on GitHub's Windows runners for every v* tag and attaches it,
-# its SHA-256 and the third-party notices to a draft release; then Octet.dmg on macOS.
+# For every v* tag: a draft release (its notes are the tag's message: `git tag -a v1.2.3 -F notes.md`),
+# then Octet.exe on Windows and Octet.dmg on macOS, built side by side and attached to it.
 name: release
 on:
   push:
@@ -16,10 +16,21 @@ on:
 permissions:
   contents: write
 jobs:
+  # First, so both builds have a release to attach to and neither waits for the other.
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/checkout@v7
+      - if: startsWith(github.ref, 'refs/tags/')
+        run: git fetch -f origin "$GITHUB_REF:$GITHUB_REF" && gh release create "$GITHUB_REF_NAME" --draft --title "Octet ${GITHUB_REF_NAME#v}" --notes-from-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
   build:
+    needs: draft
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: rustup show            # installs the toolchain pinned in rust-toolchain.toml
       - run: python scripts/icons.py --check   # an icon left out of the cut font would show blank
       # Compiled dependencies kept between runs (keyed on Cargo.lock): the slow part of every release.
@@ -48,21 +59,20 @@ jobs:
           } finally { Remove-Item key.pem, Octet.exe.msg -ErrorAction SilentlyContinue }
           if ((Get-Item Octet.exe.sig).Length -ne 64) { throw "Signing failed" }
           if ((Get-Item Octet.exe.vsig).Length -ne 64) { throw "Signing failed" }
-          gh release create $env:GITHUB_REF_NAME --draft --title "Octet $($env:GITHUB_REF_NAME.TrimStart('v'))" `
-            --notes "SHA-256 of Octet.exe: ``$hash``" Octet.exe Octet.exe.sha256 Octet.exe.sig Octet.exe.vsig THIRD-PARTY-NOTICES.md
+          gh release upload $env:GITHUB_REF_NAME Octet.exe Octet.exe.sha256 Octet.exe.sig Octet.exe.vsig THIRD-PARTY-NOTICES.md
         env:
           GH_TOKEN: ${{ github.token }}
           OCTET_SIGNING_KEY: ${{ secrets.OCTET_SIGNING_KEY }}
-  # After the Windows job, so the draft release exists to add the Mac build to.
   mac:
-    needs: build
+    needs: draft
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: rustup show
-      - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - run: rustup target add aarch64-apple-darwin   # for the test below; bundle.sh adds both
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0   # v2.9.3, pinned: a third-party action in the job whose build gets signed
-      - run: cargo test --release -p octet
+      # For the Apple silicon target, so bundle.sh's build of it reuses these compiled dependencies.
+      - run: cargo test --release -p octet --target aarch64-apple-darwin
       # Universal Octet.app (Apple silicon and Intel), ad-hoc signed, in Octet.dmg.
       - run: crates/octet/macos/bundle.sh
       - if: startsWith(github.ref, 'refs/tags/')

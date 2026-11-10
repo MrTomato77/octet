@@ -1050,12 +1050,12 @@ html.app, html.app body { overflow: hidden; }
 
         <div class="ptabs" id="ptabs" role="tablist" aria-label="Adapter pages">
           <span id="ptab-pill" aria-hidden="true"></span>
-          <button class="ptab" role="tab" data-page="ip" aria-selected="true" aria-controls="page-ip" title="Ctrl+1"><span data-t="tabIp">IP &amp; DNS</span><span class="diff" aria-hidden="true"></span></button>
-          <button class="ptab" role="tab" data-page="adv" aria-selected="false" aria-controls="page-adv" tabindex="-1" title="Ctrl+2"><span data-t="tabAdv">Advanced</span></button>
+          <button class="ptab" role="tab" data-page="ip" aria-selected="true" aria-controls="page-ip"><span data-t="tabIp">IP &amp; DNS</span><span class="diff" aria-hidden="true"></span></button>
+          <button class="ptab" role="tab" data-page="adv" aria-selected="false" aria-controls="page-adv" tabindex="-1"><span data-t="tabAdv">Advanced</span></button>
           <button class="ptab" role="tab" data-page="share" data-win aria-selected="false" aria-controls="page-share" tabindex="-1"><span data-t="tabShare">Share</span></button>
-          <button class="ptab" role="tab" data-page="probe" aria-selected="false" aria-controls="page-probe" tabindex="-1" title="Ctrl+3"><span data-t="tabProbe">Ping</span></button>
-          <button class="ptab" role="tab" data-page="scan" aria-selected="false" aria-controls="page-scan" tabindex="-1" title="Ctrl+4"><span data-t="tabScan">Scan</span></button>
-          <button class="ptab" role="tab" data-page="info" aria-selected="false" aria-controls="page-info" tabindex="-1" title="Ctrl+5"><span data-t="tabInfo">Info</span></button>
+          <button class="ptab" role="tab" data-page="probe" aria-selected="false" aria-controls="page-probe" tabindex="-1"><span data-t="tabProbe">Ping</span></button>
+          <button class="ptab" role="tab" data-page="scan" aria-selected="false" aria-controls="page-scan" tabindex="-1"><span data-t="tabScan">Scan</span></button>
+          <button class="ptab" role="tab" data-page="info" aria-selected="false" aria-controls="page-info" tabindex="-1"><span data-t="tabInfo">Info</span></button>
         </div>
 
         <hr class="break">
@@ -1258,7 +1258,7 @@ html.app, html.app body { overflow: hidden; }
                 <h4><i class="ph ph-app-window" aria-hidden="true"></i><span data-t="kgAll">Anywhere</span></h4>
                 <kbd>Ctrl</kbd><kbd>Enter</kbd><span data-t="kApply">Apply changes</span>
                 <kbd>F5</kbd><span></span><span data-t="kRefresh">Read adapters again</span>
-                <kbd>Ctrl</kbd><kbd>1-5</kbd><span data-t="kPages">Go to a page</span>
+                <kbd>Ctrl</kbd><kbd id="k-pages">1-5</kbd><span data-t="kPages">Go to a page</span>
                 <kbd>Ctrl</kbd><kbd>T</kbd><span data-t="kSpeed">Open or close the speed test</span>
                 <kbd>Ctrl</kbd><kbd>B</kbd><span data-t="kSide">Expand or collapse the sidebar</span>
                 <kbd>Esc</kbd><span></span><span data-t="kEsc">Close a menu or the sidebar</span>
@@ -1348,11 +1348,9 @@ const isMod = e => mac ? e.metaKey : e.ctrlKey;
 if (mac) {
   document.documentElement.classList.add("mac");
   document.querySelector(".ptab[data-page=adv]").remove();
-  document.querySelectorAll(".ptab").forEach((b, i) => b.title = `⌘${i + 1}`);
   for (const el of document.querySelectorAll("[data-win]")) { el.hidden = true; el.disabled = true; }
   for (const k of document.querySelectorAll(".keys kbd")) {
     if (k.textContent === "Ctrl") k.textContent = "⌘";
-    else if (k.textContent === "1-5") k.textContent = "1-4";
     else if (k.textContent === "F5") { k.textContent = "⌘"; k.nextElementSibling.replaceWith(Object.assign(document.createElement("kbd"), { textContent: "R" })); }
   }
   for (const el of document.querySelectorAll("[title*='Ctrl+'], [title*='(F5)']")) el.title = el.title.replace("Ctrl+", "⌘").replace("F5", "⌘R");
@@ -2978,7 +2976,8 @@ document.addEventListener("keydown", e => {
 // ---------- adapter pages ----------
 // The pill slides to the new tab; the old page steps aside (away from where you're going) while the
 // new one comes in from that side. A new click cancels what's running and goes straight to the end.
-const ptabs = [...document.querySelectorAll("#ptabs [role=tab]")];
+const ptabs = [...document.querySelectorAll("#ptabs [role=tab]:not([hidden])")];   // macOS hides Share: Ctrl/⌘+N counts only the tabs it shows
+$("k-pages").textContent = "1-" + ptabs.length; ptabs.forEach((b, i) => b.title = (mac ? "⌘" : "Ctrl+") + (i + 1));
 const editable = p => p === "ip" || p === "adv";   // the pages that share the draft and its Revert/Apply
 let page = "ip", pageMotion = [], footMotion = [];
 // Same move as the sidebar indicator: stretch over both tabs, then contract onto the new one.
@@ -4523,6 +4522,7 @@ const scenarios = {
     pgproxy: ["Scan, router answers for every address (proxy ARP)", () => { demo.proxyArp = true; showPage("scan"); }],
     pgscan2: ["Scan, with a second IP", () => { Object.assign(adapters[sel], { extraIps: ["192.168.1.50"], extraSubnets: ["255.255.255.0"] }); showPage("scan"); }],
     pginfo: ["Info", () => showPage("info")],
+    pgshare: ["Share, a router joined", async () => { adapters[1].state = "up"; await go(1); showPage("share"); setTimeout(() => $("share-go").click(), 600); }],
   },
   "Settings": {
     general: ["General", () => openSettings()],
