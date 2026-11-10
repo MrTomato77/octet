@@ -2,6 +2,10 @@
 
 mod adapters;
 mod change;
+#[cfg(windows)]
+mod ics;
+#[cfg(windows)]
+mod win;
 #[cfg(target_os = "macos")]
 mod mac;
 mod net;
@@ -64,6 +68,14 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Sen
 #[tauri::command]
 async fn read_adapters() -> Result<Vec<adapters::Adapter>, String> {
     blocking(adapters::read).await
+}
+
+#[tauri::command]
+async fn sharing_state() -> Result<serde_json::Value, String> {
+    #[cfg(windows)]
+    return blocking(|| serde_json::to_value(ics::state()?).map_err(|e| e.to_string())).await;
+    #[cfg(not(windows))]
+    Err("Internet Sharing is only available on Windows".into())
 }
 
 /// One change at a time: a second click must not raise a second UAC prompt.
@@ -359,7 +371,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, sharing_state, change, flush_dns, who_has, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");
