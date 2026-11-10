@@ -253,7 +253,7 @@ button, input, select { font: inherit; color: inherit; }
 .share { --ok-soft: color-mix(in oklch, var(--ok) 22%, transparent); --ok-line: color-mix(in oklch, var(--ok) 32%, transparent); flex-direction: column; }
 .share:not([hidden]) { display: flex; }
 /* the link: source left, this adapter right, the wire between; on, it draws in and packets ride it */
-.sh-link { padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); margin-bottom: var(--s2); }
+.sh-link { padding: 12px; border: 1px solid var(--border); border-radius: var(--r-input); background: var(--surface); margin-bottom: var(--s4); }
 .sh-ends { display: flex; align-items: center; }
 .sh-end { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .sh-end.dst { flex-direction: row-reverse; text-align: right; } .sh-end.dst b { justify-content: flex-end; }
@@ -266,7 +266,7 @@ button, input, select { font: inherit; color: inherit; }
 .sh-link.on .sh-wire .fill { transform: none; } .sh-link.on .sh-wire .flow { opacity: 1; animation: sh-ride 800ms linear infinite; }
 @keyframes sh-ride { to { background-position: 16px 50%; } }
 /* under the card: the source picker (one box whose frame grows down into the list) and the address */
-.sh-under { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin-bottom: var(--s2); }
+.sh-under { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin-bottom: var(--s4); }
 .sh-selw { position: relative; height: var(--row-h); }
 .sh-selbox { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; flex-direction: column; border: 1px solid var(--border-strong); border-radius: var(--r-input); background: var(--surface); transition: border-color 160ms; }   /* the same field colour as the address beside it */
 .sh-selbtn { display: flex; align-items: center; gap: 8px; height: calc(var(--row-h) - 2px); padding: 0 10px; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
@@ -283,10 +283,10 @@ button, input, select { font: inherit; color: inherit; }
 .sh-ip { display: flex; align-items: center; gap: 4px; min-width: 0; } .sh-ip > span:first-child { flex: 1; min-width: 0; display: flex; } .sh-ip .ip.short { flex: none; width: var(--octets-w); }   /* the same octet width as IP & DNS, so no digit is cut */ .sh-ip .ip span.sep { width: 10px; }
 .sh-ip .slash { width: 10px; text-align: center; color: var(--faint); } .sh-ip .prefix { width: 34px; }
 /* devices: the empty box until someone turns up */
-.sh-devs { flex: 1; min-height: 0; display: grid; margin-top: calc(var(--group-gap) - var(--s2)); }   /* a group of its own: 24 px above, as below */
+.sh-devs { flex: 1; min-height: 0; display: grid; margin-bottom: calc(var(--s4) - var(--group-gap)); }   /* 16 px between every block, as under the tabs and above the action bar */
 .sh-devs > * { grid-area: 1 / 1; transition: opacity 240ms; }
 .sh-devs.has .sh-empty, .sh-devs:not(.has) .sh-devlist { opacity: 0; pointer-events: none; }
-.sh-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--faint); font-size: 12px; border: 1px dashed var(--border); border-radius: 10px; text-align: center; padding: 0 var(--s4); }
+.sh-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--faint); font-size: 12px; border: 1px dashed var(--border); border-radius: var(--r-input); text-align: center; padding: 0 var(--s4); }
 .sh-empty i { font-size: 22px; }
 .sh-devlist { overflow: hidden auto; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
 /* a row lines its tile up with the card's (12 px in + its border); opened, the row and its actions become one card */

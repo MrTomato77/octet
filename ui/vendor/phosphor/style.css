@@ -415,6 +415,9 @@
 .ph.ph-stop:before {
   content: "\e46c";
 }
+.ph.ph-swap:before {
+  content: "\e83c";
+}
 .ph.ph-table:before {
   content: "\e476";
 }
