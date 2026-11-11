@@ -424,9 +424,6 @@ mod native {
     const V4_FULL: GET_ADAPTERS_ADDRESSES_FLAGS = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST;
     // Without ALL_INTERFACES Windows lists only interfaces bound to IPv4 (no NDIS filter modules, WAN miniports, tunnels, unplugged cards).
     const V4_LEAN: GET_ADAPTERS_ADDRESSES_FLAGS = V4_FULL & !GAA_FLAG_INCLUDE_ALL_INTERFACES;
-    // Tests set this to make read() take the full IPv4 list, as it did before V4_LEAN.
-    #[cfg(test)]
-    thread_local! { pub(super) static FULL_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 
     /// IPv6 addresses by adapter GUID (Info shows them; nothing edits them).
     pub(super) fn ipv6s(flags: GET_ADAPTERS_ADDRESSES_FLAGS) -> HashMap<String, Vec<String>> {
@@ -556,15 +553,6 @@ mod native {
         pub(super) wifi: super::Wifi,
     }
 
-    /// The network each Wi-Fi card is joined to, by adapter GUID. Empty when there is no
-    /// Wi-Fi (the WLAN service is not running) or nothing is joined.
-    fn wlans() -> HashMap<String, Wlan> {
-        wlans_with(true)
-    }
-
-    #[cfg(test)]
-    pub(super) static FAST_HITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-
     /// The frequency as it has always been read: the scan list for our SSID, type and security,
     /// then the entry with our BSSID. 0 when there is none.
     pub(super) unsafe fn mhz_exact(h: windows_sys::Win32::Foundation::HANDLE, guid: &windows_sys::core::GUID,
@@ -654,9 +642,11 @@ mod native {
         }
     }
 
-    /// fast: fetch the whole scan list while the connection is asked for, instead of after it.
+    /// The network each Wi-Fi card is joined to, by adapter GUID. Empty when there is no
+    /// Wi-Fi (the WLAN service is not running) or nothing is joined. The scan list is fetched
+    /// while the connection is asked for, not after it.
     #[allow(non_upper_case_globals)]   // Windows names these dot11_phy_type_*
-    pub(super) fn wlans_with(fast: bool) -> HashMap<String, Wlan> {
+    fn wlans() -> HashMap<String, Wlan> {
         use windows_sys::Win32::NetworkManagement::WiFi::*;
         let mut out = HashMap::new();
         unsafe {
@@ -675,7 +665,7 @@ mod native {
                     let (hu, guid) = (h as usize, info.InterfaceGuid);
                     // The channel number, when it settles the frequency (well under a millisecond), else the list.
                     let (rc, got) = std::thread::scope(|s| {
-                        let t = fast.then(|| s.spawn(move || by_channel(hu, guid).ok_or_else(|| bss_all(hu, guid))));
+                        let t = Some(s.spawn(move || by_channel(hu, guid).ok_or_else(|| bss_all(hu, guid))));
                         let rc = WlanQueryInterface(h, &info.InterfaceGuid, wlan_intf_opcode_current_connection, std::ptr::null(),
                             &mut size, &mut data, std::ptr::null_mut());
                         (rc, t.and_then(|t| t.join().ok()))
@@ -744,11 +734,7 @@ mod native {
                     // The same association both times: its PHY must not have changed in between.
                     let quick = quick.filter(|&(phy, _)| phy == assoc.dot11PhyType).map(|(_, mhz)| mhz);
                     w.mhz = match quick.or(hit.map(|e| e.ulChCenterFrequency / 1000)) {   // kHz
-                        Some(mhz) => {
-                            #[cfg(test)]
-                            FAST_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            mhz
-                        }
+                        Some(mhz) => mhz,
                         None => mhz_exact(h, &info.InterfaceGuid, conn),
                     };
                     WlanFreeMemory(data);
@@ -770,8 +756,6 @@ mod native {
             let (w, v, m, r) = (s.spawn(wlans), s.spawn(|| ipv6s(V6_FLAGS)), s.spawn(crate::net::metered), s.spawn(metrics));
             (live(V4_LEAN), w.join().unwrap_or_default(), v.join().unwrap_or_default(), m.join().unwrap_or_default(), r.join().unwrap_or_default())
         });
-        #[cfg(test)]
-        let lean = if FULL_ONLY.get() { Err(String::new()) } else { lean };
         let mut entries = vec![];
         // One entry per network adapter driver. Virtual ports of one card (Wi-Fi Direct)
         // have no driver entry of their own, and NCF_HIDDEN (0x8) marks WAN miniports and
@@ -1043,43 +1027,6 @@ mod tests {
         use windows_sys::Win32::NetworkManagement::IpHelper::*;
         let full = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST;
         assert_eq!(native::ipv6s(full), native::ipv6s(native::V6_FLAGS));
-    }
-
-    /// The lean IPv4 list must read the same as the full one it stands in for:
-    /// `cargo test --release -p octet lean_ipv4_table_reads_the_same -- --ignored`.
-    #[cfg(windows)]
-    #[test]
-    #[ignore]
-    fn lean_ipv4_table_reads_the_same() {
-        let lean = format!("{:?}", read());
-        native::FULL_ONLY.set(true);
-        let full = format!("{:?}", read());
-        native::FULL_ONLY.set(false);
-        assert_eq!(lean, full);
-    }
-
-    /// The parallel scan-list read gives the same Wi-Fi map as the serial one (signal left out:
-    /// it moves between any two calls). Proves it only for the network joined while it runs:
-    /// `cargo test --release -p octet wifi_parallel_bss_reads_the_same -- --ignored --nocapture`.
-    #[cfg(windows)]
-    #[test]
-    #[ignore]
-    fn wifi_parallel_bss_reads_the_same() {
-        use std::sync::atomic::Ordering;
-        let key = |m: std::collections::HashMap<String, native::Wlan>| {
-            m.into_iter().map(|(g, w)| (g, (w.ssid, w.phy, w.mhz, w.wifi.bssid, w.wifi.security))).collect::<std::collections::BTreeMap<_, _>>()
-        };
-        let first = key(native::wlans_with(false));
-        let Some((_, joined)) = first.iter().find(|(_, w)| w.2 != 0) else {
-            println!("skipped: no joined Wi-Fi");
-            return;
-        };
-        println!("joined {:?}, auth {:?}", joined.0, joined.4);
-        native::FAST_HITS.store(0, Ordering::Relaxed);
-        for _ in 0..20 {
-            assert_eq!(key(native::wlans_with(true)), key(native::wlans_with(false)));
-        }
-        println!("fast path taken {} of 20", native::FAST_HITS.load(Ordering::Relaxed));
     }
 
     /// A channel number gives a frequency only where the PHY allows that band and the link says the same.

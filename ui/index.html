@@ -306,9 +306,6 @@ button, input, select { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .sh-link.on .sh-wire .flow, .sh-dev { animation: none; } .sh-wire .fill, .sh-list, .sh-selbtn .ph-caret-down, .sh-tools, .sh-dev .mk { transition: none; } }
 .mac [data-win] { display: none !important; }
 .page.leaving { pointer-events: none; }
-.page.soon { display: grid; place-content: center; justify-items: center; gap: var(--s2); min-height: 280px; color: var(--muted); font-size: 13px; }
-.page.soon[hidden] { display: none; }
-.page.soon .ph { font-size: 28px; color: var(--faint); }
 /* Probe: the targets as chips (a thumb slides to the picked one), then its last minute as a graph you can hover.
    Its address and numbers sit in the footer. */
 #page-probe:not([hidden]) { display: flex; flex-direction: column; gap: var(--s3); }
@@ -372,11 +369,6 @@ button, input, select { font: inherit; color: inherit; }
 #page-scan:not([hidden]) { display: flex; flex-direction: column; gap: var(--s3); position: relative; }
 .shead { display: flex; align-items: center; gap: var(--s2); font-size: 13px; min-height: var(--row-h); }
 /* One line: the subnet as one address (the prefix just quieter), then which /24 of it the grid holds. */
-.snet { display: flex; align-items: center; min-width: 0; color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.snet > i { font-size: 16px; color: var(--muted); margin-right: 8px; }
-.spfx { color: var(--muted); }
-.snet-sub { color: var(--faint); font-size: 12px; margin-left: 10px; overflow: hidden; text-overflow: ellipsis; }
-.snet-sub:empty { display: none; }
 /* The sweep's progress is a ring around the rescan button; the % sits where the arrow was, and the arrow comes back when it is done. */
 .sstate { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .sagain { margin-left: auto; position: relative; }
@@ -1431,38 +1423,36 @@ let sel = 0, draft = null, applies = 0, lang = pref("octet-lang") || (navigator.
 const T = {
   en: { adapters: "Adapters", settings: "Settings", refresh: "Refresh", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
     hide: "Hide from list", ncpa: mac ? "Network Settings" : "Network Connections",
-    dhcp: "DHCP", manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
+    manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
     dns1: "Preferred", dns2: "Alternate", register: "Register in DNS", revert: "Revert", apply: "Apply",
-    theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark", updates: "Updates", admin: "Run as admin", adminAsk: "When needed", adminAlways: "Always",
+    theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark", admin: "Run as admin", adminAsk: "When needed", adminAlways: "Always",
     general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: mac ? "Read adapters again" : "Read adapters again (or Ctrl R)",
     kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
     kOctet: "Move between octets", kEsc: "Close a menu, a view or the sidebar", kSpeed: "Open or close the speed test", kPort: "Add a port (Ping)",
     kgAll: "Anywhere", kgCfg: "The whole configuration", kgType: "Typing an address", updAuto: "Auto-check", sgLook: "Appearance", sgAccess: "Access and memory", sgUpd: "Updates", version: "Version", off: "Off", atStart: "When Octet starts", relNotes: "Release notes", scanMem: "Scan memory", clear: "Clear",
     report: "Report a problem", sysInfo: "System", copy: "Copy", tagline: "IPv4 and DNS settings, in seconds.",
-    license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
+    license: "License", notices: "Third-party notices", source: "Source", 
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
-    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabShare: "Share", tabProbe: "Ping", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
-    soonAdv: "Extra addresses, gateways and metric", soonProbe: "Ping with a live graph", soonScan: "Free addresses on this subnet", soonInfo: "A summary to copy and send",
-    kPages: "Go to a page", addIp: "Add address", addGw: "Add gateway", byDhcp: "Set by DHCP.", toManual: "Switch to Manual",
-    metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateways",
+    up: "Connected", down: "Disconnected", disabled: "Disabled", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabShare: "Share", tabProbe: "Ping", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
+    kPages: "Go to a page", speedTest: "Speed test", isp: "ISP", cfServer: "Cloudflare", data: "Data", ping: "Ping", jitter: "Jitter", loadDown: "Loaded down", loadUp: "Loaded up", underLoad: "Under load", 
+    metric: "Metric", 
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
   },
   th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", refresh: "รีเฟรช", release: "Release IP", renew: "Renew IP", cycle: "Release แล้ว Renew",
     hide: "ซ่อน", ncpa: mac ? "Network Settings" : "Network Connections",
-    dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
+    manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
     dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "Register ใน DNS", revert: "ย้อนกลับ", apply: "บันทึก",
-    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", updates: "อัปเดต", admin: "สิทธิ์ Admin", adminAsk: "ขอเมื่อต้องใช้", adminAlways: "ทุกครั้ง",
+    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", admin: "สิทธิ์ Admin", adminAsk: "ขอเมื่อต้องใช้", adminAlways: "ทุกครั้ง",
     general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "บันทึก", kRefresh: mac ? "รีเฟรชรายการ" : "รีเฟรชรายการ (หรือ Ctrl R)",
     kSide: "ย่อ/ขยายแถบซ้าย", kCopy: "คัดลอกค่าทั้งหมด", kPaste: "วางค่าทั้งหมด",
     kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนู หน้าที่เปิดอยู่ หรือแถบซ้าย", kSpeed: "เปิด/ปิด Speed Test", kPort: "ใส่พอร์ต (หน้า Ping)",
     kgAll: "ใช้ได้ทุกหน้า", kgCfg: "ค่าทั้งหมด", kgType: "ตอนพิมพ์ IP", updAuto: "ตรวจอัตโนมัติ", sgLook: "การแสดงผล", sgAccess: "สิทธิ์และความจำ", sgUpd: "อัปเดต", version: "เวอร์ชัน", off: "ปิด", atStart: "ตอนเปิด Octet", relNotes: "บันทึกการเปลี่ยนแปลง", scanMem: "ความจำ Scan", clear: "ล้าง",
     report: "แจ้งปัญหา", sysInfo: "ระบบ", copy: "คัดลอก", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
-    license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
+    license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", 
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
-    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabShare: "แชร์เน็ต", tabProbe: "Ping", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
-    soonAdv: "หลาย IP, หลาย Gateway และ Metric", soonProbe: "Ping พร้อมกราฟสด", soonScan: "IP ที่ยังว่างใน subnet นี้", soonInfo: "สรุปข้อมูลไว้คัดลอกส่งต่อ",
-    kPages: "ไปที่หน้า", addIp: "เพิ่ม IP", addGw: "เพิ่ม Gateway", byDhcp: "ได้จาก DHCP", toManual: "เปลี่ยนเป็นกำหนดเอง",
-    metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateway",
+    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabShare: "แชร์เน็ต", tabProbe: "Ping", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
+    kPages: "ไปที่หน้า", speedTest: "ทดสอบความเร็ว", isp: "ผู้ให้บริการ", cfServer: "Cloudflare", data: "ข้อมูลที่ใช้", ping: "Ping", jitter: "Jitter", loadDown: "ขณะดาวน์โหลด", loadUp: "ขณะอัปโหลด", underLoad: "ขณะใช้งานหนัก", 
+    metric: "Metric", 
     changes: n => `แก้ไว้ ${n} จุด ยังไม่ได้บันทึก`, applied: n => `บันทึกค่าของ ${n} แล้ว`, disable: "ปิดการใช้งาน", enable: "เปิดการใช้งาน",
   },
 };
@@ -2491,7 +2481,7 @@ async function shareLook() {
     for (const [ip, mac] of n) if (ip !== own && net24(ip) === net24(own) && !found.some(d => d.mac === mac)) found.push({ ip, mac });
     if (a.state !== "up") shMndp = [];
     else if (own && shTick % 3 === 0) shMndp = await net("mndp", { address: own }).catch(() => shMndp);
-    // ponytail: MikroTik announces with the port's MAC, the bridge answers with another of its own (same first
+    // ponytail: MikroTik announces with the port's MAC, the router answers ARP with another of its own (same first
     // five bytes). Matching on those may join two routers whose MACs are neighbours; ask the router if it does.
     const same = (x, y) => x.slice(0, 14) === y.slice(0, 14);
     for (const m of shMndp) {
@@ -2525,6 +2515,21 @@ $("share-go").onclick = async () => {
       try { localStorage.removeItem("octet-share"); } catch {}   // after: a failed Stop can be pressed again
     } else {
       const src = adapters.find(x => x.id === shFrom), scope = shScope || "192.168.1.1";
+      const net24 = ip => ip.split(".").slice(0, 3).join(".");
+      if (src.cfg.address && net24(src.cfg.address) === net24(scope))
+        throw L(`${net24(scope)}.0/24 is ${src.name}'s own network: pick another, such as 192.168.137.1`, `${net24(scope)}.0/24 เป็นวงของ ${src.name} เอง: เลือกวงอื่น เช่น 192.168.137.1`);
+      // Someone on the cable may already have it (a router's own LAN address): ask before Windows takes it.
+      if (scope !== a.cfg.address) {
+        say(L("Checking address…", "กำลังเช็ก IP ซ้ำ…"));
+        const owner = await net("who_has", { address: scope }).catch(() => null);
+        if (owner && owner !== a.mac) {
+          lock(false);
+          const go = await ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Share anyway", "แชร์ต่อ"), "warning",
+            L(`${scope} answered from ${owner} (${await maker(owner) ?? "unknown maker"}). Pick a free one, such as 192.168.137.1.`, `${scope} มีเครื่อง ${owner} (${await maker(owner) ?? "ไม่ทราบยี่ห้อ"}) ตอบกลับ เลือก IP ที่ว่าง เช่น 192.168.137.1`));
+          if (!go) { renderShare(); say(""); return; }
+          lock(true); say(L("Waiting for permission…", "รอสิทธิ์ Admin…"));
+        }
+      }
       keep("octet-share-ip", scope);
       // first: a half-done share can still be stopped
       keep("octet-share", JSON.stringify({ id: a.id, index: a.index, name: a.name, pub: src.index, from: src.name, cfg: cfgOf(a), scope, at: Date.now() }));
@@ -3238,8 +3243,8 @@ function advEdges(p = $("page-adv")) {   // also the Share device list
   p.classList.toggle("above", p.scrollTop > 1);
   p.classList.toggle("below", p.scrollTop + p.clientHeight < p.scrollHeight - 1);
 }
-$("page-adv").addEventListener("scroll", advEdges, { passive: true });
-const edgeWatch = new ResizeObserver(advEdges);
+$("page-adv").addEventListener("scroll", () => advEdges(), { passive: true });
+const edgeWatch = new ResizeObserver(() => advEdges());
 ["page-adv", "adv-list"].forEach(id => edgeWatch.observe($(id)));
 $("sh-devlist").addEventListener("scroll", () => advEdges($("sh-devlist")), { passive: true });
 new ResizeObserver(() => advEdges($("sh-devlist"))).observe($("sh-devlist"));
