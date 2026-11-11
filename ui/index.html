@@ -2510,12 +2510,16 @@ setInterval(shareLook, 3000);
 setInterval(() => { const a = adapters[sel], { mode, s } = shareMode(a); if ((mode === "on" || mode === "gone") && page === "share") shSay(a, s, true, false, false, mode === "gone"); }, 1000);
 $("share-go").onclick = async () => {
   const a = adapters[sel], { mode, s } = shareMode(a);
+  // ponytail: step times shown after the result, to find what makes Share/Stop slow. Delete once known.
+  let t0 = performance.now(); const took = [];
+  const lap = what => { const t = performance.now(); took.push(`${what} ${((t - t0) / 1000).toFixed(1)}`); t0 = t; };
   say(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true); $("share-go").disabled = true;
   try {
     if (s) {
       // One elevated run (one UAC): sharing off, then the saved settings back. Already off: just the settings.
       const back = { op: "apply", index: a.index, name: a.name, cfg: s.cfg, ip: true, dns: true, extra: true, wasExtra: [], wasGws: [], wasMetric: cfgOf(a).metric };
       await change(mode === "gone" ? back : { op: "share", public: s.pub, private: a.index, on: false, restore: back });
+      lap("admin+stop");
       try { localStorage.removeItem("octet-share"); } catch {}   // after: a failed Stop can be pressed again
     } else {
       const src = adapters.find(x => x.id === shFrom), scope = shScope || "192.168.1.1";
@@ -2526,6 +2530,7 @@ $("share-go").onclick = async () => {
       if (scope !== a.cfg.address) {
         say(L("Checking address…", "กำลังเช็ก IP ซ้ำ…"));
         const owner = await net("who_has", { address: scope }).catch(() => null);
+        lap("check");
         if (owner && owner !== a.mac) {
           lock(false);
           const go = await ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Share anyway", "แชร์ต่อ"), "warning",
@@ -2537,13 +2542,14 @@ $("share-go").onclick = async () => {
       keep("octet-share-ip", scope);
       // first: a half-done share can still be stopped
       keep("octet-share", JSON.stringify({ id: a.id, index: a.index, name: a.name, pub: src.index, from: src.name, cfg: cfgOf(a), scope, at: Date.now() }));
-      try { await change({ op: "share", public: src.index, private: a.index, on: true, scope }); }
+      try { await change({ op: "share", public: src.index, private: a.index, on: true, scope }); lap("admin+share"); }
       catch (e) { try { localStorage.removeItem("octet-share"); } catch {} throw e; }
     }
     shDevs = []; shMndp = [];
     if (tauri) await reload();
+    lap("read");
     lock(false); renderAdapter(true); renderList(); renderShare();
-    say(s ? L("Sharing stopped · settings put back", "หยุดแชร์แล้ว · คืนค่าเดิมแล้ว") : L("Sharing on", "เริ่มแชร์แล้ว"), "ok");
+    say((s ? L("Sharing stopped · settings put back", "หยุดแชร์แล้ว · คืนค่าเดิมแล้ว") : L("Sharing on", "เริ่มแชร์แล้ว")) + " · " + took.join(" · ") + " s", "ok");
   } catch (e) {
     if (tauri) await reload().catch(() => {});
     lock(false); renderAdapter(true); renderShare(); say(String(e), "bad");
