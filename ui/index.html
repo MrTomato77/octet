@@ -1325,6 +1325,7 @@ const adapters = [
 ];
 const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const keep = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const forget = k => { try { localStorage.removeItem(k); } catch {} };
 let hidden = new Set();
 try { hidden = new Set(JSON.parse(pref("octet-hidden") || "[]")); } catch {}
 const saveHidden = () => keep("octet-hidden", JSON.stringify([...hidden]));
@@ -2485,11 +2486,10 @@ async function shareLook() {
     // five bytes). Matching on those may join two routers whose MACs are neighbours; ask the router if it does.
     const same = (x, y) => x.slice(0, 14) === y.slice(0, 14);
     // Answers are heard on every address: one sent from inside another adapter's network came from there.
-    const toInt = ip => ip.split(".").reduce((n, o) => n * 256 + +o, 0);
     const elsewhere = ip => adapters.some(x => x !== a && x.state === "up" && validIp(x.cfg.address || "") && validIp(x.cfg.subnet || "")
-      && ((toInt(ip) ^ toInt(x.cfg.address)) & toInt(x.cfg.subnet)) === 0);
+      && ((ipNum(ip) ^ ipNum(x.cfg.address)) & ipNum(x.cfg.subnet)) === 0);
     for (const m of shMndp.filter(m => !m.from || !elsewhere(m.from))) {
-      const f = found.find(d => d.mac === m.mac) ?? found.find(d => same(d.mac, m.mac));
+      const f = found.find(d => same(d.mac, m.mac));
       if (f) Object.assign(f, { board: m.board, version: m.version });
       else found.push({ ip: m.address && own && net24(m.address) === net24(own) ? m.address : "", mac: m.mac, board: m.board, version: m.version });
     }
@@ -2516,7 +2516,7 @@ $("share-go").onclick = async () => {
       // One elevated run (one UAC): sharing off, then the saved settings back. Already off: just the settings.
       const back = { op: "apply", index: a.index, name: a.name, cfg: s.cfg, ip: true, dns: true, extra: true, wasExtra: [], wasGws: [], wasMetric: cfgOf(a).metric };
       await change(mode === "gone" ? back : { op: "share", public: s.pub, private: a.index, on: false, restore: back });
-      try { localStorage.removeItem("octet-share"); } catch {}   // after: a failed Stop can be pressed again
+      forget("octet-share");   // after: a failed Stop can be pressed again
     } else {
       const src = adapters.find(x => x.id === shFrom), scope = shScope || "192.168.1.1";
       if (src.cfg.address && net24(src.cfg.address) === net24(scope))
@@ -2530,8 +2530,9 @@ $("share-go").onclick = async () => {
         const owner = shMndp.find(m => m.address === scope)?.mac ?? (onLink ? await net("who_has", { address: scope }).catch(() => null) : null);
         if (owner && owner !== a.mac) {
           lock(false);
+          const mk = await maker(owner);
           const go = await ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Share anyway", "แชร์ต่อ"), "warning",
-            L(`${scope} answered from ${owner} (${await maker(owner) ?? "unknown maker"}). Pick a free one, such as 192.168.137.1.`, `${scope} มีเครื่อง ${owner} (${await maker(owner) ?? "ไม่ทราบยี่ห้อ"}) ตอบกลับ เลือก IP ที่ว่าง เช่น 192.168.137.1`));
+            L(`${scope} answered from ${owner} (${mk ?? "unknown maker"}). Pick a free one, such as 192.168.137.1.`, `${scope} มีเครื่อง ${owner} (${mk ?? "ไม่ทราบยี่ห้อ"}) ตอบกลับ เลือก IP ที่ว่าง เช่น 192.168.137.1`));
           if (!go) { renderShare(); say(""); return; }
           lock(true); say(L("Waiting for permission…", "รอสิทธิ์ Admin…"));
         }
@@ -2540,7 +2541,7 @@ $("share-go").onclick = async () => {
       // first: a half-done share can still be stopped
       keep("octet-share", JSON.stringify({ id: a.id, index: a.index, name: a.name, pub: src.index, from: src.name, cfg: cfgOf(a), scope, at: Date.now() }));
       try { await change({ op: "share", public: src.index, private: a.index, on: true, scope }); }
-      catch (e) { try { localStorage.removeItem("octet-share"); } catch {} throw e; }
+      catch (e) { forget("octet-share"); throw e; }
     }
     shDevs = []; shMndp = [];
     if (tauri) await reload();
@@ -3253,7 +3254,6 @@ $("page-adv").addEventListener("scroll", () => advEdges(), { passive: true });
 const edgeWatch = new ResizeObserver(() => advEdges());
 ["page-adv", "adv-list"].forEach(id => edgeWatch.observe($(id)));
 $("sh-devlist").addEventListener("scroll", () => advEdges($("sh-devlist")), { passive: true });
-new ResizeObserver(() => advEdges($("sh-devlist"))).observe($("sh-devlist"));
 // ---------- Probe: the gateway, DNS and a target of your own, pinged once a second all the time ----------
 // It keeps going on other pages (so the graph already holds the last minute), and rests while the window is minimised.
 // ping answers a number (ms) or { ms }; null is a loss.
