@@ -2416,7 +2416,9 @@ function shFade(e, t) {
   e.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: "ease-in", fill: "forwards" });
   setTimeout(() => { if (e._to !== t) return; e.textContent = t; delete e._to; e.getAnimations().forEach(x => x.cancel()); e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" }); }, 120);
 }
+let shNote = "";   // what Share/Stop is doing now; Share's own footer, since the status line is hidden on this page
 function shSay(a, s, mine, other, bad, gone) {
+  if (shNote) { if ($("share-say").textContent !== shNote) $("share-say").textContent = shNote; return; }
   if (gone) { const g = L("Windows stopped sharing · Stop puts your settings back", "Windows หยุดแชร์ไปแล้ว · กดหยุดเพื่อคืนค่าเดิม"); if ($("share-say").textContent !== g) $("share-say").textContent = g; return; }
   const t = mine ? Math.max(0, Math.floor((Date.now() - (s.at || Date.now())) / 1000)) : 0;
   const text = mine ? `<i class="ph ph-clock"></i> ${t >= 60 ? Math.floor(t / 60) + " " + L("min", "นาที") + " " : ""}${t % 60} ${L("s", "วิ")}`
@@ -2510,9 +2512,12 @@ setInterval(shareLook, 3000);
 setInterval(() => { const a = adapters[sel], { mode, s } = shareMode(a); if ((mode === "on" || mode === "gone") && page === "share") shSay(a, s, true, false, false, mode === "gone"); }, 1000);
 $("share-go").onclick = async () => {
   const a = adapters[sel], { mode, s } = shareMode(a);
-  say(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true); $("share-go").disabled = true;
+  const note = t => { shNote = t; shSay(a, s); };
+  note(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true); $("share-go").disabled = true;
   try {
     if (s) {
+      // Windows turns ICS off one side after the other (~3 s, measured); say so rather than look stuck.
+      note(L("Stopping sharing… Windows takes a few seconds", "กำลังหยุดแชร์… Windows ใช้เวลาสักครู่"));
       // One elevated run (one UAC): sharing off, then the saved settings back. Already off: just the settings.
       const back = { op: "apply", index: a.index, name: a.name, cfg: s.cfg, ip: true, dns: true, extra: true, wasExtra: [], wasGws: [], wasMetric: cfgOf(a).metric };
       await change(mode === "gone" ? back : { op: "share", public: s.pub, private: a.index, on: false, restore: back });
@@ -2526,17 +2531,18 @@ $("share-go").onclick = async () => {
       // out its 3 s timeout for nothing, so a MikroTik's own announced address is the check there.
       const onLink = a.state === "up" && !!a.cfg.address && net24(a.cfg.address) === net24(scope);
       if (scope !== a.cfg.address) {
-        say(L("Checking address…", "กำลังเช็ก IP ซ้ำ…"));
+        note(L("Checking address…", "กำลังเช็ก IP ซ้ำ…"));
         const owner = shMndp.find(m => m.address === scope)?.mac ?? (onLink ? await net("who_has", { address: scope }).catch(() => null) : null);
         if (owner && owner !== a.mac) {
-          lock(false);
+          lock(false); note("");
           const mk = await maker(owner);
           const go = await ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Share anyway", "แชร์ต่อ"), "warning",
             L(`${scope} answered from ${owner} (${mk ?? "unknown maker"}). Pick a free one, such as 192.168.137.1.`, `${scope} มีเครื่อง ${owner} (${mk ?? "ไม่ทราบยี่ห้อ"}) ตอบกลับ เลือก IP ที่ว่าง เช่น 192.168.137.1`));
           if (!go) { renderShare(); say(""); return; }
-          lock(true); say(L("Waiting for permission…", "รอสิทธิ์ Admin…"));
+          lock(true);
         }
       }
+      note(L("Starting sharing…", "กำลังเริ่มแชร์…"));
       keep("octet-share-ip", scope);
       // first: a half-done share can still be stopped
       keep("octet-share", JSON.stringify({ id: a.id, index: a.index, name: a.name, pub: src.index, from: src.name, cfg: cfgOf(a), scope, at: Date.now() }));
@@ -2545,11 +2551,12 @@ $("share-go").onclick = async () => {
     }
     shDevs = []; shMndp = [];
     if (tauri) await reload();
-    lock(false); renderAdapter(true); renderList(); renderShare();
+    shNote = ""; lock(false); renderAdapter(true); renderList(); renderShare();
     say((s ? L("Sharing stopped · settings put back", "หยุดแชร์แล้ว · คืนค่าเดิมแล้ว") : L("Sharing on", "เริ่มแชร์แล้ว")), "ok");
   } catch (e) {
     if (tauri) await reload().catch(() => {});
-    lock(false); renderAdapter(true); renderShare(); say(String(e), "bad");
+    const msg = String(e); shNote = msg; setTimeout(() => { if (shNote === msg) { shNote = ""; renderShare(); } }, 6000);   // the error stays readable a while
+    lock(false); renderAdapter(true); renderShare(); say(msg, "bad");
   }
 };
 

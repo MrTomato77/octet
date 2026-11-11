@@ -125,7 +125,8 @@ fn run(c: &INetSharingConfiguration, op: Op) -> windows::core::Result<()> {
     unsafe { match op { Op::Off => c.DisableSharing(), Op::On(kind) => c.EnableSharing(kind), Op::Keep => Ok(()) } }
 }
 
-/// Both sides at once: each Enable/DisableSharing takes Windows 0.3-1.6 s, side by side they overlap.
+/// Both sides at once. Measured on hardware: EnableSharing overlaps (Start got much faster), DisableSharing
+/// doesn't (Windows runs it one side after the other, ~3 s either way).
 /// Both threads are in the process's multithreaded COM apartment, where these objects may cross threads.
 fn both(a: &INetSharingConfiguration, op_a: Op, b: &INetSharingConfiguration, op_b: Op) -> (windows::core::Result<()>, windows::core::Result<()>) {
     use windows::core::Interface;
