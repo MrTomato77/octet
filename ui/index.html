@@ -1390,7 +1390,7 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   if (cmd === "neighbours") { const b = (sharing()?.scope || "192.168.137.1").split(".").slice(0, 3).join("."), t = (Date.now() - (sharing()?.at || 0)) / 1000;
     return res([t > 2 && [b + ".23", "D0-EA-11-5E-FD-33"], t > 2 && ["192.168.88.1", "D0-EA-11-5E-FD-33"], t > 8 && [b + ".88", "3C-22-FB-10-0A-91"]].filter(Boolean)); }   // an old /24 lingers, as Windows keeps it
   // MNDP: the router announces itself as soon as the cable is in, before it has an address on this side.
-  if (cmd === "mndp") return res(adapters[sel]?.state === "up" ? [{ mac: "D0-EA-11-5E-FD-39", identity: "MikroTik", version: "7.16.2 (stable)", board: "RB5009UG+S+", address: "192.168.88.1" }] : []);
+  if (cmd === "mndp") return res(adapters[sel]?.state === "up" ? [{ mac: "D0-EA-11-5E-FD-39", identity: "MikroTik", version: "7.16.2 (stable)", board: "RB5009UG+S+", address: "192.168.88.1", from: "192.168.88.1" }, { mac: "6C-3B-6B-D9-90-61", identity: "Office", version: "7.20.2 (stable)", board: "RB2011UiAS-2HnD", address: "10.0.0.1", from: "10.0.0.1" }] : []);
   if (cmd === "change") {
     if (demo.outcome === "cancel") return rej("Cancelled");
     if (demo.outcome === "fail") return rej("The object already exists.");
@@ -2484,7 +2484,11 @@ async function shareLook() {
     // ponytail: MikroTik announces with the port's MAC, the router answers ARP with another of its own (same first
     // five bytes). Matching on those may join two routers whose MACs are neighbours; ask the router if it does.
     const same = (x, y) => x.slice(0, 14) === y.slice(0, 14);
-    for (const m of shMndp) {
+    // Answers are heard on every address: one sent from inside another adapter's network came from there.
+    const toInt = ip => ip.split(".").reduce((n, o) => n * 256 + +o, 0);
+    const elsewhere = ip => adapters.some(x => x !== a && x.state === "up" && validIp(x.cfg.address || "") && validIp(x.cfg.subnet || "")
+      && ((toInt(ip) ^ toInt(x.cfg.address)) & toInt(x.cfg.subnet)) === 0);
+    for (const m of shMndp.filter(m => !m.from || !elsewhere(m.from))) {
       const f = found.find(d => d.mac === m.mac) ?? found.find(d => same(d.mac, m.mac));
       if (f) Object.assign(f, { board: m.board, version: m.version });
       else found.push({ ip: m.address && own && net24(m.address) === net24(own) ? m.address : "", mac: m.mac, board: m.board, version: m.version });

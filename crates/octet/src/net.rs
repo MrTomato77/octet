@@ -575,6 +575,9 @@ pub struct Mndp {
     pub version: String,
     pub board: String,
     pub address: String,
+    /// Where the packet came from. RouterOS sends from its first address, which may be on another network
+    /// than the shared one (192.168.88.1 while sharing 192.168.1.x), or 0.0.0.0 with no address at all.
+    pub from: String,
 }
 
 /// Packet: 4 bytes of header, then type/length/value fields, big-endian u16s.
@@ -599,20 +602,26 @@ pub fn mndp_parse(p: &[u8]) -> Option<Mndp> {
 }
 
 /// Asks the shared adapter's cable who is there (an empty MNDP packet makes RouterOS answer at once)
-/// and listens for `wait_ms`. Bound to the adapter's own address, so the question goes out of that port only.
+/// and listens for `wait_ms`. The question goes out bound to the adapter's own address (that port only); answers
+/// are heard on every address, since RouterOS sends from whatever address it has first. That also hears
+/// MikroTiks on other adapters: `from` lets the UI drop those.
 /// ponytail: port 5678 is shared with Winbox; if Winbox holds it this returns the error and the UI just skips it.
+/// No arrival-interface check (IP_PKTINFO); the UI's subnet filter stands in for it.
 pub fn mndp(local: Ipv4Addr, wait_ms: u64) -> Result<Vec<Mndp>, String> {
     use std::time::{Duration, Instant};
-    let s = std::net::UdpSocket::bind((local, 5678)).map_err(|e| format!("MNDP: {e}"))?;
-    s.set_broadcast(true).map_err(|e| e.to_string())?;
-    let _ = s.send_to(&[0, 0, 0, 0], (Ipv4Addr::BROADCAST, 5678));
+    let tx = std::net::UdpSocket::bind((local, 5678)).map_err(|e| format!("MNDP: {e}"))?;
+    tx.set_broadcast(true).map_err(|e| e.to_string())?;
+    // Winbox may hold the wildcard: then only what reaches the adapter's own address, as before.
+    let rx = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 5678));
+    let s = rx.as_ref().unwrap_or(&tx);
+    let _ = tx.send_to(&[0, 0, 0, 0], (Ipv4Addr::BROADCAST, 5678));
     let end = Instant::now() + Duration::from_millis(wait_ms);
     let mut found: Vec<Mndp> = vec![];
     let mut buf = [0u8; 1500];
     while let Some(left) = end.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()) {
         s.set_read_timeout(Some(left)).map_err(|e| e.to_string())?;
-        let Ok((n, _)) = s.recv_from(&mut buf) else { break };
-        if let Some(m) = mndp_parse(&buf[..n]) && !found.iter().any(|f| f.mac == m.mac) { found.push(m); }
+        let Ok((n, src)) = s.recv_from(&mut buf) else { break };
+        if let Some(mut m) = mndp_parse(&buf[..n]) && !found.iter().any(|f| f.mac == m.mac) { m.from = src.ip().to_string(); found.push(m); }
     }
     Ok(found)
 }
