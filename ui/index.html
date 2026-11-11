@@ -2421,8 +2421,10 @@ function shSay(a, s, mine, other, bad, gone) {
     : other ? L(`Already sharing to ${s.name}`, `กำลังแชร์ไปที่ ${s.name} อยู่`)
     : bad ? L("Use a private address, e.g. 192.168.1.1", "ใช้ IP วงภายใน เช่น 192.168.1.1")
     : `<i class="ph ph-shield-check"></i> ${L("Current settings come back on Stop", "กดหยุดแล้วค่าเดิมกลับมา")}`;
-  if ($("share-say").innerHTML !== text) $("share-say").innerHTML = text;
+  const shown = text + (shTook ? ` · ${shTook}` : "");   // ponytail: step times, delete with lap()
+  if ($("share-say").innerHTML !== shown) $("share-say").innerHTML = shown;
 }
+let shTook = "";
 // Devices: the neighbour table while sharing, plus any MikroTik heard through MNDP. That one shows up even
 // before it has an address, which tells you its DHCP client sits on another port.
 const shCopy = t => navigator.clipboard.writeText(t).then(() => say(L(`Copied ${t}`, `คัดลอก ${t} แล้ว`), "ok"), () => say(L("Couldn't copy", "คัดลอกไม่ได้"), "bad"));
@@ -2549,7 +2551,8 @@ $("share-go").onclick = async () => {
     if (tauri) await reload();
     lap("read");
     lock(false); renderAdapter(true); renderList(); renderShare();
-    say((s ? L("Sharing stopped · settings put back", "หยุดแชร์แล้ว · คืนค่าเดิมแล้ว") : L("Sharing on", "เริ่มแชร์แล้ว")) + " · " + took.join(" · ") + " s", "ok");
+    say((s ? L("Sharing stopped · settings put back", "หยุดแชร์แล้ว · คืนค่าเดิมแล้ว") : L("Sharing on", "เริ่มแชร์แล้ว")), "ok");
+    shTook = took.join(" · ") + " s"; renderShare();
   } catch (e) {
     if (tauri) await reload().catch(() => {});
     lock(false); renderAdapter(true); renderShare(); say(String(e), "bad");
