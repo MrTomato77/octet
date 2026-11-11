@@ -5,6 +5,7 @@
 //! Changes run networksetup in a second copy of Octet, started as root through the system's
 //! administrator prompt (see `sudo`).
 
+use crate::adapters::Raw;
 use crate::net::Tcp;
 use objc2_core_foundation::{CFArray, CFBoolean, CFData, CFDate, CFDictionary, CFNumber, CFRetained, CFString, CFType};
 use objc2_system_configuration::{SCDynamicStore, SCNetworkInterface, SCPreferences};
@@ -82,7 +83,7 @@ fn ips(v: &Value) -> Vec<String> {
 /// The network services of the current location, in System Settings' order, as Windows-shaped rows.
 /// Services macOS hides (HiddenConfiguration), ones without a network device (VPNs, PPP) and
 /// ones with IPv4 turned off are left out: there is nothing in them for Octet to edit.
-pub(crate) fn services(prefs: &Map<String, Value>, live: &Map<String, Value>) -> Vec<Raw> {
+pub(crate) fn services(prefs: &Map<String, Value>, live: &Map<String, Value>) -> Vec<(Raw, bool)> {
     let set = prefs.get("CurrentSet").and_then(Value::as_str).and_then(|s| s.strip_prefix("/Sets/")).unwrap_or_default();
     let set = &prefs["Sets"][set];
     let mut ids: Vec<String> = set["Network"]["Global"]["IPv4"]["ServiceOrder"].as_array().into_iter().flatten().filter_map(Value::as_str).map(String::from).collect();
@@ -119,9 +120,9 @@ pub(crate) fn services(prefs: &Map<String, Value>, live: &Map<String, Value>) ->
             status: if inactive { "Disabled" } else if up { "Up" } else { "Disconnected" }.into(),
             dhcp: auto,
             static_dns,
-            wifi_card: iface["Type"].as_str() == Some("IEEE80211") || iface["Hardware"].as_str() == Some("AirPort"),
             ..Default::default()
         };
+        let wifi_card = iface["Type"].as_str() == Some("IEEE80211") || iface["Hardware"].as_str() == Some("AirPort");
         if !inactive {
             // Live values when the service is up; a static service that isn't keeps what it is set to.
             let src = if ipv4.is_null() && !auto { v4 } else { ipv4 };
@@ -139,33 +140,13 @@ pub(crate) fn services(prefs: &Map<String, Value>, live: &Map<String, Value>) ->
                 raw.lease_ends = dhcp["LeaseExpirationTime"].as_u64().unwrap_or(0);
             }
         }
-        out.push(raw);
+        out.push((raw, wifi_card));
     }
     out
 }
 
-/// What the adapter reader needs that the service list doesn't say.
-#[derive(Default, Debug)]
-pub(crate) struct Raw {
-    pub id: String,
-    pub index: u32,
-    pub name: String,
-    pub description: String,
-    pub status: String,
-    pub dhcp: bool,
-    pub static_dns: bool,
-    pub dhcp_server: String,
-    pub ip: Vec<String>,
-    pub subnet: Vec<String>,
-    pub gateway: Vec<String>,
-    pub dns: Vec<String>,
-    pub suffix: String,
-    pub lease_got: u64,
-    pub lease_ends: u64,
-    pub wifi_card: bool,
-}
-
-pub(crate) fn read() -> Result<Vec<Raw>, String> {
+/// Each service with whether its device is a Wi-Fi card.
+pub(crate) fn read() -> Result<Vec<(Raw, bool)>, String> {
     let p = prefs(&["CurrentSet", "Sets", "NetworkServices"]);
     if p.is_empty() {
         return Err("Could not read the network settings".into());
@@ -225,7 +206,7 @@ pub(crate) fn links() -> HashMap<String, Link> {
                 if len == 6 {
                     // sdl_data holds the name, then the address; it can run past the declared array.
                     let bytes = unsafe { std::slice::from_raw_parts((dl.sdl_data.as_ptr() as *const u8).add(n), len) };
-                    l.mac = bytes.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-");
+                    l.mac = crate::net::mac_text(bytes);
                 }
                 if !a.ifa_data.is_null() {
                     l.speed = u64::from(unsafe { (*(a.ifa_data as *const libc::if_data)).ifi_baudrate });
@@ -508,7 +489,7 @@ fn arp_table() -> Vec<(Ipv4Addr, u32, String)> {
                 let mac = &dl[8 + nlen..8 + nlen + 6];
                 // Broadcast and multicast entries are no device.
                 if mac != [0; 6] && mac[0] & 1 == 0 {
-                    out.push((Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr)), u32::from(index), mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-")));
+                    out.push((Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr)), u32::from(index), crate::net::mac_text(mac)));
                 }
             }
         }
@@ -676,17 +657,17 @@ mod tests {
         });
         let (Value::Object(p), Value::Object(l)) = (prefs, live) else { unreachable!() };
         let s = services(&p, &l);
-        let names: Vec<_> = s.iter().map(|r| r.name.as_str()).collect();
+        let names: Vec<_> = s.iter().map(|r| r.0.name.as_str()).collect();
         assert_eq!(names, ["Wi-Fi", "USB LAN", "Thunderbolt Bridge"], "hidden and VPN services are left out; unordered ones come last");
-        let w = &s[0];
-        assert!(w.dhcp && w.wifi_card && !w.static_dns && w.status == "Up");
+        let (w, wifi_card) = &s[0];
+        assert!(w.dhcp && *wifi_card && !w.static_dns && w.status == "Up");
         assert_eq!((w.ip.as_slice(), w.gateway.as_slice(), w.dhcp_server.as_str()), (&["192.168.15.158".to_string()][..], &["192.168.12.1".to_string()][..], "192.168.12.1"));
         assert_eq!((w.lease_got, w.lease_ends, w.suffix.as_str()), (1000, 2000, "lan"));
-        let u = &s[1];
+        let u = &s[1].0;
         assert_eq!((u.status.as_str(), u.dhcp, u.static_dns), ("Disconnected", false, true));
         assert_eq!(u.ip, ["192.168.50.20"], "a static service that is down shows what it is set to");
         assert_eq!(u.dns, ["1.1.1.1", "8.8.8.8"]);
-        assert_eq!(s[2].status, "Disabled");
+        assert_eq!(s[2].0.status, "Disabled");
     }
 
     /// Reads this Mac: `cargo test -p octet reads_this_mac -- --ignored --nocapture`.

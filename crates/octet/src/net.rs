@@ -12,6 +12,37 @@ fn ip_u32(ip: Ipv4Addr) -> u32 {
     u32::from_ne_bytes(ip.octets())
 }
 
+/// A MAC as "AA-BB-..".
+pub(crate) fn mac_text(mac: &[u8]) -> String {
+    mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-")
+}
+
+/// An IPv4 socket address for Winsock.
+#[cfg(windows)]
+pub(crate) fn sin(ip: Ipv4Addr, port: u16) -> windows_sys::Win32::Networking::WinSock::SOCKADDR_IN {
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, SOCKADDR_IN};
+    let mut sa: SOCKADDR_IN = unsafe { std::mem::zeroed() };
+    sa.sin_family = AF_INET;
+    sa.sin_port = port.to_be();
+    sa.sin_addr.S_un.S_addr = ip_u32(ip);
+    sa
+}
+
+/// The neighbour cache's row for `ip` on interface `index`, ready to look up or resolve.
+#[cfg(windows)]
+fn ipnet_row(ip: Ipv4Addr, index: u32) -> windows_sys::Win32::NetworkManagement::IpHelper::MIB_IPNET_ROW2 {
+    let mut row = windows_sys::Win32::NetworkManagement::IpHelper::MIB_IPNET_ROW2 { InterfaceIndex: index, ..Default::default() };
+    row.Address.Ipv4 = sin(ip, 0);
+    row
+}
+
+/// The MAC in a neighbour row, unless it is missing or all zeros.
+#[cfg(windows)]
+fn row_mac(row: &windows_sys::Win32::NetworkManagement::IpHelper::MIB_IPNET_ROW2) -> Option<String> {
+    let mac = &row.PhysicalAddress[..6];
+    (row.PhysicalAddressLength == 6 && mac != [0; 6]).then(|| mac_text(mac))
+}
+
 #[cfg(windows)]
 pub fn elevated() -> bool {
     unsafe { windows_sys::Win32::UI::Shell::IsUserAnAdmin() != 0 }
@@ -23,7 +54,7 @@ pub fn arp(ip: Ipv4Addr) -> Option<String> {
     let mut mac = [0u8; 8];
     let mut len = mac.len() as u32;
     let r = unsafe { windows_sys::Win32::NetworkManagement::IpHelper::SendARP(ip_u32(ip), 0, mac.as_mut_ptr().cast(), &mut len) };
-    (r == 0 && len >= 6).then(|| mac[..len as usize].iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
+    (r == 0 && len >= 6).then(|| mac_text(&mac[..len as usize]))
 }
 
 /// Devices this adapter has talked to lately (its neighbour table): for Internet Sharing, the one plugged in.
@@ -41,7 +72,7 @@ pub fn neighbours(index: u32) -> Vec<(Ipv4Addr, String)> {
             let mac = &r.PhysicalAddress[..r.PhysicalAddressLength as usize];
             if r.InterfaceIndex == index && r.State != NlnsIncomplete && r.State != NlnsUnreachable && mac.len() == 6 && mac[0] & 1 == 0
                 && !ip.is_multicast() && !ip.is_broadcast() && ip.octets()[3] != 255 {
-                out.push((ip, mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-")));
+                out.push((ip, mac_text(mac)));
             }
         }
         FreeMibTable(t.cast());
@@ -53,13 +84,11 @@ pub fn neighbours(index: u32) -> Vec<(Ipv4Addr, String)> {
 /// also asks LLMNR and NetBIOS). None when nobody answers.
 #[cfg(windows)]
 pub fn hostname(ip: Ipv4Addr) -> Option<String> {
-    use windows_sys::Win32::Networking::WinSock::{AF_INET, GetNameInfoW, NI_NAMEREQD, SOCKADDR, SOCKADDR_IN, WSADATA, WSAStartup};
+    use windows_sys::Win32::Networking::WinSock::{GetNameInfoW, NI_NAMEREQD, SOCKADDR, SOCKADDR_IN, WSADATA, WSAStartup};
     unsafe {
         let mut wsa: WSADATA = std::mem::zeroed();
         WSAStartup(0x0202, &mut wsa);   // reference-counted; once per call is fine
-        let mut sa: SOCKADDR_IN = std::mem::zeroed();
-        sa.sin_family = AF_INET;
-        sa.sin_addr.S_un.S_addr = ip_u32(ip);
+        let sa = sin(ip, 0);
         let mut host = [0u16; 1025];
         let r = GetNameInfoW((&sa as *const SOCKADDR_IN).cast::<SOCKADDR>(), size_of::<SOCKADDR_IN>() as i32,
             host.as_mut_ptr(), host.len() as u32, std::ptr::null_mut(), 0, NI_NAMEREQD as i32);
@@ -291,13 +320,6 @@ pub fn tcping(ip: Ipv4Addr, port: u16, from: Option<Ipv4Addr>, timeout_ms: u32) 
         AF_INET, FD_SET, FIONBIO, INVALID_SOCKET, IPPROTO_TCP, SOCK_STREAM, SOCKADDR, SOCKADDR_IN, TIMEVAL, WSADATA,
         SOL_SOCKET, SO_ERROR, WSAECONNREFUSED, WSAStartup, bind, closesocket, connect, getsockopt, ioctlsocket, select, socket, WSAIoctl,
     };
-    let addr = |ip: Ipv4Addr, port: u16| {
-        let mut sa: SOCKADDR_IN = unsafe { std::mem::zeroed() };
-        sa.sin_family = AF_INET;
-        sa.sin_port = port.to_be();
-        sa.sin_addr.S_un.S_addr = ip_u32(ip);
-        sa
-    };
     unsafe {
         let mut wsa: WSADATA = std::mem::zeroed();
         WSAStartup(0x0202, &mut wsa);
@@ -308,7 +330,7 @@ pub fn tcping(ip: Ipv4Addr, port: u16, from: Option<Ipv4Addr>, timeout_ms: u32) 
         let len = size_of::<SOCKADDR_IN>() as i32;
         // A loopback target (a local proxy) only answers from loopback, as with ping.
         if let (Some(src), false) = (from, ip.is_loopback()) {
-            let sa = addr(src, 0);
+            let sa = sin(src, 0);
             bind(s, (&sa as *const SOCKADDR_IN).cast::<SOCKADDR>(), len);
         }
         let mut on = 1u32;
@@ -318,7 +340,7 @@ pub fn tcping(ip: Ipv4Addr, port: u16, from: Option<Ipv4Addr>, timeout_ms: u32) 
         let rto: [u8; 4] = { let ms = timeout_ms.min(65535) as u16; let b = ms.to_ne_bytes(); [b[0], b[1], 0xFE, 0] };   // Rtt, MaxSynRetransmissions = none
         let mut got = 0u32;
         WSAIoctl(s, 0x9800_0011, rto.as_ptr().cast(), 4, std::ptr::null_mut(), 0, &mut got, std::ptr::null_mut(), None);
-        let sa = addr(ip, port);
+        let sa = sin(ip, port);
         let t0 = std::time::Instant::now();
         connect(s, (&sa as *const SOCKADDR_IN).cast::<SOCKADDR>(), len);   // WSAEWOULDBLOCK: the answer comes to select
         // Windows reports an accepted connect as writable, a refused one as an exception.
@@ -345,46 +367,34 @@ pub fn tcping(ip: Ipv4Addr, port: u16, from: Option<Ipv4Addr>, timeout_ms: u32) 
 #[cfg(windows)]
 #[allow(non_upper_case_globals)]   // Windows names these Nlns*
 pub fn neighbour(ip: Ipv4Addr, index: u32) -> Option<String> {
-    use windows_sys::Win32::NetworkManagement::IpHelper::{GetIpNetEntry2, MIB_IPNET_ROW2};
-    use windows_sys::Win32::Networking::WinSock::{AF_INET, NlnsIncomplete, NlnsUnreachable};
-    let mut row = MIB_IPNET_ROW2::default();
-    row.Address.Ipv4.sin_family = AF_INET;
-    row.Address.Ipv4.sin_addr.S_un.S_addr = ip_u32(ip);
-    row.InterfaceIndex = index;
-    if unsafe { GetIpNetEntry2(&mut row) } != 0 || matches!(row.State, NlnsIncomplete | NlnsUnreachable) || row.PhysicalAddressLength != 6 {
+    use windows_sys::Win32::NetworkManagement::IpHelper::GetIpNetEntry2;
+    use windows_sys::Win32::Networking::WinSock::{NlnsIncomplete, NlnsUnreachable};
+    let mut row = ipnet_row(ip, index);
+    if unsafe { GetIpNetEntry2(&mut row) } != 0 || matches!(row.State, NlnsIncomplete | NlnsUnreachable) {
         return None;
     }
-    let mac = &row.PhysicalAddress[..6];
-    (mac != [0; 6]).then(|| mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
+    row_mac(&row)
 }
 
 /// Whether the neighbour cache has just heard from `ip` (Reachable, or an entry set by hand), not
 /// merely remembers it (Stale, Delay, Probe: an answer from a while ago).
 #[cfg(windows)]
 fn fresh(ip: Ipv4Addr, index: u32) -> bool {
-    use windows_sys::Win32::NetworkManagement::IpHelper::{GetIpNetEntry2, MIB_IPNET_ROW2};
-    use windows_sys::Win32::Networking::WinSock::{AF_INET, NlnsPermanent, NlnsReachable};
-    let mut row = MIB_IPNET_ROW2::default();
-    row.Address.Ipv4.sin_family = AF_INET;
-    row.Address.Ipv4.sin_addr.S_un.S_addr = ip_u32(ip);
-    row.InterfaceIndex = index;
+    use windows_sys::Win32::NetworkManagement::IpHelper::GetIpNetEntry2;
+    use windows_sys::Win32::Networking::WinSock::{NlnsPermanent, NlnsReachable};
+    let mut row = ipnet_row(ip, index);
     (unsafe { GetIpNetEntry2(&mut row) }) == 0 && [NlnsReachable, NlnsPermanent].contains(&row.State)
 }
 
 /// Throws away what the cache remembers about `ip` and asks ARP afresh: the MAC of what answers now, or None.
 #[cfg(windows)]
 fn resolve(ip: Ipv4Addr, index: u32) -> Option<String> {
-    use windows_sys::Win32::NetworkManagement::IpHelper::{MIB_IPNET_ROW2, ResolveIpNetEntry2};
-    use windows_sys::Win32::Networking::WinSock::AF_INET;
-    let mut row = MIB_IPNET_ROW2::default();
-    row.Address.Ipv4.sin_family = AF_INET;
-    row.Address.Ipv4.sin_addr.S_un.S_addr = ip_u32(ip);
-    row.InterfaceIndex = index;
-    if unsafe { ResolveIpNetEntry2(&mut row, std::ptr::null()) } != 0 || row.PhysicalAddressLength != 6 {
+    use windows_sys::Win32::NetworkManagement::IpHelper::ResolveIpNetEntry2;
+    let mut row = ipnet_row(ip, index);
+    if unsafe { ResolveIpNetEntry2(&mut row, std::ptr::null()) } != 0 {
         return None;
     }
-    let mac = &row.PhysicalAddress[..6];
-    (mac != [0; 6]).then(|| mac.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"))
+    row_mac(&row)
 }
 
 // ponytail: macOS reads the ARP table only; a stale entry there still counts.
@@ -575,6 +585,9 @@ pub struct Mndp {
     pub version: String,
     pub board: String,
     pub address: String,
+    /// Where the packet came from. RouterOS sends from its first address, which may be on another network
+    /// than the shared one (192.168.88.1 while sharing 192.168.1.x), or 0.0.0.0 with no address at all.
+    pub from: String,
 }
 
 /// Packet: 4 bytes of header, then type/length/value fields, big-endian u16s.
@@ -586,7 +599,7 @@ pub fn mndp_parse(p: &[u8]) -> Option<Mndp> {
         let v = p.get(at + 4..at + 4 + len)?;
         let text = || String::from_utf8_lossy(v).into_owned();
         match kind {
-            1 if len == 6 => m.mac = v.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"),
+            1 if len == 6 => m.mac = mac_text(v),
             5 => m.identity = text(),
             7 => m.version = text(),
             12 => m.board = text(),
@@ -599,20 +612,26 @@ pub fn mndp_parse(p: &[u8]) -> Option<Mndp> {
 }
 
 /// Asks the shared adapter's cable who is there (an empty MNDP packet makes RouterOS answer at once)
-/// and listens for `wait_ms`. Bound to the adapter's own address, so the question goes out of that port only.
+/// and listens for `wait_ms`. The question goes out bound to the adapter's own address (that port only); answers
+/// are heard on every address, since RouterOS sends from whatever address it has first. That also hears
+/// MikroTiks on other adapters: `from` lets the UI drop those.
 /// ponytail: port 5678 is shared with Winbox; if Winbox holds it this returns the error and the UI just skips it.
+/// No arrival-interface check (IP_PKTINFO); the UI's subnet filter stands in for it.
 pub fn mndp(local: Ipv4Addr, wait_ms: u64) -> Result<Vec<Mndp>, String> {
     use std::time::{Duration, Instant};
-    let s = std::net::UdpSocket::bind((local, 5678)).map_err(|e| format!("MNDP: {e}"))?;
-    s.set_broadcast(true).map_err(|e| e.to_string())?;
-    let _ = s.send_to(&[0, 0, 0, 0], (Ipv4Addr::BROADCAST, 5678));
+    let tx = std::net::UdpSocket::bind((local, 5678)).map_err(|e| format!("MNDP: {e}"))?;
+    tx.set_broadcast(true).map_err(|e| e.to_string())?;
+    // Winbox may hold the wildcard: then only what reaches the adapter's own address, as before.
+    let rx = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 5678));
+    let s = rx.as_ref().unwrap_or(&tx);
+    let _ = tx.send_to(&[0, 0, 0, 0], (Ipv4Addr::BROADCAST, 5678));
     let end = Instant::now() + Duration::from_millis(wait_ms);
     let mut found: Vec<Mndp> = vec![];
     let mut buf = [0u8; 1500];
     while let Some(left) = end.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()) {
         s.set_read_timeout(Some(left)).map_err(|e| e.to_string())?;
-        let Ok((n, _)) = s.recv_from(&mut buf) else { break };
-        if let Some(m) = mndp_parse(&buf[..n]) && !found.iter().any(|f| f.mac == m.mac) { found.push(m); }
+        let Ok((n, src)) = s.recv_from(&mut buf) else { break };
+        if let Some(mut m) = mndp_parse(&buf[..n]) && !found.iter().any(|f| f.mac == m.mac) { m.from = src.ip().to_string(); found.push(m); }
     }
     Ok(found)
 }

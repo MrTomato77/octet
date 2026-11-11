@@ -40,7 +40,9 @@ pub enum Request {
     /// macOS only: emptying the DNS cache needs root there (Windows does it in-process).
     FlushDns,
     /// Windows only: Internet Connection Sharing from `public` (has the internet) to `private`.
-    Share { public: u32, private: u32, on: bool, #[serde(default)] scope: Option<Ipv4Addr> },
+    /// `restore` (turning off only): the private adapter's saved settings, put back in the same elevated run,
+    /// so Stop asks for admin once.
+    Share { public: u32, private: u32, on: bool, #[serde(default)] scope: Option<Ipv4Addr>, #[serde(default)] restore: Option<Box<Request>> },
 }
 
 fn ipv4(v: &str, what: &str) -> Result<Ipv4Addr, String> {
@@ -113,14 +115,20 @@ pub fn commands(r: &Request) -> Result<Vec<Vec<String>>, String> {
         Request::FlushDns if cfg!(target_os = "macos") => return Ok(vec![cmd(&["dscacheutil", "-flushcache"]), cmd(&["killall", "-HUP", "mDNSResponder"])]),
         Request::FlushDns => return Ok(vec![]),
         #[cfg(windows)]
-        Request::Share { public, private, on, scope } => {
+        Request::Share { public, private, on, scope, restore } => {
             let mut c = vec![SHARE.to_string(), public.to_string(), private.to_string(), (if *on { "on" } else { "off" }).into()];
             if let Some(ip) = scope.filter(|_| *on) {
                 let o = ip.octets();
                 if !ip.is_private() || o[3] == 0 || o[3] == 255 { return Err(format!("{ip} is not a private host address for sharing")); }
                 c.push(ip.to_string());
             }
-            return Ok(vec![c]);
+            let mut all = vec![c];
+            match restore.as_deref() {
+                None => {}
+                Some(r @ Request::Apply { index, .. }) if !*on && index == private => all.extend(commands(r)?),
+                Some(_) => return Err("Only the shared adapter's own settings can be put back after sharing".into()),
+            }
+            return Ok(all);
         }
         #[cfg(not(windows))]
         Request::Share { .. } => return Err("Internet Sharing is Windows only".into()),
@@ -521,6 +529,15 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn share_request_from_the_ui() {
+        // Stop puts the shared adapter back in the same run; anything else as `restore` is refused.
+        let back = r#"{"op":"apply","index":11,"name":"Ethernet 4","cfg":{"ipAuto":true,"address":"","subnet":"","gateway":"","dnsAuto":true,"dns1":"","dns2":"","register":true},"ip":true,"dns":true}"#;
+        let stop: Request = serde_json::from_str(&format!(r#"{{"op":"share","public":18,"private":11,"on":false,"restore":{back}}}"#)).unwrap();
+        let c = commands(&stop).unwrap();
+        assert!(c.len() > 1 && c[0][0] == SHARE && c[0][3] == "off", "{c:?}");
+        let other: Request = serde_json::from_str(&format!(r#"{{"op":"share","public":18,"private":12,"on":false,"restore":{back}}}"#)).unwrap();
+        assert!(commands(&other).is_err(), "another adapter's settings");
+        let start: Request = serde_json::from_str(&format!(r#"{{"op":"share","public":18,"private":11,"on":true,"restore":{back}}}"#)).unwrap();
+        assert!(commands(&start).is_err(), "restore only when turning off");
         let r: Request = serde_json::from_str(r#"{"op":"share","public":18,"private":11,"on":true}"#).unwrap();
         assert_eq!(commands(&r).unwrap(), [cmd(&[SHARE, "18", "11", "on"])]);
         let r: Request = serde_json::from_str(r#"{"op":"share","public":18,"private":11,"on":true,"scope":"10.9.8.1"}"#).unwrap();

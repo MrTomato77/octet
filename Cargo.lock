@@ -2453,7 +2453,6 @@ dependencies = [
  "ed25519-compact",
  "libc",
  "native-tls",
- "objc2",
  "objc2-core-foundation",
  "objc2-core-location",
  "objc2-core-wlan",

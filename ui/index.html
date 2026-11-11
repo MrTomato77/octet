@@ -211,9 +211,9 @@ button, input, select { font: inherit; color: inherit; }
 /* Only Advanced grows past the window (many rows); 2px of room so focus rings at its edges aren't cut */
 #page-adv { overflow-y: auto; scrollbar-width: none; padding: 2px; margin: -2px; }
 /* No scrollbar: the edge that has more past it fades out instead */
-#page-adv.below { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
-#page-adv.above { mask-image: linear-gradient(to top, #000 calc(100% - 28px), transparent); }
-#page-adv.above.below { mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+#page-adv.below, .sh-devlist.below { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
+#page-adv.above, .sh-devlist.above { mask-image: linear-gradient(to top, #000 calc(100% - 28px), transparent); }
+#page-adv.above.below, .sh-devlist.above.below { mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 /* Advanced: the IP toggle, then one line of boxes per address: address / prefix -> the gateway it goes out
    through. The last line is empty and dashed: type into it and it becomes a real one. */
 .alist { margin-top: 0; }
@@ -288,7 +288,7 @@ button, input, select { font: inherit; color: inherit; }
 .sh-devs.has .sh-empty, .sh-devs:not(.has) .sh-devlist { opacity: 0; pointer-events: none; }
 .sh-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--faint); font-size: 12px; border: 1px dashed var(--border); border-radius: var(--r-input); text-align: center; padding: 0 var(--s4); }
 .sh-empty i { font-size: 22px; }
-.sh-devlist { overflow: hidden auto; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
+.sh-devlist { overflow: hidden auto; scrollbar-width: none; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
 /* a row lines its tile up with the card's (12 px in + its border); opened, the row and its actions become one card */
 .sh-item { border: 1px solid transparent; border-radius: 10px; transition: background-color 180ms, border-color 180ms; }
 .sh-item:hover, .sh-item:focus-within { background: var(--hover); }
@@ -306,9 +306,6 @@ button, input, select { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .sh-link.on .sh-wire .flow, .sh-dev { animation: none; } .sh-wire .fill, .sh-list, .sh-selbtn .ph-caret-down, .sh-tools, .sh-dev .mk { transition: none; } }
 .mac [data-win] { display: none !important; }
 .page.leaving { pointer-events: none; }
-.page.soon { display: grid; place-content: center; justify-items: center; gap: var(--s2); min-height: 280px; color: var(--muted); font-size: 13px; }
-.page.soon[hidden] { display: none; }
-.page.soon .ph { font-size: 28px; color: var(--faint); }
 /* Probe: the targets as chips (a thumb slides to the picked one), then its last minute as a graph you can hover.
    Its address and numbers sit in the footer. */
 #page-probe:not([hidden]) { display: flex; flex-direction: column; gap: var(--s3); }
@@ -372,11 +369,6 @@ button, input, select { font: inherit; color: inherit; }
 #page-scan:not([hidden]) { display: flex; flex-direction: column; gap: var(--s3); position: relative; }
 .shead { display: flex; align-items: center; gap: var(--s2); font-size: 13px; min-height: var(--row-h); }
 /* One line: the subnet as one address (the prefix just quieter), then which /24 of it the grid holds. */
-.snet { display: flex; align-items: center; min-width: 0; color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.snet > i { font-size: 16px; color: var(--muted); margin-right: 8px; }
-.spfx { color: var(--muted); }
-.snet-sub { color: var(--faint); font-size: 12px; margin-left: 10px; overflow: hidden; text-overflow: ellipsis; }
-.snet-sub:empty { display: none; }
 /* The sweep's progress is a ring around the rescan button; the % sits where the arrow was, and the arrow comes back when it is done. */
 .sstate { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .sagain { margin-left: auto; position: relative; }
@@ -1331,9 +1323,12 @@ const adapters = [
   { id: 4, name: "Bluetooth Network Connection", desc: "Bluetooth Device (Personal Area Network)", mac: "02-00-00-00-00-04", state: "disabled", dhcpServer: "",
     cfg: { ipAuto: true, address: "", subnet: "", gateway: "", dnsAuto: true, dns1: "", dns2: "", register: true } },
 ];
+const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const keep = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const forget = k => { try { localStorage.removeItem(k); } catch {} };
 let hidden = new Set();
-try { hidden = new Set(JSON.parse(localStorage.getItem("octet-hidden") || "[]")); } catch {}
-const saveHidden = () => { try { localStorage.setItem("octet-hidden", JSON.stringify([...hidden])); } catch {} };
+try { hidden = new Set(JSON.parse(pref("octet-hidden") || "[]")); } catch {}
+const saveHidden = () => keep("octet-hidden", JSON.stringify([...hidden]));
 const firstVisible = () => adapters.findIndex(a => !hidden.has(a.id));
 const L = (en, th) => lang === "th" ? th : en;
 // Inside Octet, Tauri is here and the sample list above is replaced by this machine's adapters.
@@ -1396,9 +1391,9 @@ const demoInvoke = (cmd, a = {}) => new Promise((res, rej) => setTimeout(() => {
   if (cmd === "ping") return res(demo.pingFail && a.address !== "8.8.8.8" || demo.proxyArp && a.address !== adapters[sel].cfg.gateway ? null : { ms: /^(10|192\.168)\./.test(a.address) ? 1 + Math.floor(Math.random() ** 3 * 5) : 14 + Math.floor(Math.random() ** 2 * 8), ttl: /^(10|192\.168)\./.test(a.address) ? 64 : 117 });
   // Sharing: the RB5009 asks for an address and turns up in the shared range; a phone joins a little later.
   if (cmd === "neighbours") { const b = (sharing()?.scope || "192.168.137.1").split(".").slice(0, 3).join("."), t = (Date.now() - (sharing()?.at || 0)) / 1000;
-    return res([t > 2 && [b + ".23", "D0-EA-11-5E-FD-33"], t > 8 && [b + ".88", "3C-22-FB-10-0A-91"]].filter(Boolean)); }
+    return res([t > 2 && [b + ".23", "D0-EA-11-5E-FD-33"], t > 2 && ["192.168.88.1", "D0-EA-11-5E-FD-33"], t > 8 && [b + ".88", "3C-22-FB-10-0A-91"]].filter(Boolean)); }   // an old /24 lingers, as Windows keeps it
   // MNDP: the router announces itself as soon as the cable is in, before it has an address on this side.
-  if (cmd === "mndp") return res(adapters[sel]?.state === "up" ? [{ mac: "D0-EA-11-5E-FD-33", identity: "MikroTik", version: "7.16.2 (stable)", board: "RB5009UG+S+", address: "" }] : []);
+  if (cmd === "mndp") return res(adapters[sel]?.state === "up" ? [{ mac: "D0-EA-11-5E-FD-39", identity: "MikroTik", version: "7.16.2 (stable)", board: "RB5009UG+S+", address: "192.168.88.1", from: "192.168.88.1" }, { mac: "6C-3B-6B-D9-90-61", identity: "Office", version: "7.20.2 (stable)", board: "RB2011UiAS-2HnD", address: "10.0.0.1", from: "10.0.0.1" }] : []);
   if (cmd === "change") {
     if (demo.outcome === "cancel") return rej("Cancelled");
     if (demo.outcome === "fail") return rej("The object already exists.");
@@ -1424,45 +1419,41 @@ async function reload() {
   keep("octet-rows", adapters.filter(a => !hidden.has(a.id)).length);   // next launch draws this many skeleton rows
 }
 const change = request => net("change", { request });
-const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
-const keep = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 let sel = 0, draft = null, applies = 0, lang = pref("octet-lang") || (navigator.language.startsWith("th") ? "th" : "en");
 
 const T = {
   en: { adapters: "Adapters", settings: "Settings", refresh: "Refresh", release: "Release DHCP", renew: "Renew DHCP", cycle: "Release and renew",
     hide: "Hide from list", ncpa: mac ? "Network Settings" : "Network Connections",
-    dhcp: "DHCP", manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
+    manual: "Manual", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "Automatic",
     dns1: "Preferred", dns2: "Alternate", register: "Register in DNS", revert: "Revert", apply: "Apply",
-    theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark", updates: "Updates", admin: "Run as admin", adminAsk: "When needed", adminAlways: "Always",
+    theme: "Theme", language: "Language", hidden: "Hidden", system: "System", light: "Light", dark: "Dark", admin: "Run as admin", adminAsk: "When needed", adminAlways: "Always",
     general: "General", keys: "Shortcuts", about: "About", kApply: "Apply changes", kRefresh: mac ? "Read adapters again" : "Read adapters again (or Ctrl R)",
     kSide: "Expand or collapse the sidebar", kCopy: "Copy the whole configuration", kPaste: "Paste a whole configuration",
     kOctet: "Move between octets", kEsc: "Close a menu, a view or the sidebar", kSpeed: "Open or close the speed test", kPort: "Add a port (Ping)",
     kgAll: "Anywhere", kgCfg: "The whole configuration", kgType: "Typing an address", updAuto: "Auto-check", sgLook: "Appearance", sgAccess: "Access and memory", sgUpd: "Updates", version: "Version", off: "Off", atStart: "When Octet starts", relNotes: "Release notes", scanMem: "Scan memory", clear: "Clear",
     report: "Report a problem", sysInfo: "System", copy: "Copy", tagline: "IPv4 and DNS settings, in seconds.",
-    license: "License", notices: "Third-party notices", source: "Source", updates: "Updates", releases: "See releases",
+    license: "License", notices: "Third-party notices", source: "Source", 
     privacy: "Privacy", privacyText: "No telemetry, no server of its own. It only checks your network around Apply (ARP, ping) and looks up the gateway. Device makers come from a list built into the app.", credits: "Credits", inspired: "Inspired by",
-    up: "Connected", down: "Disconnected", disabled: "Disabled", none: "None", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabShare: "Share", tabProbe: "Ping", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
-    soonAdv: "Extra addresses, gateways and metric", soonProbe: "Ping with a live graph", soonScan: "Free addresses on this subnet", soonInfo: "A summary to copy and send",
-    kPages: "Go to a page", addIp: "Add address", addGw: "Add gateway", byDhcp: "Set by DHCP.", toManual: "Switch to Manual",
-    metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateways",
+    up: "Connected", down: "Disconnected", disabled: "Disabled", noChanges: "No changes", tabIp: "IP & DNS", tabAdv: "Advanced", tabShare: "Share", tabProbe: "Ping", tabScan: "Scan", tabInfo: "Info", pAvg: "Avg", pMax: "Max", pJit: "Jitter", pLoss: "Loss",
+    kPages: "Go to a page", speedTest: "Speed test", isp: "ISP", cfServer: "Cloudflare", data: "Data", ping: "Ping", jitter: "Jitter", loadDown: "Loaded down", loadUp: "Loaded up", underLoad: "Under load", 
+    metric: "Metric", 
     changes: n => `${n} change${n > 1 ? "s" : ""} not applied`, applied: n => `Applied to ${n}`, disable: "Disable adapter", enable: "Enable adapter",
   },
   th: { adapters: "อะแดปเตอร์", settings: "ตั้งค่า", refresh: "รีเฟรช", release: "Release IP", renew: "Renew IP", cycle: "Release แล้ว Renew",
     hide: "ซ่อน", ncpa: mac ? "Network Settings" : "Network Connections",
-    dhcp: "DHCP", manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
+    manual: "กำหนดเอง", ip: "IP address", subnet: "Subnet mask", gateway: "Gateway", auto: "อัตโนมัติ",
     dns1: "DNS หลัก", dns2: "DNS สำรอง", register: "Register ใน DNS", revert: "ย้อนกลับ", apply: "บันทึก",
-    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", updates: "อัปเดต", admin: "สิทธิ์ Admin", adminAsk: "ขอเมื่อต้องใช้", adminAlways: "ทุกครั้ง",
+    theme: "ธีม", language: "ภาษา", hidden: "ที่ซ่อนไว้", system: "ตามระบบ", light: "สว่าง", dark: "มืด", admin: "สิทธิ์ Admin", adminAsk: "ขอเมื่อต้องใช้", adminAlways: "ทุกครั้ง",
     general: "ทั่วไป", keys: "คีย์ลัด", about: "เกี่ยวกับ", kApply: "บันทึก", kRefresh: mac ? "รีเฟรชรายการ" : "รีเฟรชรายการ (หรือ Ctrl R)",
     kSide: "ย่อ/ขยายแถบซ้าย", kCopy: "คัดลอกค่าทั้งหมด", kPaste: "วางค่าทั้งหมด",
     kOctet: "ไปช่องถัดไป", kEsc: "ปิดเมนู หน้าที่เปิดอยู่ หรือแถบซ้าย", kSpeed: "เปิด/ปิด Speed Test", kPort: "ใส่พอร์ต (หน้า Ping)",
     kgAll: "ใช้ได้ทุกหน้า", kgCfg: "ค่าทั้งหมด", kgType: "ตอนพิมพ์ IP", updAuto: "ตรวจอัตโนมัติ", sgLook: "การแสดงผล", sgAccess: "สิทธิ์และความจำ", sgUpd: "อัปเดต", version: "เวอร์ชัน", off: "ปิด", atStart: "ตอนเปิด Octet", relNotes: "บันทึกการเปลี่ยนแปลง", scanMem: "ความจำ Scan", clear: "ล้าง",
     report: "แจ้งปัญหา", sysInfo: "ระบบ", copy: "คัดลอก", tagline: "ตั้งค่า IPv4 และ DNS ได้ในไม่กี่วินาที",
-    license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", updates: "อัปเดต", releases: "ดูเวอร์ชันล่าสุด",
+    license: "License", notices: "ไลบรารีที่ใช้", source: "Source code", 
     privacy: "ความเป็นส่วนตัว", privacyText: "ไม่เก็บข้อมูลการใช้งาน และไม่มีเซิร์ฟเวอร์ของตัวเอง แค่เช็กเครือข่ายตอนบันทึก (ARP, ping) และดูข้อมูล Gateway ส่วนชื่อผู้ผลิตอุปกรณ์มาจากรายชื่อที่อยู่ในแอป", credits: "เครดิต", inspired: "ได้แรงบันดาลใจจาก",
-    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", none: "ไม่มี", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabShare: "แชร์เน็ต", tabProbe: "Ping", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
-    soonAdv: "หลาย IP, หลาย Gateway และ Metric", soonProbe: "Ping พร้อมกราฟสด", soonScan: "IP ที่ยังว่างใน subnet นี้", soonInfo: "สรุปข้อมูลไว้คัดลอกส่งต่อ",
-    kPages: "ไปที่หน้า", addIp: "เพิ่ม IP", addGw: "เพิ่ม Gateway", byDhcp: "ได้จาก DHCP", toManual: "เปลี่ยนเป็นกำหนดเอง",
-    metric: "Metric", ifMetric: "Interface metric", addrs: "IP addresses", gws: "Gateway",
+    up: "เชื่อมต่อแล้ว", down: "ไม่ได้เชื่อมต่อ", disabled: "ปิดอยู่", noChanges: "ยังไม่ได้แก้อะไร", tabIp: "IP & DNS", tabAdv: "ขั้นสูง", tabShare: "แชร์เน็ต", tabProbe: "Ping", tabScan: "หา IP", tabInfo: "ข้อมูล", pAvg: "เฉลี่ย", pMax: "สูงสุด", pJit: "Jitter", pLoss: "หลุด",
+    kPages: "ไปที่หน้า", speedTest: "ทดสอบความเร็ว", isp: "ผู้ให้บริการ", cfServer: "Cloudflare", data: "ข้อมูลที่ใช้", ping: "Ping", jitter: "Jitter", loadDown: "ขณะดาวน์โหลด", loadUp: "ขณะอัปโหลด", underLoad: "ขณะใช้งานหนัก", 
+    metric: "Metric", 
     changes: n => `แก้ไว้ ${n} จุด ยังไม่ได้บันทึก`, applied: n => `บันทึกค่าของ ${n} แล้ว`, disable: "ปิดการใช้งาน", enable: "เปิดการใช้งาน",
   },
 };
@@ -2296,6 +2287,17 @@ tools.onclick = async e => {
 // say) gets an address and the internet. Windows gives this adapter the address picked here; what it had
 // before is kept and put back on Stop.
 const sharing = () => { try { return JSON.parse(pref("octet-share")); } catch { return null; } };
+// The Share state, from data only: "off", "other" (another adapter is shared), "on", or "gone" (Windows
+// stopped it: ICS pins the shared adapter to the chosen address, so another address means it is off).
+// ponytail: guessed from the address; read INetSharingManager instead if this ever guesses wrong.
+function shareMode(a) {
+  const s = sharing();
+  if (!s || !a) return { mode: "off" };
+  if (s.id !== a.id) return { mode: "other", s };
+  const gone = a.state === "up" && !!a.cfg.address && a.cfg.address !== (s.scope || "192.168.137.1");
+  return { mode: gone ? "gone" : "on", s };
+}
+const net24 = ip => ip.split(".").slice(0, 3).join(".");
 const shareSources = a => adapters.filter(x => x !== a && x.state === "up" && x.cfg.gateway);
 const srcSub = x => x.ssid || x.cfg.address;
 let shFrom, shScope = pref("octet-share-ip") || "192.168.1.1", shDevs = [], shMndp = [], shKey = "";
@@ -2377,16 +2379,13 @@ function paintSource(x, move, cardOnly = false) {
 }
 function renderShare() {
   const a = adapters[sel]; if (!a) return;
-  const s = sharing(), mine = !!s && s.id === a.id, other = !!s && !mine, list = shareSources(a);
+  const { mode, s } = shareMode(a), mine = mode === "on" || mode === "gone", other = mode === "other", gone = mode === "gone", list = shareSources(a);
   if (!mine && !list.some(x => x.id === shFrom)) shFrom = list[0]?.id;
   const src = mine ? adapters.find(x => x.index === s.pub) ?? { name: s.from } : adapters.find(x => x.id === shFrom);
   // another adapter or a source that changed elsewhere is a fresh paint, not a pick: no roll
   // A new adapter or source rolls both ends of the card, the same motion as picking a source.
   const key = a.id + "|" + (src?.id ?? src?.name ?? ""), move = !!shKey && page === "share";
   if (key !== shKey) { if (!shKey.startsWith(a.id + "|")) { shDevs = []; shMndp = []; } paintSource(src, move); shKey = key; }   // another adapter: its own devices only
-  // ponytail: Windows pins the shared adapter to the chosen address, so another address means sharing stopped
-  // (ICS turned off elsewhere, a reboot). Read INetSharingManager instead if this ever guesses wrong.
-  const gone = mine && a.state === "up" && !!a.cfg.address && a.cfg.address !== (s.scope || "192.168.137.1");
   $("sh-link").classList.toggle("on", mine && !gone);
   const dstIc = "ph " + kindIcon[kind(a)];
   if (move) { shMorph($("sh-dst-ic"), dstIc); shRoll($("sh-dst-name"), a.name); } else { $("sh-dst-ic").className = dstIc; $("sh-dst-name").textContent = a.name; }
@@ -2406,7 +2405,7 @@ function renderShare() {
   go.innerHTML = mine ? `<i class="ph ph-stop"></i><span>${L("Stop", "หยุดแชร์")}</span>` : `<i class="ph ph-share"></i><span>${L("Share", "แชร์")}</span>`;
   go.className = mine ? "btn" : "btn primary";
   go.disabled = busyNow || (!mine && (other || !src || bad || a.state === "disabled"));
-  shSay(a, s, mine, other, bad, gone);
+  shSay(a);
   shDevPaint(a, mine);
 }
 // Centred text: fade out, swap, fade in. One line at a time, so it never wraps mid-change.
@@ -2417,8 +2416,11 @@ function shFade(e, t) {
   e.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: "ease-in", fill: "forwards" });
   setTimeout(() => { if (e._to !== t) return; e.textContent = t; delete e._to; e.getAnimations().forEach(x => x.cancel()); e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" }); }, 120);
 }
-function shSay(a, s, mine, other, bad, gone) {
-  if (gone) { const g = L("Windows stopped sharing · Stop puts your settings back", "Windows หยุดแชร์ไปแล้ว · กดหยุดเพื่อคืนค่าเดิม"); if ($("share-say").textContent !== g) $("share-say").textContent = g; return; }
+let shNote = "";   // what Share/Stop is doing now; Share's own footer, since the status line is hidden on this page
+function shSay(a) {
+  const { mode, s } = shareMode(a), mine = mode === "on", other = mode === "other", bad = !s && !!shScope && !privateIp(shScope);
+  if (shNote) { if ($("share-say").textContent !== shNote) $("share-say").textContent = shNote; return; }
+  if (mode === "gone") { const g = L("Windows stopped sharing · Stop puts your settings back", "Windows หยุดแชร์ไปแล้ว · กดหยุดเพื่อคืนค่าเดิม"); if ($("share-say").textContent !== g) $("share-say").textContent = g; return; }
   const t = mine ? Math.max(0, Math.floor((Date.now() - (s.at || Date.now())) / 1000)) : 0;
   const text = mine ? `<i class="ph ph-clock"></i> ${t >= 60 ? Math.floor(t / 60) + " " + L("min", "นาที") + " " : ""}${t % 60} ${L("s", "วิ")}`
     : other ? L(`Already sharing to ${s.name}`, `กำลังแชร์ไปที่ ${s.name} อยู่`)
@@ -2461,6 +2463,7 @@ function shDevPaint(a, mine) {
       return item;
     }));
     host.dataset.k = want;
+    advEdges(host);
   }
   $("sh-devs").classList.toggle("has", shDevs.length > 0);
   shFade($("sh-empty-text"), a.state === "disabled" ? L("Turn this adapter on first", "เปิดอะแดปเตอร์นี้ก่อน") : a.state !== "up" ? L("Plug a cable into this adapter", "เสียบสายเข้ากับอะแดปเตอร์นี้")
@@ -2477,12 +2480,19 @@ async function shareLook() {
   try {
     const own = a.cfg.address || "";
     const n = mine && a.state === "up" ? await net("neighbours", { index: a.index }).catch(() => []) : [];
-    const found = n.filter(([ip]) => ip !== own).map(([ip, mac]) => ({ ip, mac }));
+    // Only the shared /24 (Windows keeps old neighbours from before), and one row per device (one MAC, first IP).
+    const found = [];
+    for (const [ip, mac] of n) if (ip !== own && net24(ip) === net24(own) && !found.some(d => d.mac === mac)) found.push({ ip, mac });
     if (a.state !== "up") shMndp = [];
     else if (own && shTick % 3 === 0) shMndp = await net("mndp", { address: own }).catch(() => shMndp);
-    const net24 = ip => ip.split(".").slice(0, 3).join(".");
-    for (const m of shMndp) {
-      const f = found.find(d => d.mac === m.mac);
+    // ponytail: MikroTik announces with the port's MAC, the router answers ARP with another of its own (same first
+    // five bytes). Matching on those may join two routers whose MACs are neighbours; ask the router if it does.
+    const same = (x, y) => x.slice(0, 14) === y.slice(0, 14);
+    // Answers are heard on every address: one sent from inside another adapter's network came from there.
+    const elsewhere = ip => adapters.some(x => x !== a && x.state === "up" && validIp(x.cfg.address || "") && validIp(x.cfg.subnet || "")
+      && ((ipNum(ip) ^ ipNum(x.cfg.address)) & ipNum(x.cfg.subnet)) === 0);
+    for (const m of shMndp.filter(m => !m.from || !elsewhere(m.from))) {
+      const f = found.find(d => same(d.mac, m.mac));
       if (f) Object.assign(f, { board: m.board, version: m.version });
       else found.push({ ip: m.address && own && net24(m.address) === net24(own) ? m.address : "", mac: m.mac, board: m.board, version: m.version });
     }
@@ -2500,30 +2510,54 @@ function shSweep(a) {
   Promise.all(Array.from({ length: 16 }, lane));
 }
 setInterval(shareLook, 3000);
-setInterval(() => { const a = adapters[sel], s = sharing(); if (a && s && s.id === a.id && page === "share") shSay(a, s, true, false, false, !$("sh-link").classList.contains("on")); }, 1000);
+setInterval(() => { const a = adapters[sel]; if (["on", "gone"].includes(shareMode(a).mode) && page === "share") shSay(a); }, 1000);
 $("share-go").onclick = async () => {
-  const a = adapters[sel], s = sharing();
-  say(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true); $("share-go").disabled = true;
+  const a = adapters[sel], { mode, s } = shareMode(a);
+  const note = t => { shNote = t; shSay(a); };
+  note(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true); $("share-go").disabled = true;
   try {
     if (s) {
-      if ($("sh-link").classList.contains("on")) await change({ op: "share", public: s.pub, private: a.index, on: false });   // already off: just restore
-      try { localStorage.removeItem("octet-share"); } catch {}
-      await change({ op: "apply", index: a.index, name: a.name, cfg: s.cfg, ip: true, dns: true, extra: true, wasExtra: [], wasGws: [], wasMetric: cfgOf(a).metric });
+      // Windows turns ICS off one side after the other (~3 s, measured); say so rather than look stuck.
+      note(L("Stopping sharing… Windows takes a few seconds", "กำลังหยุดแชร์… Windows ใช้เวลาสักครู่"));
+      // One elevated run (one UAC): sharing off, then the saved settings back. Already off: just the settings.
+      const back = { op: "apply", index: a.index, name: a.name, cfg: s.cfg, ip: true, dns: true, extra: true, wasExtra: [], wasGws: [], wasMetric: cfgOf(a).metric };
+      await change(mode === "gone" ? back : { op: "share", public: s.pub, private: a.index, on: false, restore: back });
+      forget("octet-share");   // after: a failed Stop can be pressed again
     } else {
       const src = adapters.find(x => x.id === shFrom), scope = shScope || "192.168.1.1";
+      if (src.cfg.address && net24(src.cfg.address) === net24(scope))
+        throw L(`${net24(scope)}.0/24 is ${src.name}'s own network: pick another, such as 192.168.137.1`, `${net24(scope)}.0/24 เป็นวงของ ${src.name} เอง: เลือกวงอื่น เช่น 192.168.137.1`);
+      // Someone on the cable may already have it (a router's own LAN address): ask before Windows takes it.
+      // ARP only reaches the cable when the address is on this adapter's network now; elsewhere it would wait
+      // out its 3 s timeout for nothing, so a MikroTik's own announced address is the check there.
+      const onLink = a.state === "up" && !!a.cfg.address && net24(a.cfg.address) === net24(scope);
+      if (scope !== a.cfg.address) {
+        note(L("Checking address…", "กำลังเช็ก IP ซ้ำ…"));
+        const owner = shMndp.find(m => m.address === scope)?.mac ?? (onLink ? await net("who_has", { address: scope }).catch(() => null) : null);
+        if (owner && owner !== a.mac) {
+          lock(false); note("");
+          const mk = await maker(owner);
+          const go = await ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Share anyway", "แชร์ต่อ"), "warning",
+            L(`${scope} answered from ${owner} (${mk ?? "unknown maker"}). Pick a free one, such as 192.168.137.1.`, `${scope} มีเครื่อง ${owner} (${mk ?? "ไม่ทราบยี่ห้อ"}) ตอบกลับ เลือก IP ที่ว่าง เช่น 192.168.137.1`));
+          if (!go) { renderShare(); say(""); return; }
+          lock(true);
+        }
+      }
+      note(L("Starting sharing…", "กำลังเริ่มแชร์…"));
       keep("octet-share-ip", scope);
       // first: a half-done share can still be stopped
       keep("octet-share", JSON.stringify({ id: a.id, index: a.index, name: a.name, pub: src.index, from: src.name, cfg: cfgOf(a), scope, at: Date.now() }));
       try { await change({ op: "share", public: src.index, private: a.index, on: true, scope }); }
-      catch (e) { try { localStorage.removeItem("octet-share"); } catch {} throw e; }
+      catch (e) { forget("octet-share"); throw e; }
     }
     shDevs = []; shMndp = [];
     if (tauri) await reload();
-    lock(false); renderAdapter(true); renderList(); renderShare();
-    say(s ? L("Sharing stopped · settings put back", "หยุดแชร์แล้ว · คืนค่าเดิมแล้ว") : L("Sharing on", "เริ่มแชร์แล้ว"), "ok");
+    shNote = ""; lock(false); renderAdapter(true); renderList(); renderShare();
+    say((s ? L("Sharing stopped · settings put back", "หยุดแชร์แล้ว · คืนค่าเดิมแล้ว") : L("Sharing on", "เริ่มแชร์แล้ว")), "ok");
   } catch (e) {
     if (tauri) await reload().catch(() => {});
-    lock(false); renderAdapter(true); renderShare(); say(String(e), "bad");
+    const msg = String(e); shNote = msg; setTimeout(() => { if (shNote === msg) { shNote = ""; renderShare(); } }, 6000);   // the error stays readable a while
+    lock(false); renderAdapter(true); renderShare(); say(msg, "bad");
   }
 };
 
@@ -3220,14 +3254,14 @@ function renderAdv(roll = false) {
   if (window.pagesReady) advEdges();
 }
 const markAdv = () => { if (advDrawn) paintAdv(); };
-function advEdges() {
-  const p = $("page-adv");
+function advEdges(p = $("page-adv")) {   // also the Share device list
   p.classList.toggle("above", p.scrollTop > 1);
   p.classList.toggle("below", p.scrollTop + p.clientHeight < p.scrollHeight - 1);
 }
-$("page-adv").addEventListener("scroll", advEdges, { passive: true });
-const edgeWatch = new ResizeObserver(advEdges);
+$("page-adv").addEventListener("scroll", () => advEdges(), { passive: true });
+const edgeWatch = new ResizeObserver(() => advEdges());
 ["page-adv", "adv-list"].forEach(id => edgeWatch.observe($(id)));
+$("sh-devlist").addEventListener("scroll", () => advEdges($("sh-devlist")), { passive: true });
 // ---------- Probe: the gateway, DNS and a target of your own, pinged once a second all the time ----------
 // It keeps going on other pages (so the graph already holds the last minute), and rests while the window is minimised.
 // ping answers a number (ms) or { ms }; null is a loss.

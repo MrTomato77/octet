@@ -6,7 +6,7 @@
 # Not notarized: the app gets an ad-hoc signature, which Apple silicon needs to run anything.
 set -eu
 cd "$(dirname "$0")/../../.."
-version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/octet/Cargo.toml | head -n 1)
 if [ "${1:-}" = "--native" ]; then
   cargo build --release -p octet
   bin=target/release/octet
