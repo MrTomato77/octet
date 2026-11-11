@@ -96,21 +96,8 @@ fn validate(public: u32, private: u32, connections: &[Connection]) -> Result<[us
 /// private side turns the public side back off; turning off disables both. Windows sets the private
 /// adapter's address itself (usually 192.168.137.1); the UI puts the old one back after Stop.
 pub fn set(public: u32, private: u32, on: bool, scope: Option<&str>) -> Result<(), String> {
-    // ponytail: phase times to %TEMP%\octet-share.log, overwritten each run, to find what makes Share slow.
-    // Delete once that's known.
-    let t0 = std::time::Instant::now();
-    let mut times = vec![];
-    let mut lap = |what: &str| times.push(format!("{what}: {} ms", t0.elapsed().as_millis()));
-    let r = set_timed(public, private, on, scope, &mut lap);
-    lap(if r.is_ok() { "done" } else { "failed" });
-    let _ = std::fs::write(std::env::temp_dir().join("octet-share.log"), format!("{} {}\n{}\n", if on { "on" } else { "off" }, scope.unwrap_or(""), times.join("\n")));
-    r
-}
-
-fn set_timed(public: u32, private: u32, on: bool, scope: Option<&str>, lap: &mut impl FnMut(&str)) -> Result<(), String> {
     let _com = Com::new()?;
     let entries = entries()?;
-    lap("read connections");
     let states: Vec<_> = entries.iter().map(|e| Connection { guid: String::new(), index: e.state.index, name: e.state.name.clone(), role: e.state.role }).collect();
     let [p, q] = validate(public, private, &states)?;
     let (p, q) = (&entries[p], &entries[q]);
@@ -118,7 +105,6 @@ fn set_timed(public: u32, private: u32, on: bool, scope: Option<&str>, lap: &mut
     unsafe {
         if !on {
             q.config.DisableSharing().map_err(|e| fail(q, e))?;
-            lap("private off");
             return p.config.DisableSharing().map_err(|e| fail(p, e));
         }
         if let Some(ip) = scope {
@@ -127,12 +113,10 @@ fn set_timed(public: u32, private: u32, on: bool, scope: Option<&str>, lap: &mut
         if p.state.role.is_none() {
             p.config.EnableSharing(ICSSHARINGTYPE_PUBLIC).map_err(|e| fail(p, e))?;
         }
-        lap("public on");
         if q.state.role.is_none() && let Err(e) = q.config.EnableSharing(ICSSHARINGTYPE_PRIVATE) {
             let _ = p.config.DisableSharing();
             return Err(fail(q, e));
         }
-        lap("private on");
     }
     Ok(())
 }

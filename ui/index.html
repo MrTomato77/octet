@@ -2421,10 +2421,8 @@ function shSay(a, s, mine, other, bad, gone) {
     : other ? L(`Already sharing to ${s.name}`, `กำลังแชร์ไปที่ ${s.name} อยู่`)
     : bad ? L("Use a private address, e.g. 192.168.1.1", "ใช้ IP วงภายใน เช่น 192.168.1.1")
     : `<i class="ph ph-shield-check"></i> ${L("Current settings come back on Stop", "กดหยุดแล้วค่าเดิมกลับมา")}`;
-  const shown = text + (shTook ? ` · ${shTook}` : "");   // ponytail: step times, delete with lap()
-  if ($("share-say").innerHTML !== shown) $("share-say").innerHTML = shown;
+  if ($("share-say").innerHTML !== text) $("share-say").innerHTML = text;
 }
-let shTook = "";
 // Devices: the neighbour table while sharing, plus any MikroTik heard through MNDP. That one shows up even
 // before it has an address, which tells you its DHCP client sits on another port.
 const shCopy = t => navigator.clipboard.writeText(t).then(() => say(L(`Copied ${t}`, `คัดลอก ${t} แล้ว`), "ok"), () => say(L("Couldn't copy", "คัดลอกไม่ได้"), "bad"));
@@ -2512,16 +2510,12 @@ setInterval(shareLook, 3000);
 setInterval(() => { const a = adapters[sel], { mode, s } = shareMode(a); if ((mode === "on" || mode === "gone") && page === "share") shSay(a, s, true, false, false, mode === "gone"); }, 1000);
 $("share-go").onclick = async () => {
   const a = adapters[sel], { mode, s } = shareMode(a);
-  // ponytail: step times shown after the result, to find what makes Share/Stop slow. Delete once known.
-  let t0 = performance.now(); const took = [];
-  const lap = what => { const t = performance.now(); took.push(`${what} ${((t - t0) / 1000).toFixed(1)}`); t0 = t; };
   say(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true); $("share-go").disabled = true;
   try {
     if (s) {
       // One elevated run (one UAC): sharing off, then the saved settings back. Already off: just the settings.
       const back = { op: "apply", index: a.index, name: a.name, cfg: s.cfg, ip: true, dns: true, extra: true, wasExtra: [], wasGws: [], wasMetric: cfgOf(a).metric };
       await change(mode === "gone" ? back : { op: "share", public: s.pub, private: a.index, on: false, restore: back });
-      lap("admin+stop");
       try { localStorage.removeItem("octet-share"); } catch {}   // after: a failed Stop can be pressed again
     } else {
       const src = adapters.find(x => x.id === shFrom), scope = shScope || "192.168.1.1";
@@ -2529,10 +2523,12 @@ $("share-go").onclick = async () => {
       if (src.cfg.address && net24(src.cfg.address) === net24(scope))
         throw L(`${net24(scope)}.0/24 is ${src.name}'s own network: pick another, such as 192.168.137.1`, `${net24(scope)}.0/24 เป็นวงของ ${src.name} เอง: เลือกวงอื่น เช่น 192.168.137.1`);
       // Someone on the cable may already have it (a router's own LAN address): ask before Windows takes it.
+      // ARP only reaches the cable when the address is on this adapter's network now; elsewhere it would wait
+      // out its 3 s timeout for nothing, so a MikroTik's own announced address is the check there.
+      const onLink = a.state === "up" && !!a.cfg.address && net24(a.cfg.address) === net24(scope);
       if (scope !== a.cfg.address) {
         say(L("Checking address…", "กำลังเช็ก IP ซ้ำ…"));
-        const owner = await net("who_has", { address: scope }).catch(() => null);
-        lap("check");
+        const owner = shMndp.find(m => m.address === scope)?.mac ?? (onLink ? await net("who_has", { address: scope }).catch(() => null) : null);
         if (owner && owner !== a.mac) {
           lock(false);
           const go = await ask(L("This address is already in use", "IP นี้มีเครื่องอื่นใช้อยู่"), L("Share anyway", "แชร์ต่อ"), "warning",
@@ -2544,15 +2540,13 @@ $("share-go").onclick = async () => {
       keep("octet-share-ip", scope);
       // first: a half-done share can still be stopped
       keep("octet-share", JSON.stringify({ id: a.id, index: a.index, name: a.name, pub: src.index, from: src.name, cfg: cfgOf(a), scope, at: Date.now() }));
-      try { await change({ op: "share", public: src.index, private: a.index, on: true, scope }); lap("admin+share"); }
+      try { await change({ op: "share", public: src.index, private: a.index, on: true, scope }); }
       catch (e) { try { localStorage.removeItem("octet-share"); } catch {} throw e; }
     }
     shDevs = []; shMndp = [];
     if (tauri) await reload();
-    lap("read");
     lock(false); renderAdapter(true); renderList(); renderShare();
     say((s ? L("Sharing stopped · settings put back", "หยุดแชร์แล้ว · คืนค่าเดิมแล้ว") : L("Sharing on", "เริ่มแชร์แล้ว")), "ok");
-    shTook = took.join(" · ") + " s"; renderShare();
   } catch (e) {
     if (tauri) await reload().catch(() => {});
     lock(false); renderAdapter(true); renderShare(); say(String(e), "bad");
