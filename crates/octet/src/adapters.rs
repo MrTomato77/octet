@@ -828,6 +828,8 @@ mod native {
                     let (ip, subnet, gateway) = if dhcp { Default::default() } else { (list("IPAddress"), list("SubnetMask"), list("DefaultGateway")) };
                     let (ip, subnet): (Vec<_>, Vec<_>) = ip.into_iter().zip(subnet).unzip();   // read as pairs
                     out.push(Raw {
+                        // Its interface index outlives the disable, and Enable and Apply go by it.
+                        index: windows::core::GUID::try_from(id.trim_matches(['{', '}'])).ok().and_then(crate::ics::interface_index).unwrap_or(0),
                         id,
                         name,
                         description,

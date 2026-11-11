@@ -4,7 +4,7 @@
 use serde::Serialize;
 use windows::core::{GUID, IUnknown, Interface};
 use windows::Win32::NetworkManagement::WindowsFirewall::{
-    ICSSHARINGTYPE_PRIVATE, ICSSHARINGTYPE_PUBLIC, INetConnection,
+    SHARINGCONNECTIONTYPE, ICSSHARINGTYPE_PRIVATE, ICSSHARINGTYPE_PUBLIC, INetConnection,
     INetSharingConfiguration, INetSharingManager, NetSharingManager,
 };
 use crate::win::Com;
@@ -28,7 +28,7 @@ pub struct Connection {
 
 struct Entry { state: Connection, config: INetSharingConfiguration }
 
-fn interface_index(guid: GUID) -> Option<u32> {
+pub(crate) fn interface_index(guid: GUID) -> Option<u32> {
     use windows_sys::Win32::NetworkManagement::IpHelper::{ConvertInterfaceGuidToLuid, ConvertInterfaceLuidToIndex};
     use windows_sys::Win32::NetworkManagement::Ndis::NET_LUID_LH;
     let guid = windows_sys::core::GUID { data1: guid.data1, data2: guid.data2, data3: guid.data3, data4: guid.data4 };
@@ -102,23 +102,49 @@ pub fn set(public: u32, private: u32, on: bool, scope: Option<&str>) -> Result<(
     let [p, q] = validate(public, private, &states)?;
     let (p, q) = (&entries[p], &entries[q]);
     let fail = |e: &Entry, err: windows::core::Error| format!("Could not change sharing on {}: {err}", e.state.name);
-    unsafe {
-        if !on {
-            q.config.DisableSharing().map_err(|e| fail(q, e))?;
-            return p.config.DisableSharing().map_err(|e| fail(p, e));
-        }
-        if let Some(ip) = scope {
-            set_scope(ip)?;
-        }
-        if p.state.role.is_none() {
-            p.config.EnableSharing(ICSSHARINGTYPE_PUBLIC).map_err(|e| fail(p, e))?;
-        }
-        if q.state.role.is_none() && let Err(e) = q.config.EnableSharing(ICSSHARINGTYPE_PRIVATE) {
-            let _ = p.config.DisableSharing();
-            return Err(fail(q, e));
+    if !on {
+        let (rp, rq) = both(&p.config, Op::Off, &q.config, Op::Off);
+        rq.map_err(|e| fail(q, e))?;
+        return rp.map_err(|e| fail(p, e));
+    }
+    if let Some(ip) = scope {
+        set_scope(ip)?;
+    }
+    let on = |e: &Entry, kind| if e.state.role.is_none() { Op::On(kind) } else { Op::Keep };
+    let (rp, rq) = both(&p.config, on(p, ICSSHARINGTYPE_PUBLIC), &q.config, on(q, ICSSHARINGTYPE_PRIVATE));
+    // One side failed: the other goes back off if this call turned it on.
+    if rp.is_err() || rq.is_err() {
+        unsafe {
+            if rp.is_ok() && p.state.role.is_none() { let _ = p.config.DisableSharing(); }
+            if rq.is_ok() && q.state.role.is_none() { let _ = q.config.DisableSharing(); }
         }
     }
-    Ok(())
+    rp.map_err(|e| fail(p, e))?;
+    rq.map_err(|e| fail(q, e))
+}
+
+#[derive(Clone, Copy)]
+enum Op { Off, On(SHARINGCONNECTIONTYPE), Keep }
+
+fn run(c: &INetSharingConfiguration, op: Op) -> windows::core::Result<()> {
+    unsafe { match op { Op::Off => c.DisableSharing(), Op::On(kind) => c.EnableSharing(kind), Op::Keep => Ok(()) } }
+}
+
+/// Both sides at once: each Enable/DisableSharing takes Windows 0.3-1.6 s, side by side they overlap.
+/// Both threads are in the process's multithreaded COM apartment, where these objects may cross threads.
+fn both(a: &INetSharingConfiguration, op_a: Op, b: &INetSharingConfiguration, op_b: Op) -> (windows::core::Result<()>, windows::core::Result<()>) {
+    use windows::core::Interface;
+    let raw = b.as_raw() as usize;   // windows-rs interfaces aren't Send; the pointer is, and it's MTA-bound
+    std::thread::scope(|s| {
+        let other = s.spawn(move || {
+            let _com = Com::new();
+            let ptr = raw as *mut core::ffi::c_void;
+            let b = unsafe { INetSharingConfiguration::from_raw_borrowed(&ptr) }.ok_or_else(|| windows::core::Error::from(windows::Win32::Foundation::E_POINTER))?;
+            run(b, op_b)
+        });
+        let ra = run(a, op_a);
+        (ra, other.join().unwrap_or_else(|_| Err(windows::core::Error::from(windows::Win32::Foundation::E_UNEXPECTED))))
+    })
 }
 
 /// The private side's address (/24) Windows hands out from. ICS reads it when sharing starts, so it goes
