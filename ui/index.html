@@ -2405,7 +2405,7 @@ function renderShare() {
   go.innerHTML = mine ? `<i class="ph ph-stop"></i><span>${L("Stop", "หยุดแชร์")}</span>` : `<i class="ph ph-share"></i><span>${L("Share", "แชร์")}</span>`;
   go.className = mine ? "btn" : "btn primary";
   go.disabled = busyNow || (!mine && (other || !src || bad || a.state === "disabled"));
-  shSay(a, s, mine, other, bad, gone);
+  shSay(a);
   shDevPaint(a, mine);
 }
 // Centred text: fade out, swap, fade in. One line at a time, so it never wraps mid-change.
@@ -2417,9 +2417,10 @@ function shFade(e, t) {
   setTimeout(() => { if (e._to !== t) return; e.textContent = t; delete e._to; e.getAnimations().forEach(x => x.cancel()); e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" }); }, 120);
 }
 let shNote = "";   // what Share/Stop is doing now; Share's own footer, since the status line is hidden on this page
-function shSay(a, s, mine, other, bad, gone) {
+function shSay(a) {
+  const { mode, s } = shareMode(a), mine = mode === "on", other = mode === "other", bad = !s && !!shScope && !privateIp(shScope);
   if (shNote) { if ($("share-say").textContent !== shNote) $("share-say").textContent = shNote; return; }
-  if (gone) { const g = L("Windows stopped sharing · Stop puts your settings back", "Windows หยุดแชร์ไปแล้ว · กดหยุดเพื่อคืนค่าเดิม"); if ($("share-say").textContent !== g) $("share-say").textContent = g; return; }
+  if (mode === "gone") { const g = L("Windows stopped sharing · Stop puts your settings back", "Windows หยุดแชร์ไปแล้ว · กดหยุดเพื่อคืนค่าเดิม"); if ($("share-say").textContent !== g) $("share-say").textContent = g; return; }
   const t = mine ? Math.max(0, Math.floor((Date.now() - (s.at || Date.now())) / 1000)) : 0;
   const text = mine ? `<i class="ph ph-clock"></i> ${t >= 60 ? Math.floor(t / 60) + " " + L("min", "นาที") + " " : ""}${t % 60} ${L("s", "วิ")}`
     : other ? L(`Already sharing to ${s.name}`, `กำลังแชร์ไปที่ ${s.name} อยู่`)
@@ -2509,10 +2510,10 @@ function shSweep(a) {
   Promise.all(Array.from({ length: 16 }, lane));
 }
 setInterval(shareLook, 3000);
-setInterval(() => { const a = adapters[sel], { mode, s } = shareMode(a); if ((mode === "on" || mode === "gone") && page === "share") shSay(a, s, true, false, false, mode === "gone"); }, 1000);
+setInterval(() => { const a = adapters[sel]; if (["on", "gone"].includes(shareMode(a).mode) && page === "share") shSay(a); }, 1000);
 $("share-go").onclick = async () => {
   const a = adapters[sel], { mode, s } = shareMode(a);
-  const note = t => { shNote = t; shSay(a, s); };
+  const note = t => { shNote = t; shSay(a); };
   note(L("Waiting for permission…", "รอสิทธิ์ Admin…")); lock(true); $("share-go").disabled = true;
   try {
     if (s) {
