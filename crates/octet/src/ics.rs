@@ -1,7 +1,6 @@
 //! Internet Connection Sharing through the documented NetSharingManager COM API.
 //! `set` runs in the elevated copy.
 
-use serde::Serialize;
 use windows::core::{GUID, IUnknown, Interface};
 use windows::Win32::NetworkManagement::WindowsFirewall::{
     SHARINGCONNECTIONTYPE, ICSSHARINGTYPE_PRIVATE, ICSSHARINGTYPE_PUBLIC, INetConnection,
@@ -12,14 +11,11 @@ use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, IDispatch};
 use windows::Win32::System::Ole::IEnumVARIANT;
 use windows::Win32::System::Variant::VARIANT;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role { Public, Private }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug)]
 pub struct Connection {
-    pub guid: String,
     pub index: Option<u32>,
     pub name: String,
     pub role: Option<Role>,
@@ -64,10 +60,9 @@ fn entries() -> Result<Vec<Entry>, String> {
             let connection: INetConnection = if let Ok(v) = IUnknown::try_from(&value[0]) { v.cast()? }
                 else { IDispatch::try_from(&value[0])?.cast()? };
             let properties = manager.get_NetConnectionProps(&connection)?;
-            let guid_text = properties.Guid()?.to_string();
-            let guid = GUID::try_from(guid_text.trim_matches(['{', '}']))?;
+            let guid = GUID::try_from(properties.Guid()?.to_string().trim_matches(['{', '}']))?;
             let config = manager.get_INetSharingConfigurationForINetConnection(&connection)?;
-            let state = Connection { guid: guid_text, index: interface_index(guid), name: properties.Name()?.to_string(), role: role(&config)? };
+            let state = Connection { index: interface_index(guid), name: properties.Name()?.to_string(), role: role(&config)? };
             out.push(Entry { state, config });
         }
         Ok(out)
@@ -98,7 +93,7 @@ fn validate(public: u32, private: u32, connections: &[Connection]) -> Result<[us
 pub fn set(public: u32, private: u32, on: bool, scope: Option<&str>) -> Result<(), String> {
     let _com = Com::new()?;
     let entries = entries()?;
-    let states: Vec<_> = entries.iter().map(|e| Connection { guid: String::new(), index: e.state.index, name: e.state.name.clone(), role: e.state.role }).collect();
+    let states: Vec<_> = entries.iter().map(|e| e.state.clone()).collect();
     let [p, q] = validate(public, private, &states)?;
     let (p, q) = (&entries[p], &entries[q]);
     let fail = |e: &Entry, err: windows::core::Error| format!("Could not change sharing on {}: {err}", e.state.name);
@@ -164,7 +159,7 @@ fn set_scope(ip: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn c(index: u32, role: Option<Role>) -> Connection { Connection { guid: String::new(), index: Some(index), name: index.to_string(), role } }
+    fn c(index: u32, role: Option<Role>) -> Connection { Connection { index: Some(index), name: index.to_string(), role } }
     #[test]
     fn refuses_conflicts_before_writing() {
         assert!(validate(1, 1, &[]).is_err());

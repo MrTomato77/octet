@@ -36,51 +36,51 @@ ConvertTo-Json -InputObject @($out) -Compress -Depth 3
 
 #[derive(Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
-struct Raw {
-    id: String,
-    index: u32,
-    name: String,
-    description: String,
-    mac: String,
-    status: String,
-    dhcp: bool,
-    dhcp_server: String,
-    register: bool,
-    ip: Vec<String>,
-    subnet: Vec<String>,
-    gateway: Vec<String>,
-    dns: Vec<String>,
-    static_dns: bool,
+pub(crate) struct Raw {
+    pub(crate) id: String,
+    pub(crate) index: u32,
+    pub(crate) name: String,
+    pub(crate) description: String,
+    pub(crate) mac: String,
+    pub(crate) status: String,
+    pub(crate) dhcp: bool,
+    pub(crate) dhcp_server: String,
+    pub(crate) register: bool,
+    pub(crate) ip: Vec<String>,
+    pub(crate) subnet: Vec<String>,
+    pub(crate) gateway: Vec<String>,
+    pub(crate) dns: Vec<String>,
+    pub(crate) static_dns: bool,
     /// Each gateway's metric (same order) and the interface metric; 0 = automatic.
     #[serde(default)]
-    gw_metric: Vec<u32>,
+    pub(crate) gw_metric: Vec<u32>,
     #[serde(default)]
-    if_metric: u32,
+    pub(crate) if_metric: u32,
     #[serde(default)]
-    ssid: String,
+    pub(crate) ssid: String,
     #[serde(default)]
-    speed: u64,
+    pub(crate) speed: u64,
     #[serde(default)]
-    phy: String,
+    pub(crate) phy: String,
     #[serde(default)]
-    mhz: u32,
+    pub(crate) mhz: u32,
     #[serde(default)]
-    ppp: bool,
+    pub(crate) ppp: bool,
     /// An address Windows found another device already using (duplicate address detection): set but not in use.
     #[serde(default)]
-    conflict: String,
+    pub(crate) conflict: String,
     #[serde(default)]
-    metered: bool,
+    pub(crate) metered: bool,
     #[serde(default)]
-    suffix: String,
+    pub(crate) suffix: String,
     #[serde(default)]
-    ipv6: Vec<String>,
+    pub(crate) ipv6: Vec<String>,
     #[serde(default)]
-    lease_got: u64,
+    pub(crate) lease_got: u64,
     #[serde(default)]
-    lease_ends: u64,
+    pub(crate) lease_ends: u64,
     #[serde(skip)]
-    wifi: Option<Wifi>,
+    pub(crate) wifi: Option<Wifi>,
 }
 
 /// The joined Wi-Fi network, for Info: signal 0-100, the access point's MAC, and how it is secured.
@@ -312,9 +312,6 @@ mod native {
         let sin = unsafe { &*(a.lpSockaddr as *const SOCKADDR_IN) };
         Some(Ipv4Addr::from(unsafe { sin.sin_addr.S_un.S_addr }.to_ne_bytes()))
     }
-    fn mask(prefix: u8) -> String {
-        Ipv4Addr::from(u32::MAX.checked_shl(32 - prefix as u32).unwrap_or(0)).to_string()
-    }
 
     /// "Windows 11 24H2 (26100.2033)": the product line from the build, as Windows' own winver does.
     pub fn os_name() -> String {
@@ -463,7 +460,7 @@ mod native {
                 id: id.clone(),
                 index: unsafe { a.Anonymous1.Anonymous.IfIndex },
                 description: unsafe { from_wide(a.Description) },
-                mac: a.PhysicalAddress[..len].iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"),
+                mac: crate::net::mac_text(&a.PhysicalAddress[..len]),
                 status: if a.OperStatus == IfOperStatusUp { "Up" } else { "Disconnected" }.into(),
                 dhcp: flags & IP_ADAPTER_DHCP_ENABLED != 0,
                 dhcp_server: unsafe { ipv4(&a.Dhcpv4Server) }.map(|ip| ip.to_string()).unwrap_or_default(),
@@ -487,7 +484,7 @@ mod native {
                     // come first, and the leased one would then be offered for deletion (which netsh refuses).
                     let at = if x.PrefixOrigin == 3 { 0 } else { raw.ip.len() };   // IpPrefixOriginDhcp
                     raw.ip.insert(at, ip.to_string());
-                    raw.subnet.insert(at, mask(x.OnLinkPrefixLength));
+                    raw.subnet.insert(at, crate::change::prefix_mask(x.OnLinkPrefixLength).to_string());
                 }
                 u = x.Next;
             }
@@ -698,7 +695,7 @@ mod native {
                         mhz: 0,
                         wifi: super::Wifi {
                             signal: assoc.wlanSignalQuality,
-                            bssid: assoc.dot11Bssid.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"),
+                            bssid: crate::net::mac_text(&assoc.dot11Bssid),
                             security: match conn.wlanSecurityAttributes.dot11AuthAlgorithm {
                                 DOT11_AUTH_ALGO_80211_OPEN if conn.wlanSecurityAttributes.bSecurityEnabled == 0 => "Open",
                                 DOT11_AUTH_ALGO_80211_OPEN | DOT11_AUTH_ALGO_80211_SHARED_KEY => "WEP",
@@ -739,8 +736,7 @@ mod native {
                     };
                     WlanFreeMemory(data);
                     let g = info.InterfaceGuid;
-                    let id = format!("{{{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{}}}", g.data1, g.data2, g.data3, g.data4[0], g.data4[1],
-                        g.data4[2..].iter().map(|b| format!("{b:02X}")).collect::<String>());
+                    let id = format!("{{{:?}}}", windows::core::GUID { data1: g.data1, data2: g.data2, data3: g.data3, data4: g.data4 });
                     out.insert(id, w);
                 }
                 WlanFreeMemory(list.cast());
@@ -866,41 +862,24 @@ mod native {
         let (names, links) = (mac::display_names(), mac::links());
         Ok(mac::read()?
             .into_iter()
-            .map(|s| {
-                let dev = s.description;
+            .map(|(mut r, wifi_card)| {
+                let dev = std::mem::take(&mut r.description);
                 let link = links.get(&dev);
-                let up = s.status == "Up";
-                let w = if s.wifi_card && up { mac::wlan(&dev) } else { None };
-                Raw {
-                    id: s.id,
-                    index: s.index,
-                    name: s.name,
-                    description: names.get(&dev).map_or(dev.clone(), |n| format!("{n} ({dev})")),
-                    mac: link.map(|l| l.mac.clone()).unwrap_or_default(),
-                    status: s.status,
-                    dhcp: s.dhcp,
-                    dhcp_server: s.dhcp_server,
-                    register: false,   // a Windows (Active Directory) setting; macOS has none
-                    ip: s.ip,
-                    subnet: s.subnet,
-                    gateway: s.gateway,
-                    dns: s.dns,
-                    static_dns: s.static_dns,
-                    gw_metric: vec![],   // ponytail: macOS gateway and interface metrics not read; Apply there sends none
-                    if_metric: 0,
-                    ssid: w.as_ref().map(|w| w.ssid.clone()).unwrap_or_default(),
-                    speed: w.as_ref().map(|w| w.rate).or(link.map(|l| l.speed)).filter(|_| up).unwrap_or(0),
-                    phy: w.as_ref().map(|w| w.phy.clone()).unwrap_or_default(),
-                    mhz: w.as_ref().map_or(0, |w| w.mhz),
-                    ppp: false,
-                    conflict: String::new(),   // ponytail: macOS duplicate-address state not read yet
-                    metered: false,   // ponytail: macOS's "Low Data Mode" not read; the view guesses from the address
-                    suffix: s.suffix,
-                    ipv6: link.map(|l| l.ipv6.clone()).unwrap_or_default(),
-                    lease_got: s.lease_got,
-                    lease_ends: s.lease_ends,
-                    wifi: w.map(|w| Wifi { signal: w.signal, bssid: w.bssid, security: w.security }),
+                let up = r.status == "Up";
+                let w = if wifi_card && up { mac::wlan(&dev) } else { None };
+                r.description = names.get(&dev).map_or(dev.clone(), |n| format!("{n} ({dev})"));
+                r.mac = link.map(|l| l.mac.clone()).unwrap_or_default();
+                r.ipv6 = link.map(|l| l.ipv6.clone()).unwrap_or_default();
+                r.speed = w.as_ref().map(|w| w.rate).or(link.map(|l| l.speed)).filter(|_| up).unwrap_or(0);
+                // register is a Windows (Active Directory) setting; macOS has none.
+                // ponytail: macOS gateway and interface metrics not read; Apply there sends none.
+                // ponytail: macOS duplicate-address state not read yet.
+                // ponytail: macOS's "Low Data Mode" not read; the view guesses from the address.
+                if let Some(w) = w {
+                    (r.ssid, r.phy, r.mhz) = (w.ssid, w.phy, w.mhz);
+                    r.wifi = Some(Wifi { signal: w.signal, bssid: w.bssid, security: w.security });
                 }
+                r
             })
             .collect())
     }
@@ -909,15 +888,6 @@ mod native {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Prints each adapter's Wi-Fi network: cargo test --release -p octet shows_ssids -- --ignored --nocapture
-    #[test]
-    #[ignore]
-    fn shows_ssids() {
-        for a in read().unwrap() {
-            println!("SSID {:<32} {:?} {} {} MHz {} bit/s", a.name, a.ssid, a.phy, a.mhz, a.speed);
-        }
-    }
 
     #[test]
     fn parses_mixed_ipv4_ipv6_and_static_dns() {

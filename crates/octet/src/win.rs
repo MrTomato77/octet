@@ -57,10 +57,6 @@ impl Wmi {
         Ok(got.remove(0))
     }
 
-    fn all(&self, wql: &str, ctx: &IWbemContext) -> Result<Vec<IWbemClassObject>> {
-        self.query(wql, Some(ctx))
-    }
-
     fn query(&self, wql: &str, ctx: Option<&IWbemContext>) -> Result<Vec<IWbemClassObject>> {
         unsafe {
             let rows = self.svc.ExecQuery(&"WQL".into(), &wql.into(), WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, ctx).map_err(|e| e.to_string())?;
@@ -129,7 +125,7 @@ fn store(name: &str) -> Result<IWbemContext> {
 fn delete(wmi: &Wmi, wql: &str) -> Result<()> {
     for name in ["ActiveStore", "PersistentStore"] {
         let ctx = store(name)?;
-        for row in wmi.all(wql, &ctx)? {
+        for row in wmi.query(wql, Some(&ctx))? {
             let path = BSTR::try_from(&get(&row, "__PATH")?).map_err(|e| e.to_string())?;
             unsafe { wmi.svc.DeleteInstance(&path, WBEM_GENERIC_FLAG_TYPE(0), &ctx, None) }.map_err(|e| format!("Could not remove {wql}: {e}"))?;
         }
@@ -210,8 +206,8 @@ pub fn set_metric(index: u32, metric: Option<u32>) -> Result<()> {
         if code != 0 {
             return Err(format!("Could not set the interface metric (error {code})"));
         }
-        let key = HSTRING::from(format!(r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{{{:?}}}", windows::core::GUID::from_u128(
-            (u128::from(guid.data1) << 96) | (u128::from(guid.data2) << 80) | (u128::from(guid.data3) << 64) | u128::from(u64::from_be_bytes(guid.data4)))));
+        let key = HSTRING::from(format!(r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{{{:?}}}",
+            windows::core::GUID { data1: guid.data1, data2: guid.data2, data3: guid.data3, data4: guid.data4 }));
         let name = HSTRING::from("InterfaceMetric");
         let code = match metric {
             Some(m) => RegSetKeyValueW(HKEY_LOCAL_MACHINE, key.as_ptr(), name.as_ptr(), REG_DWORD, (&m as *const u32).cast(), 4),

@@ -1323,9 +1323,11 @@ const adapters = [
   { id: 4, name: "Bluetooth Network Connection", desc: "Bluetooth Device (Personal Area Network)", mac: "02-00-00-00-00-04", state: "disabled", dhcpServer: "",
     cfg: { ipAuto: true, address: "", subnet: "", gateway: "", dnsAuto: true, dns1: "", dns2: "", register: true } },
 ];
+const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const keep = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 let hidden = new Set();
-try { hidden = new Set(JSON.parse(localStorage.getItem("octet-hidden") || "[]")); } catch {}
-const saveHidden = () => { try { localStorage.setItem("octet-hidden", JSON.stringify([...hidden])); } catch {} };
+try { hidden = new Set(JSON.parse(pref("octet-hidden") || "[]")); } catch {}
+const saveHidden = () => keep("octet-hidden", JSON.stringify([...hidden]));
 const firstVisible = () => adapters.findIndex(a => !hidden.has(a.id));
 const L = (en, th) => lang === "th" ? th : en;
 // Inside Octet, Tauri is here and the sample list above is replaced by this machine's adapters.
@@ -1416,8 +1418,6 @@ async function reload() {
   keep("octet-rows", adapters.filter(a => !hidden.has(a.id)).length);   // next launch draws this many skeleton rows
 }
 const change = request => net("change", { request });
-const pref = k => { try { return localStorage.getItem(k); } catch { return null; } };
-const keep = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 let sel = 0, draft = null, applies = 0, lang = pref("octet-lang") || (navigator.language.startsWith("th") ? "th" : "en");
 
 const T = {
@@ -2296,6 +2296,7 @@ function shareMode(a) {
   const gone = a.state === "up" && !!a.cfg.address && a.cfg.address !== (s.scope || "192.168.137.1");
   return { mode: gone ? "gone" : "on", s };
 }
+const net24 = ip => ip.split(".").slice(0, 3).join(".");
 const shareSources = a => adapters.filter(x => x !== a && x.state === "up" && x.cfg.gateway);
 const srcSub = x => x.ssid || x.cfg.address;
 let shFrom, shScope = pref("octet-share-ip") || "192.168.1.1", shDevs = [], shMndp = [], shKey = "";
@@ -2475,7 +2476,6 @@ async function shareLook() {
   try {
     const own = a.cfg.address || "";
     const n = mine && a.state === "up" ? await net("neighbours", { index: a.index }).catch(() => []) : [];
-    const net24 = ip => ip.split(".").slice(0, 3).join(".");
     // Only the shared /24 (Windows keeps old neighbours from before), and one row per device (one MAC, first IP).
     const found = [];
     for (const [ip, mac] of n) if (ip !== own && net24(ip) === net24(own) && !found.some(d => d.mac === mac)) found.push({ ip, mac });
@@ -2519,7 +2519,6 @@ $("share-go").onclick = async () => {
       try { localStorage.removeItem("octet-share"); } catch {}   // after: a failed Stop can be pressed again
     } else {
       const src = adapters.find(x => x.id === shFrom), scope = shScope || "192.168.1.1";
-      const net24 = ip => ip.split(".").slice(0, 3).join(".");
       if (src.cfg.address && net24(src.cfg.address) === net24(scope))
         throw L(`${net24(scope)}.0/24 is ${src.name}'s own network: pick another, such as 192.168.137.1`, `${net24(scope)}.0/24 เป็นวงของ ${src.name} เอง: เลือกวงอื่น เช่น 192.168.137.1`);
       // Someone on the cable may already have it (a router's own LAN address): ask before Windows takes it.

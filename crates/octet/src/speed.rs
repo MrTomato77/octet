@@ -50,13 +50,6 @@ fn tcp(via: Via) -> Result<TcpStream, String> {
     use windows_sys::Win32::Networking::WinSock::*;
     // Winsock is already started: resolving the host (std) did it.
     let SocketAddr::V4(t) = via.to else { return Err("IPv4 only".into()) };
-    let addr = |ip: Ipv4Addr, port: u16| {
-        let mut a: SOCKADDR_IN = unsafe { std::mem::zeroed() };
-        a.sin_family = AF_INET;
-        a.sin_port = port.to_be();
-        a.sin_addr.S_un.S_addr = u32::from_ne_bytes(ip.octets());
-        a
-    };
     unsafe {
         let s = socket(AF_INET as i32, SOCK_STREAM, IPPROTO_TCP);
         if s == INVALID_SOCKET {
@@ -67,7 +60,7 @@ fn tcp(via: Via) -> Result<TcpStream, String> {
         if via.pinned && setsockopt(s, IPPROTO_IP, IP_UNICAST_IF, (&idx as *const u32).cast(), 4) != 0 {
             return fail("IP_UNICAST_IF");
         }
-        let (from, to) = (addr(via.src, 0), addr(*t.ip(), t.port()));
+        let (from, to) = (crate::net::sin(via.src, 0), crate::net::sin(*t.ip(), t.port()));
         if via.pinned && bind(s, (&from as *const SOCKADDR_IN).cast(), size_of::<SOCKADDR_IN>() as i32) != 0 {
             return fail("bind");
         }
