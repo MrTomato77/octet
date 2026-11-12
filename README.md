@@ -7,15 +7,15 @@
 A free, open-source **IP and DNS changer** for Windows and macOS: static IP, DHCP and DNS in one click, plus a network scanner.<br>
 A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simple-IP-Config), written in Rust. **[Website](https://thomasrieger.github.io/octet-web/)**
 
-[![Release](https://img.shields.io/github/v/release/MrTomato77/octet?style=flat-square&color=3b82f6)](https://github.com/MrTomato77/octet/releases/latest)
-[![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FMrTomato77%2Foctet%2Fbadges%2Fdownloads.json&style=flat-square)](https://github.com/MrTomato77/octet/releases)
+[![Release](https://img.shields.io/github/v/release/octet-app/octet?style=flat-square&color=3b82f6)](https://github.com/octet-app/octet/releases/latest)
+[![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Foctet-app%2Foctet%2Fbadges%2Fdownloads.json&style=flat-square)](https://github.com/octet-app/octet/releases)
 ![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4?style=flat-square&logo=windows)
 ![macOS 11+](https://img.shields.io/badge/macOS-11%2B-555?style=flat-square&logo=apple)
 [![License: MIT](https://img.shields.io/badge/license-MIT-gray?style=flat-square)](LICENSE)
 
 <img src="assets/ip.png" width="440" alt="Octet on the IP & DNS tab: a Wi-Fi adapter on Office-5G, automatic IP and DNS">
 
-**[Download](https://github.com/MrTomato77/octet/releases/latest)** &nbsp;·&nbsp; `Octet.exe` or `Octet.dmg` &nbsp;·&nbsp; no installer &nbsp;·&nbsp; no telemetry
+**[Download](https://github.com/octet-app/octet/releases/latest)** &nbsp;·&nbsp; `Octet.exe` or `Octet.dmg` &nbsp;·&nbsp; no installer &nbsp;·&nbsp; no telemetry
 
 </div>
 
@@ -85,10 +85,10 @@ Details on each of these, the macOS differences, and how to build: **[docs/guide
 **Thank you** to everyone who uses Octet, reports a bug, suggests an idea or tries a new build. Every star tells us the app is worth making better.
 
 <div align="center">
-<a href="https://www.star-history.com/#MrTomato77/octet&Date">
+<a href="https://www.star-history.com/#octet-app/octet&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=MrTomato77/octet&type=Date&theme=dark">
-    <img alt="Star history of MrTomato77/octet" src="https://api.star-history.com/svg?repos=MrTomato77/octet&type=Date" width="600">
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=octet-app/octet&type=Date&theme=dark">
+    <img alt="Star history of octet-app/octet" src="https://api.star-history.com/svg?repos=octet-app/octet&type=Date" width="600">
   </picture>
 </a>
 </div>

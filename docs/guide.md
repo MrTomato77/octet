@@ -4,7 +4,7 @@ What the [README](../README.md) leaves out: installing on each system, admin rig
 
 ## Windows
 
-Get `Octet.exe` from [Releases](https://github.com/MrTomato77/octet/releases/latest) and run it. It is one portable file, with no installer.
+Get `Octet.exe` from [Releases](https://github.com/octet-app/octet/releases/latest) and run it. It is one portable file, with no installer.
 
 - **Windows 11:** runs as is.
 - **Windows 10:** needs the Microsoft Edge WebView2 Runtime. Most PCs already have it.

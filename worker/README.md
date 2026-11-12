@@ -3,7 +3,7 @@
 Octet's "Send" in Settings → Feedback posts here; this Worker opens the GitHub issue. The token stays in Cloudflare.
 
 1. GitHub → Settings → Developer settings → Fine-grained tokens → new token:
-   repository access *Only MrTomato77/octet*, permission *Issues: Read and write*. Nothing else.
+   repository access *Only octet-app/octet*, permission *Issues: Read and write*. Nothing else.
 2. In this folder:
    ```
    npx wrangler login

@@ -5,7 +5,7 @@ workers_dev = true
 preview_urls = false
 
 [vars]
-REPO = "MrTomato77/octet"
+REPO = "octet-app/octet"
 
 # 3 reports a minute per address; GitHub's own limits cover the rest.
 [[ratelimits]]

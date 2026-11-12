@@ -251,15 +251,15 @@ fn send_feedback(kind: String, text: String) -> Result<u64, String> {
 #[tauri::command(async)]
 fn open_link(which: String) -> Result<(), String> {
     let url = match which.as_str() {
-        "repo" => "https://github.com/MrTomato77/octet",
-        "releases" => "https://github.com/MrTomato77/octet/releases",
-        "notices" => "https://github.com/MrTomato77/octet/blob/main/THIRD-PARTY-NOTICES.md",
+        "repo" => "https://github.com/octet-app/octet",
+        "releases" => "https://github.com/octet-app/octet/releases",
+        "notices" => "https://github.com/octet-app/octet/blob/main/THIRD-PARTY-NOTICES.md",
         "simpleip" => "https://github.com/KurtisLiggett/Simple-IP-Config",
         // The bug form (.github/ISSUE_TEMPLATE/bug.yml) with the version and system filled in; nothing from the
         // page goes into the address.
         "issue" => {
             let enc: String = system_info().bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
-            return open_url(&format!("https://github.com/MrTomato77/octet/issues/new?template=bug.yml&octet={enc}"));
+            return open_url(&format!("https://github.com/octet-app/octet/issues/new?template=bug.yml&octet={enc}"));
         }
         _ => return Err("Unknown link".into()),
     };
