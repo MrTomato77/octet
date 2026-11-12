@@ -378,19 +378,16 @@ fn main() {
         }
     } // UAC declined: carry on without admin rights.
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();   // it may be hidden in the tray
-                let _ = w.unminimize();
-                let _ = w.set_focus();
-            }
-        }))
-        // Closing from the taskbar (middle click, Alt+F4) hides to the tray like the X; Quit in the tray menu exits.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| bring(app)))   // it may be hidden in the tray
+        // Closing hides to the tray (Windows: the X, Alt+F4, the taskbar) or the menu bar (macOS: the red button, ⌘W),
+        // and Octet keeps running; Quit in that menu (or ⌘Q) exits. On a Mac it also leaves the Dock until it is opened again.
         .on_window_event(|w, e| {
-            #[cfg(windows)]
-            if let tauri::WindowEvent::CloseRequested { api, .. } = e { api.prevent_close(); let _ = w.hide(); }
-            #[cfg(not(windows))]
-            let _ = (w, e);
+            if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+                api.prevent_close();
+                let _ = w.hide();
+                #[cfg(target_os = "macos")]
+                let _ = w.app_handle().set_dock_visibility(false);
+            }
         })
         .setup(|app| {
             let _ = APP.set(app.handle().clone());
@@ -416,9 +413,6 @@ fn main() {
                 }
                 let open = MenuItem::with_id(app, "open", "Open Octet", true, None::<&str>)?;
                 let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-                let bring = |app: &tauri::AppHandle| if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show(); let _ = w.unminimize(); let _ = w.set_focus();
-                };
                 TrayIconBuilder::with_id("main")
                     .icon(app.default_window_icon().cloned().ok_or("no icon")?)
                     .tooltip("Octet")
@@ -431,6 +425,27 @@ fn main() {
                     })
                     .on_tray_icon_event(move |tray, e| {
                         if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e { bring(tray.app_handle()); }
+                    })
+                    .build(app)?;
+            }
+            // macOS: the same in the menu bar. A template icon (black, tinted by macOS for light and dark menu bars), and a
+            // click opens its menu, as menu bar items do there.
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{Menu, MenuItem};
+                use tauri::tray::TrayIconBuilder;
+                let open = MenuItem::with_id(app, "open", "Open Octet", true, None::<&str>)?;
+                let quit = MenuItem::with_id(app, "quit", "Quit Octet", true, Some("CmdOrCtrl+Q"))?;
+                TrayIconBuilder::with_id("main")
+                    .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray-mac.png"))?)
+                    .icon_as_template(true)
+                    .tooltip("Octet")
+                    .menu(&Menu::with_items(app, &[&open, &quit])?)
+                    .show_menu_on_left_click(true)
+                    .on_menu_event(move |app, e| match e.id.as_ref() {
+                        "open" => bring(app),
+                        "quit" => app.exit(0),
+                        _ => {}
                     })
                     .build(app)?;
             }
@@ -455,8 +470,25 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             read_adapters, change, flush_dns, who_has, neighbours, share_state, mndp, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, send_feedback, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to start Octet");
+        .build(tauri::generate_context!())
+        .expect("failed to start Octet")
+        .run(|_app, _e| {
+            // macOS: clicking Octet in the Dock, or opening it again from Applications, brings back a hidden window.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _e { bring(_app); }
+        });
+}
+
+/// Shows the window again: from the tray or menu bar, a second launch, or (macOS) the Dock. On a Mac it comes back
+/// to the Dock with it.
+fn bring(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    let _ = app.set_dock_visibility(true);
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
 }
 
 #[cfg(all(test, windows))]

@@ -20,6 +20,7 @@ Get `Octet.dmg` from the same release, open it and drag Octet onto Applications.
 
 - **Not notarized yet:** the first time, macOS says it can't check Octet. Open *System Settings → Privacy & Security* and choose *Open Anyway*.
 - **Wi-Fi name:** macOS gives the network's name only to apps with Location permission, so Octet asks once. Say no and everything else still works; only the name stays hidden.
+- **Menu bar:** closing the window (the red button or ⌘W) keeps Octet running in the menu bar, out of the Dock. Click its icon for *Open Octet* or *Quit Octet*; opening Octet again from Applications brings the window back too. ⌘Q quits.
 - **What differs from Windows:** each change asks for your password (there is no *Run as admin*). *Register in DNS* is Windows-only. The rest is done the macOS way:
   - **Advanced:** macOS keeps one address per network service, so each extra address becomes a service of its own on the same port, named like *Wi-Fi + 10.0.0.5* (what System Settings calls *Duplicate Service*), with the gateway on its network as its router. Octet shows them as rows of the first service. There are no metrics on a Mac; it goes by *Set Service Order*.
   - **Release:** turns the service's IPv4 off (macOS has no release of its own), so it stays released after a restart until you Renew, which turns DHCP back on. *Release and renew* asks for your password once.
