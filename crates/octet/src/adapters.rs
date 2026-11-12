@@ -81,6 +81,9 @@ pub(crate) struct Raw {
     pub(crate) lease_ends: u64,
     #[serde(skip)]
     pub(crate) wifi: Option<Wifi>,
+    /// macOS: the service's IPv4 is turned off (Release does that there); Renew turns DHCP back on.
+    #[serde(skip)]
+    pub(crate) ipv4_off: bool,
 }
 
 /// The joined Wi-Fi network, for Info: signal 0-100, the access point's MAC, and how it is secured.

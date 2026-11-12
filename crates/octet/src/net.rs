@@ -5,6 +5,8 @@ use std::net::Ipv4Addr;
 
 #[cfg(target_os = "macos")]
 pub use crate::mac::{arp, computer_name, dhcp, elevated, hostname, https_get_with, neighbour, ping, tcping, watch};
+#[cfg(target_os = "macos")]
+use crate::mac::{fresh, resolve};
 
 /// IPv4 in the byte order the IP Helper API wants (network order in a native u32).
 #[cfg(windows)]
@@ -395,16 +397,6 @@ fn resolve(ip: Ipv4Addr, index: u32) -> Option<String> {
         return None;
     }
     row_mac(&row)
-}
-
-// ponytail: macOS reads the ARP table only; a stale entry there still counts.
-#[cfg(not(windows))]
-fn fresh(_: Ipv4Addr, _: u32) -> bool {
-    true
-}
-#[cfg(not(windows))]
-fn resolve(ip: Ipv4Addr, index: u32) -> Option<String> {
-    neighbour(ip, index)
 }
 
 /// Who holds an address, for the Scan grid.
