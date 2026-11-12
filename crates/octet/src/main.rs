@@ -353,6 +353,13 @@ fn main() {
                 let _ = w.set_focus();
             }
         }))
+        // Closing from the taskbar (middle click, Alt+F4) hides to the tray like the X; Quit in the tray menu exits.
+        .on_window_event(|w, e| {
+            #[cfg(windows)]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = e { api.prevent_close(); let _ = w.hide(); }
+            #[cfg(not(windows))]
+            let _ = (w, e);
+        })
         .setup(|app| {
             let _ = APP.set(app.handle().clone());
             // Taskbar and Alt+Tab take the window's own icon; give it the large one explicitly.
