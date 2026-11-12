@@ -156,7 +156,9 @@ pub(crate) fn services(prefs: &Map<String, Value>, live: &Map<String, Value>, na
             let src = if ipv4.is_null() && !auto { v4 } else { ipv4 };
             (raw.ip, raw.subnet) = (ips(&src["Addresses"]), ips(&src["SubnetMasks"]));
             raw.gateway = src["Router"].as_str().filter(|r| r.parse::<Ipv4Addr>().is_ok()).map(|r| vec![r.to_string()]).unwrap_or_default();
-            raw.dns = if dns.is_null() { ips(&s["DNS"]["ServerAddresses"]) } else { ips(&dns["ServerAddresses"]) };
+            // Servers set by hand are the ones macOS uses; the service's live DNS keeps what DHCP offered all the same
+            // (the router, say), so it counts only when none are set.
+            raw.dns = if static_dns || dns.is_null() { ips(&s["DNS"]["ServerAddresses"]) } else { ips(&dns["ServerAddresses"]) };
             raw.suffix = dns["DomainName"].as_str().unwrap_or_default().to_string();
             if auto && up {
                 // Option 54, the server identifier, as 4 bytes.
@@ -883,9 +885,11 @@ mod tests {
         let prefs = json!({
             "CurrentSet": "/Sets/S1",
             "Sets": { "S1": { "Network": { "Global": { "IPv4": { "ServiceOrder": ["W", "U", "H"] } },
-                "Service": { "W": {}, "U": {}, "H": {}, "T": {}, "V": {} } } } },
+                "Service": { "W": {}, "U": {}, "H": {}, "T": {}, "V": {}, "X": {} } } } },
             "NetworkServices": {
                 "W": { "UserDefinedName": "Wi-Fi", "Interface": { "DeviceName": "en0", "Hardware": "AirPort", "Type": "IEEE80211" }, "IPv4": { "ConfigMethod": "DHCP" }, "DNS": {} },
+                "X": { "UserDefinedName": "Dock LAN", "Interface": { "DeviceName": "en9", "Type": "Ethernet" }, "IPv4": { "ConfigMethod": "DHCP" },
+                    "DNS": { "ServerAddresses": ["8.8.8.8", "8.8.4.4"] } },
                 "U": { "UserDefinedName": "USB LAN", "Interface": { "DeviceName": "en7", "Type": "Ethernet" },
                     "IPv4": { "ConfigMethod": "Manual", "Addresses": ["192.168.50.20"], "SubnetMasks": ["255.255.255.0"], "Router": "192.168.50.254" },
                     "DNS": { "ServerAddresses": ["1.1.1.1", "fe80::1", "8.8.8.8"] } },
@@ -899,12 +903,18 @@ mod tests {
             "State:/Network/Interface/en7/Link": { "Active": false },
             "State:/Network/Service/W/IPv4": { "Addresses": ["192.168.15.158"], "SubnetMasks": ["255.255.252.0"], "Router": "192.168.12.1" },
             "State:/Network/Service/W/DNS": { "ServerAddresses": ["171.102.211.106"], "DomainName": "lan" },
-            "State:/Network/Service/W/DHCP": { "Option_54": [192, 168, 12, 1], "LeaseStartTime": 1000, "LeaseExpirationTime": 2000 }
+            "State:/Network/Service/W/DHCP": { "Option_54": [192, 168, 12, 1], "LeaseStartTime": 1000, "LeaseExpirationTime": 2000 },
+            "State:/Network/Interface/en9/Link": { "Active": true },
+            "State:/Network/Service/X/IPv4": { "Addresses": ["10.0.0.5"], "SubnetMasks": ["255.255.255.0"], "Router": "10.0.0.1" },
+            "State:/Network/Service/X/DNS": { "ServerAddresses": ["10.0.0.1"] }
         });
         let (Value::Object(p), Value::Object(l)) = (prefs, live) else { unreachable!() };
         let s = services(&p, &l, &HashMap::new());
         let names: Vec<_> = s.iter().map(|r| r.0.name.as_str()).collect();
-        assert_eq!(names, ["Wi-Fi", "USB LAN", "Thunderbolt Bridge"], "hidden and VPN services are left out; unordered ones come last");
+        assert_eq!(names, ["Wi-Fi", "USB LAN", "Thunderbolt Bridge", "Dock LAN"], "hidden and VPN services are left out; unordered ones come last");
+        // Servers set by hand win over what DHCP still offers (it stays in the live DNS): those are what macOS uses.
+        let m = &s.iter().find(|r| r.0.name == "Dock LAN").unwrap().0;
+        assert_eq!((m.static_dns, m.dns.as_slice()), (true, &["8.8.8.8".to_string(), "8.8.4.4".into()][..]));
         let (w, wifi_card) = &s[0];
         assert!(w.dhcp && *wifi_card && !w.static_dns && w.status == "Up");
         assert_eq!((w.ip.as_slice(), w.gateway.as_slice(), w.dhcp_server.as_str()), (&["192.168.15.158".to_string()][..], &["192.168.12.1".to_string()][..], "192.168.12.1"));
