@@ -1,0 +1,14 @@
+name = "octet-feedback"
+main = "feedback.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+preview_urls = false
+
+[vars]
+REPO = "MrTomato77/octet"
+
+# 3 reports a minute per address; GitHub's own limits cover the rest.
+[[ratelimits]]
+name = "LIMIT"
+namespace_id = "1001"
+simple = { limit = 3, period = 60 }

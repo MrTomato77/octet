@@ -214,6 +214,28 @@ fn open_ncpa() -> Result<(), String> {
     hidden("control").arg("ncpa.cpl").spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// The relay that turns a report into a GitHub issue (worker/ in this repo); the token lives there, not here.
+const FEEDBACK_HOST: &str = "octet-feedback.kreechaichana3.workers.dev";
+
+/// Settings → Feedback: posts the text with the version and system, returns the issue number.
+#[tauri::command(async)]
+fn send_feedback(kind: String, text: String) -> Result<u64, String> {
+    use std::io::{Read, Write};
+    let body = serde_json::json!({ "kind": kind, "text": text, "system": system_info() }).to_string();
+    let tcp = std::net::TcpStream::connect((FEEDBACK_HOST, 443)).map_err(|_| "No connection to the report service".to_string())?;
+    tcp.set_read_timeout(Some(std::time::Duration::from_secs(20))).ok();
+    let mut s = native_tls::TlsConnector::new().map_err(|e| e.to_string())?.connect(FEEDBACK_HOST, tcp).map_err(|e| format!("TLS: {e}"))?;
+    // HTTP/1.0: the answer comes whole, never chunked.
+    write!(s, "POST / HTTP/1.0\r\nHost: {FEEDBACK_HOST}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).map_err(|e| e.to_string())?;
+    let mut out = String::new();
+    let _ = s.read_to_string(&mut out);   // the server closes; a TLS close without notify still leaves the text
+    let (head, rest) = out.split_once("\r\n\r\n").unwrap_or((&out, ""));
+    if head.split(' ').nth(1) != Some("200") {
+        return Err(if rest.trim().is_empty() { "The report service didn't answer".into() } else { rest.trim().into() });
+    }
+    serde_json::from_str::<serde_json::Value>(rest).ok().and_then(|v| v["number"].as_u64()).ok_or_else(|| "Sent, but no issue number came back".into())
+}
+
 /// Opens one of Octet's own pages in the default browser. A fixed list, so the
 /// page can't be made to launch anything else.
 #[tauri::command(async)]
@@ -421,7 +443,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, neighbours, mndp, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, neighbours, mndp, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, send_feedback, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

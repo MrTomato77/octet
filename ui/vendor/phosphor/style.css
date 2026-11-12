@@ -88,6 +88,9 @@
 .ph.ph-browser:before {
   content: "\e0f4";
 }
+.ph.ph-bug:before {
+  content: "\e5f4";
+}
 .ph.ph-camera:before {
   content: "\e10e";
 }
@@ -105,6 +108,9 @@
 }
 .ph.ph-chat:before {
   content: "\e15c";
+}
+.ph.ph-chat-circle-dots:before {
+  content: "\e16c";
 }
 .ph.ph-check:before {
   content: "\e182";
@@ -226,6 +232,9 @@
 .ph.ph-ghost:before {
   content: "\e62a";
 }
+.ph.ph-github-logo:before {
+  content: "\e576";
+}
 .ph.ph-globe-hemisphere-west:before {
   content: "\e28c";
 }
@@ -258,6 +267,9 @@
 }
 .ph.ph-layout:before {
   content: "\e6d6";
+}
+.ph.ph-lightbulb:before {
+  content: "\e2dc";
 }
 .ph.ph-lightning:before {
   content: "\e2de";
@@ -303,6 +315,9 @@
 }
 .ph.ph-palette:before {
   content: "\e6c8";
+}
+.ph.ph-paper-plane-tilt:before {
+  content: "\e398";
 }
 .ph.ph-path:before {
   content: "\e39c";
