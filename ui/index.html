@@ -3021,9 +3021,13 @@ function renderMem() {
   $("s-mem-clear").classList.toggle("gone", !n); $("s-mem-clear").disabled = !n;   // folds away like Updates' button
 }
 // Feedback: the text goes to a relay that opens the GitHub issue (worker/), so no GitHub account is needed.
+// One state for the whole flow: "idle", "sending" (the pop-up may be closed meanwhile) or a sent issue's number.
+let fbState = "idle";
 function fbIdle() {
+  if (fbState === "sending") return;
   const idea = document.querySelector("input[name=fbkind]:checked").value === "idea", n = $("fb-text").value.trim().length;
-  $("fb-row").textContent = L("A problem or an idea, no account needed", "ปัญหาหรือไอเดีย ไม่ต้องมีบัญชี");
+  $("fb-row").textContent = typeof fbState === "number" ? L(`Sent as issue #${fbState} · thank you`, `ส่งแล้ว issue #${fbState} · ขอบคุณครับ`)
+    : L("A problem or an idea, no account needed", "ปัญหาหรือไอเดีย ไม่ต้องมีบัญชี");
   $("fb-sub").textContent = L("Goes to the Octet team on GitHub", "ส่งถึงทีม Octet ผ่าน GitHub");
   $("fb-text").placeholder = idea ? L("What would make Octet better for you?", "อยากให้ Octet ทำอะไรได้เพิ่ม?")
     : L("What happened, and what did you expect?", "เกิดอะไรขึ้น แล้วคาดว่าควรเป็นแบบไหน?");
@@ -3038,16 +3042,15 @@ function fbIdle() {
 }
 document.querySelectorAll("input[name=fbkind]").forEach(x => x.onchange = () => { segIndex("fbkind"); fbIdle(); });
 $("fb-open").onclick = () => { fbIdle(); $("fb").showModal(); centre($("fb")); $("fb-text").focus(); };
-$("fb-text").oninput = () => { if (!$("fb").classList.contains("sending")) fbIdle(); };
+$("fb-text").oninput = fbIdle;
 $("fb-send").onclick = async () => {
   const d = $("fb"), kind = document.querySelector("input[name=fbkind]:checked").value, text = $("fb-text").value.trim();
-  d.classList.add("sending"); $("fb-send").disabled = true; $("fb-say").textContent = L("Sending…", "กำลังส่ง…");
+  if (fbState === "sending") return;
+  fbState = "sending"; $("fb-send").disabled = true; $("fb-say").textContent = L("Sending…", "กำลังส่ง…");
   try {
-    const n = tauri ? await invoke("send_feedback", { kind, text }) : await new Promise(r => setTimeout(() => r(42), 700));
+    fbState = tauri ? await invoke("send_feedback", { kind, text }) : await new Promise(r => setTimeout(() => r(42), 700));
     $("fb-text").value = ""; d.close(); fbIdle();
-    $("fb-row").textContent = L(`Sent as issue #${n} · thank you`, `ส่งแล้ว issue #${n} · ขอบคุณครับ`);
-  } catch (e) { $("fb-say").className = "fb-say bad"; $("fb-say").textContent = String(e); $("fb-send").disabled = false; }
-  d.classList.remove("sending");
+  } catch (e) { fbState = "idle"; fbIdle(); $("fb-say").className = "fb-say bad"; $("fb-say").textContent = String(e); }
 };
 fbIdle();
 $("s-mem-clear").onclick = () => { keep("octet-seen", "{}"); renderMem(); $("s-mem").focus(); };   // the button goes: focus stays in the row
