@@ -2354,7 +2354,7 @@ function shareMode(a) {
 // macOS gives this Mac the shared network's .1 and Wi-Fi out makes a hotspot (System Settings does that one).
 const shScopeBad = v => !privateIp(v) || mac && !/\.1$/.test(v);
 const macWifiOut = a => mac && kind(a) === "wifi";
-// This Mac's own address on the shared network (the sharing bridge's), else the one chosen.
+// This Mac's own address on the shared network (the one macOS shares from), else the one chosen.
 const shOwn = (a, s) => mac ? (s && (macShare?.address || s.scope)) || a.cfg.address || "" : a.cfg.address || "";
 const net24 = ip => ip.split(".").slice(0, 3).join(".");
 const shareSources = a => adapters.filter(x => x !== a && x.state === "up" && x.cfg.gateway);
@@ -2643,7 +2643,7 @@ function leaseAction(act) {
     const req = op => change({ op, index: a.index, name: a.name });
     // ipconfig waits about a minute when no DHCP server answers: give up on it after 10 s.
     const wait = new Promise((_, no) => setTimeout(() => no(L("No DHCP server answered", "ไม่มี DHCP server ตอบ")), 10000));
-    // A Mac asks for the password with each change: there, release and renew go as one.
+    // A Mac asks for admin rights with each change: there, release and renew go as one.
     const cycle = act === "cycle" && mac ? change({ op: "renew", index: a.index, name: a.name, cycle: true })
       : act === "cycle" ? req("release").then(() => req("renew")) : req(act);
     const go = Promise.race([cycle, wait]);
