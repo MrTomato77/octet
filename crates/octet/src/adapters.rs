@@ -1084,3 +1084,16 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod timing {
+    /// How long a read takes here: `cargo test --release -p octet read_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn read_timing() {
+        let t = |f: &dyn Fn()| { let s = std::time::Instant::now(); f(); s.elapsed().as_millis() };
+        let reads: Vec<_> = (0..6).map(|_| t(&|| { super::read().unwrap(); })).collect();
+        println!("read: {reads:?} ms (first is cold)");
+        println!("os_name: {} ms", t(&|| { super::os_name(); }));
+    }
+}
