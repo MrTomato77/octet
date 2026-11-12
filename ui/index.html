@@ -2900,6 +2900,8 @@ tauri?.app.getVersion().then(v => { $("s-version").textContent = v; updShow(); }
 // Updates: Check, then Update (the whole exe, signature and version checked in update.rs), then Restart.
 const upd = { s: "idle", p: 0 };
 function updShow() {
+  // The menu bar (macOS) shows "Restart to update" and the like: it hears of each new state, not every progress tick.
+  if (mac && tauri && updShow.told !== upd.s + upd.v) { updShow.told = upd.s + upd.v; invoke("tray_update", { state: upd.s, version: upd.v || "" }).catch(() => {}); }
   const el = $("s-upd"), v = $("s-version").textContent, was = el.dataset.s;
   const [icon, say, go] = {
     idle: ["ph-arrows-clockwise", `Octet ${v}`, L("Check", "ตรวจ")],
@@ -2951,6 +2953,17 @@ const updApi = tauri ? {
   restart: async () => { upd.seen = false; },
 };
 tauri?.event.listen("update-progress", e => { if (upd.s === "getting") { upd.p = e.payload; updShow(); } });
+// The menu bar (macOS): what its items ask of the page. Its own changes (DNS, Renew, Flush) run in Rust; a failure
+// comes here to be said, with the window brought up.
+tauri?.event.listen("tray", e => {
+  const a = e.payload;
+  // The buttons toggle these; the menu always opens them (already open: left as it is).
+  if (a === "settings") { if (!settingsOpen()) openSettings(); }
+  else if (a === "speed") { if (!speedOpen()) openSpeed(); }
+  else if (a === "update") $("s-upd-go").click();   // the next step from where the update is: download, or restart
+  else if (a === "share-stopped") { forget("octet-share"); shDevs = []; shMndp = []; renderShare(); say(L("Sharing stopped", "หยุดแชร์แล้ว"), "ok"); }
+  else if (a?.error) say(String(a.error), "bad");
+});
 $("s-upd-go").onclick = async () => {
   try {
     if (["idle", "latest", "failed"].includes(upd.s)) {

@@ -8,6 +8,8 @@ mod ics;
 mod win;
 #[cfg(target_os = "macos")]
 mod mac;
+#[cfg(target_os = "macos")]
+mod menubar;
 mod net;
 mod speed;
 mod update;
@@ -71,14 +73,28 @@ async fn read_adapters() -> Result<Vec<adapters::Adapter>, String> {
 /// One change at a time: a second click must not raise a second UAC prompt.
 static CHANGING: AtomicBool = AtomicBool::new(false);
 
-#[tauri::command]
-async fn change(request: Request) -> Result<(), String> {
+/// Runs `f` unless another change (the page's, or the menu bar's) is still running.
+fn one_change<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
     if CHANGING.swap(true, Ordering::SeqCst) {
         return Err("Another change is still running".into());
     }
-    let result = blocking(move || change::elevate(&request)).await;
+    let result = f();
     CHANGING.store(false, Ordering::SeqCst);
     result
+}
+
+#[tauri::command]
+async fn change(request: Request) -> Result<(), String> {
+    blocking(move || one_change(|| change::elevate(&request))).await
+}
+
+/// The page's update state, for the menu bar (macOS), which shows "Restart to update" and the like from it.
+#[tauri::command]
+fn tray_update(app: tauri::AppHandle, state: String, version: String) {
+    #[cfg(target_os = "macos")]
+    menubar::set_update(&app, state, version);
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, state, version);
 }
 
 #[tauri::command]
@@ -428,27 +444,9 @@ fn main() {
                     })
                     .build(app)?;
             }
-            // macOS: the same in the menu bar. A template icon (black, tinted by macOS for light and dark menu bars), and a
-            // click opens its menu, as menu bar items do there.
+            // macOS: the same in the menu bar, with the quick changes in its menu (see menubar.rs).
             #[cfg(target_os = "macos")]
-            {
-                use tauri::menu::{Menu, MenuItem};
-                use tauri::tray::TrayIconBuilder;
-                let open = MenuItem::with_id(app, "open", "Open Octet", true, None::<&str>)?;
-                let quit = MenuItem::with_id(app, "quit", "Quit Octet", true, Some("CmdOrCtrl+Q"))?;
-                TrayIconBuilder::with_id("main")
-                    .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray-mac.png"))?)
-                    .icon_as_template(true)
-                    .tooltip("Octet")
-                    .menu(&Menu::with_items(app, &[&open, &quit])?)
-                    .show_menu_on_left_click(true)
-                    .on_menu_event(move |app, e| match e.id.as_ref() {
-                        "open" => bring(app),
-                        "quit" => app.exit(0),
-                        _ => {}
-                    })
-                    .build(app)?;
-            }
+            menubar::install(app.handle())?;
             // If the page never calls ready, show the window anyway.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -463,12 +461,14 @@ fn main() {
             net::watch(|| {
                 if let Some(app) = APP.get() {
                     let _ = app.emit("net-changed", ());
+                    #[cfg(target_os = "macos")]
+                    menubar::refresh(app);
                 }
             });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, neighbours, share_state, mndp, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, send_feedback, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, tray_update, flush_dns, who_has, neighbours, share_state, mndp, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, send_feedback, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .build(tauri::generate_context!())
         .expect("failed to start Octet")
