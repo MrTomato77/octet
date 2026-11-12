@@ -8,6 +8,8 @@ mod ics;
 mod win;
 #[cfg(target_os = "macos")]
 mod mac;
+#[cfg(target_os = "macos")]
+mod menubar;
 mod net;
 mod speed;
 mod update;
@@ -71,14 +73,28 @@ async fn read_adapters() -> Result<Vec<adapters::Adapter>, String> {
 /// One change at a time: a second click must not raise a second UAC prompt.
 static CHANGING: AtomicBool = AtomicBool::new(false);
 
-#[tauri::command]
-async fn change(request: Request) -> Result<(), String> {
+/// Runs `f` unless another change (the page's, or the menu bar's) is still running.
+fn one_change<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
     if CHANGING.swap(true, Ordering::SeqCst) {
         return Err("Another change is still running".into());
     }
-    let result = blocking(move || change::elevate(&request)).await;
+    let result = f();
     CHANGING.store(false, Ordering::SeqCst);
     result
+}
+
+#[tauri::command]
+async fn change(request: Request) -> Result<(), String> {
+    blocking(move || one_change(|| change::elevate(&request))).await
+}
+
+/// The page's update state, for the menu bar (macOS), which shows "Restart to update" and the like from it.
+#[tauri::command]
+fn tray_update(app: tauri::AppHandle, state: String, version: String) {
+    #[cfg(target_os = "macos")]
+    menubar::set_update(&app, state, version);
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, state, version);
 }
 
 #[tauri::command]
@@ -378,19 +394,16 @@ fn main() {
         }
     } // UAC declined: carry on without admin rights.
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();   // it may be hidden in the tray
-                let _ = w.unminimize();
-                let _ = w.set_focus();
-            }
-        }))
-        // Closing from the taskbar (middle click, Alt+F4) hides to the tray like the X; Quit in the tray menu exits.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| bring(app)))   // it may be hidden in the tray
+        // Closing hides to the tray (Windows: the X, Alt+F4, the taskbar) or the menu bar (macOS: the red button, ⌘W),
+        // and Octet keeps running; Quit in that menu (or ⌘Q) exits. On a Mac it also leaves the Dock until it is opened again.
         .on_window_event(|w, e| {
-            #[cfg(windows)]
-            if let tauri::WindowEvent::CloseRequested { api, .. } = e { api.prevent_close(); let _ = w.hide(); }
-            #[cfg(not(windows))]
-            let _ = (w, e);
+            if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+                api.prevent_close();
+                let _ = w.hide();
+                #[cfg(target_os = "macos")]
+                let _ = w.app_handle().set_dock_visibility(false);
+            }
         })
         .setup(|app| {
             let _ = APP.set(app.handle().clone());
@@ -416,9 +429,6 @@ fn main() {
                 }
                 let open = MenuItem::with_id(app, "open", "Open Octet", true, None::<&str>)?;
                 let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-                let bring = |app: &tauri::AppHandle| if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show(); let _ = w.unminimize(); let _ = w.set_focus();
-                };
                 TrayIconBuilder::with_id("main")
                     .icon(app.default_window_icon().cloned().ok_or("no icon")?)
                     .tooltip("Octet")
@@ -434,6 +444,9 @@ fn main() {
                     })
                     .build(app)?;
             }
+            // macOS: the same in the menu bar, with the quick changes in its menu (see menubar.rs).
+            #[cfg(target_os = "macos")]
+            menubar::install(app.handle())?;
             // If the page never calls ready, show the window anyway.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -448,15 +461,34 @@ fn main() {
             net::watch(|| {
                 if let Some(app) = APP.get() {
                     let _ = app.emit("net-changed", ());
+                    #[cfg(target_os = "macos")]
+                    menubar::refresh(app);
                 }
             });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, neighbours, share_state, mndp, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, send_feedback, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, tray_update, flush_dns, who_has, neighbours, share_state, mndp, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, send_feedback, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to start Octet");
+        .build(tauri::generate_context!())
+        .expect("failed to start Octet")
+        .run(|_app, _e| {
+            // macOS: clicking Octet in the Dock, or opening it again from Applications, brings back a hidden window.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _e { bring(_app); }
+        });
+}
+
+/// Shows the window again: from the tray or menu bar, a second launch, or (macOS) the Dock. On a Mac it comes back
+/// to the Dock with it.
+fn bring(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    let _ = app.set_dock_visibility(true);
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
 }
 
 #[cfg(all(test, windows))]
