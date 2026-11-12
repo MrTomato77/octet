@@ -56,6 +56,9 @@ pub(crate) struct Raw {
     pub(crate) gw_metric: Vec<u32>,
     #[serde(default)]
     pub(crate) if_metric: u32,
+    /// Next hop of this interface's 0.0.0.0/1 route, when it has one (`Cfg::first`).
+    #[serde(default)]
+    pub(crate) first: String,
     #[serde(default)]
     pub(crate) ssid: String,
     #[serde(default)]
@@ -114,6 +117,10 @@ pub struct Cfg {
     pub gw_metric: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub metric: String,
+    /// The gateway put ahead of every 0.0.0.0/0 route (DHCP's too) with the two halves 0.0.0.0/1 and
+    /// 128.0.0.0/1: a longer prefix always wins, whatever the metrics. Empty = none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub first: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -265,6 +272,7 @@ fn shape(raw: Vec<Raw>) -> Vec<Adapter> {
                     dns1: dns.first().cloned().unwrap_or_default(),
                     dns2: dns.get(1).cloned().unwrap_or_default(),
                     register: r.register,
+                    first: r.first,
                     ..Default::default()
                 },
             }
@@ -516,14 +524,18 @@ mod native {
 
     /// Metrics: of each default route by (interface index, gateway), and of each interface whose metric
     /// was set by hand (automatic ones are left out), by interface index.
-    fn metrics() -> (HashMap<(u32, Ipv4Addr), u32>, HashMap<u32, u32>) {
-        let (mut routes, mut ifs) = (HashMap::new(), HashMap::new());
+    /// Also the next hop of each interface's 0.0.0.0/1 route (`Cfg::first`).
+    fn metrics() -> (HashMap<(u32, Ipv4Addr), u32>, HashMap<u32, u32>, HashMap<u32, Ipv4Addr>) {
+        let (mut routes, mut ifs, mut firsts) = (HashMap::new(), HashMap::new(), HashMap::new());
         unsafe {
             let mut t: *mut MIB_IPFORWARD_TABLE2 = std::ptr::null_mut();
             if GetIpForwardTable2(AF_INET, &mut t) == 0 {
                 for r in std::slice::from_raw_parts((*t).Table.as_ptr(), (*t).NumEntries as usize) {
-                    if r.DestinationPrefix.PrefixLength == 0 {   // 0.0.0.0/0
-                        routes.insert((r.InterfaceIndex, Ipv4Addr::from(r.NextHop.Ipv4.sin_addr.S_un.S_addr.to_ne_bytes())), r.Metric);
+                    let hop = Ipv4Addr::from(r.NextHop.Ipv4.sin_addr.S_un.S_addr.to_ne_bytes());
+                    match (r.DestinationPrefix.PrefixLength, r.DestinationPrefix.Prefix.Ipv4.sin_addr.S_un.S_addr) {
+                        (0, _) => { routes.insert((r.InterfaceIndex, hop), r.Metric); }   // 0.0.0.0/0
+                        (1, 0) => { firsts.insert(r.InterfaceIndex, hop); }               // 0.0.0.0/1
+                        _ => {}
                     }
                 }
                 FreeMibTable(t.cast());
@@ -538,7 +550,7 @@ mod native {
                 FreeMibTable(t.cast());
             }
         }
-        (routes, ifs)
+        (routes, ifs, firsts)
     }
 
     /// What a joined Wi-Fi card is on: network name, 802.11 standard, channel frequency.
@@ -748,7 +760,7 @@ mod native {
 
     pub fn read() -> Result<Vec<Raw>, String> {
         // Each asks Windows something that takes some 20 ms: asked side by side, a read takes one of those, not three.
-        let (lean, mut wlans, mut v6, metered, (routes, if_metrics)) = std::thread::scope(|s| {
+        let (lean, mut wlans, mut v6, metered, (routes, if_metrics, firsts)) = std::thread::scope(|s| {
             let (w, v, m, r) = (s.spawn(wlans), s.spawn(|| ipv6s(V6_FLAGS)), s.spawn(crate::net::metered), s.spawn(metrics));
             (live(V4_LEAN), w.join().unwrap_or_default(), v.join().unwrap_or_default(), m.join().unwrap_or_default(), r.join().unwrap_or_default())
         });
@@ -806,6 +818,7 @@ mod native {
                     }
                     raw.gw_metric = raw.gateway.iter().map(|g| g.parse().ok().and_then(|g| routes.get(&(raw.index, g))).copied().unwrap_or(0)).collect();
                     raw.if_metric = if_metrics.get(&raw.index).copied().unwrap_or(0);
+                    raw.first = firsts.get(&raw.index).map(|g| g.to_string()).unwrap_or_default();
                     // With a conflict, the list's order can't be trusted to put the main address first: a static
                     // adapter's main one is the first in its saved list (what `set address` wrote, and what Windows'
                     // own dialog shows), not whichever address another device happens to hold.

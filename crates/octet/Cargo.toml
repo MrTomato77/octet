@@ -11,7 +11,7 @@ tauri-build = "2"
 brotli = { version = "9", default-features = false, features = ["std"] }   # already in the build through Tauri; compresses the maker list
 
 [dependencies]
-tauri = { version = "2", features = ["image-png"] }
+tauri = { version = "2", features = ["image-png", "tray-icon"] }
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -21,7 +21,7 @@ brotli = { version = "9", default-features = false, features = ["std"] }   # alr
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Win32_Networking_NetworkListManager", "Win32_NetworkManagement_WindowsFirewall", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant", "Win32_System_Wmi", "Win32_System_Rpc"] }   # already in the build through Tauri; COM for the metered flag, WMI and Internet Sharing
-windows-sys = { version = "0.61", features = ["Win32_Devices_DeviceAndDriverInstallation", "Win32_Foundation", "Win32_Globalization", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_NetworkManagement_WiFi", "Win32_Networking_WinHttp", "Win32_Networking_WinSock", "Win32_System_IO", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_UI_Shell"] }
+windows-sys = { version = "0.61", features = ["Win32_Devices_DeviceAndDriverInstallation", "Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Dwm", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_NetworkManagement_WiFi", "Win32_Networking_WinHttp", "Win32_Networking_WinSock", "Win32_System_IO", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_UI_Shell"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"

@@ -348,6 +348,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();   // it may be hidden in the tray
                 let _ = w.unminimize();
                 let _ = w.set_focus();
             }
@@ -357,6 +358,42 @@ fn main() {
             // Taskbar and Alt+Tab take the window's own icon; give it the large one explicitly.
             if let (Some(w), Ok(icon)) = (app.get_webview_window("main"), tauri::image::Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))) {
                 let _ = w.set_icon(icon);
+            }
+            // Windows: no system title bar (the page draws its own X and drag strip), and X hides to the tray.
+            #[cfg(windows)]
+            {
+                use tauri::menu::{Menu, MenuItem};
+                use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.set_decorations(false);
+                    // No shadow: with one, Windows keeps a 1 px frame that it paints in the accent colour.
+                    // Windows 11 still rounds the corners when asked.
+                    let _ = w.set_shadow(false);
+                    if let Ok(hwnd) = w.hwnd() {
+                        use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND};
+                        let round = DWMWCP_ROUND;
+                        unsafe { DwmSetWindowAttribute(hwnd.0 as _, DWMWA_WINDOW_CORNER_PREFERENCE as u32, (&raw const round).cast(), 4) };
+                    }
+                }
+                let open = MenuItem::with_id(app, "open", "Open Octet", true, None::<&str>)?;
+                let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+                let bring = |app: &tauri::AppHandle| if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show(); let _ = w.unminimize(); let _ = w.set_focus();
+                };
+                TrayIconBuilder::with_id("main")
+                    .icon(app.default_window_icon().cloned().ok_or("no icon")?)
+                    .tooltip("Octet")
+                    .menu(&Menu::with_items(app, &[&open, &quit])?)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(move |app, e| match e.id.as_ref() {
+                        "open" => bring(app),
+                        "quit" => app.exit(0),
+                        _ => {}
+                    })
+                    .on_tray_icon_event(move |tray, e| {
+                        if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e { bring(tray.app_handle()); }
+                    })
+                    .build(app)?;
             }
             // If the page never calls ready, show the window anyway.
             let handle = app.handle().clone();

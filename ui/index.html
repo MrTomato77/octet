@@ -69,12 +69,12 @@ button, input, select { font: inherit; color: inherit; }
 /* The sidebar is a 56px rail. Expanded, it rises above the form (z axis) instead of
    pushing it or resizing the window; a scrim dims what it covers. */
 .window.rail { --side-w: 56px; }
-.window { width: var(--win-w); height: var(--win-h); display: grid; grid-template-rows: 32px 1fr;
+/* No title bar: a strip along the top edge (above the rail and the header) drags the window */
+.window { position: relative; } .grip { position: absolute; inset: 0 0 auto; height: var(--s3); z-index: 50; }
+.window { width: var(--win-w); height: var(--win-h); display: grid; grid-template-rows: 1fr;
   transition: width var(--t-slow) var(--ease-out);
   background: var(--bg); border-radius: 8px; overflow: hidden;
   box-shadow: 0 0 0 1px var(--border-strong), 0 16px 48px oklch(0.2 0.02 250 / 0.25); }
-.titlebar { display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3); font-size: 12px; color: var(--muted); background: var(--side); }
-.titlebar img { display: block; }
 /* Demo-only scenario picker under the window */
 .demo-pick { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s4); font-size: 13px; color: var(--muted); }
 .demo-pick select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-input); padding: 4px 8px; }
@@ -160,7 +160,7 @@ button, input, select { font: inherit; color: inherit; }
 #a-ssid:empty { display: none; }
 /* Long adapter names stay on one line; the full name is in the tooltip */
 .ghost { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: none; }
-#a-name, #a-ssid, #a-desc, #a-mac, #a-state, #gw-name { position: relative; white-space: nowrap; }
+#a-name, #a-ssid, #a-desc, #a-mac, #gw-name { position: relative; white-space: nowrap; }
 #a-mac .ghost { left: auto; right: 0; }   /* MAC sits on the right edge */
 #a-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One hardware line: what the adapter is (left, truncates) and its address (right, never cut). */
@@ -209,7 +209,7 @@ button, input, select { font: inherit; color: inherit; }
 .pages { display: grid; grid-template-rows: minmax(0, 1fr); flex: 1; min-height: 0; }
 .page { grid-area: 1 / 1; min-width: 0; min-height: 0; }
 /* Only Advanced grows past the window (many rows); 2px of room so focus rings at its edges aren't cut */
-#page-adv { overflow-y: auto; scrollbar-width: none; padding: 2px; margin: -2px; }
+#page-adv { overflow-y: auto; scrollbar-width: none; padding: 2px 2px 2px 24px; margin: -2px -2px -2px -24px; }   /* 24 px on the left: room for the drag grips in the page margin */
 /* No scrollbar: the edge that has more past it fades out instead */
 #page-adv.below, .sh-devlist.below { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
 #page-adv.above, .sh-devlist.above { mask-image: linear-gradient(to top, #000 calc(100% - 28px), transparent); }
@@ -222,9 +222,16 @@ button, input, select { font: inherit; color: inherit; }
 .ahead > .host { flex: 1 1 0; padding-left: 2px; }
 .ahead .cidr { width: 34px; text-align: center; }
 .ahead .slash { width: 10px; } .ahead .to { width: 22px; }
+/* Gateway order: the top line's gateway carries the internet first (Octet sets the metrics). */
+.alist { display: flex; flex-direction: column; } .arow.ph { order: 9999; } .arow.ph .ord { visibility: hidden; }   /* the empty line stays last, with nothing to order */
+.ahead .ord { width: 20px; margin-left: -24px; }   /* the grip hangs in the page margin: the boxes line up with every other page */
+.arow .ord { width: 20px; height: 28px; flex: none; margin-left: -24px; display: grid; place-items: center; border-radius: var(--r-input); color: var(--muted); font-size: 16px; cursor: grab; touch-action: none; transition: color var(--t-fast), background-color var(--t-fast); }
+.arow .ord:hover { background: var(--hover); color: var(--ink); }
+.arow .ord.off { cursor: default; opacity: 0.35; pointer-events: none; }
+.arow.dragging { position: relative; z-index: 2; } .arow.dragging .ord { cursor: grabbing; color: var(--ink); }
 /* The first line is the main address: its numbers stand out (weight, full ink), the rest sit back */
-.arow:first-child .ip input, .arow:first-child .prefix { font-weight: 600; color: var(--ink); transition: color 240ms; }
-.alist.dhcp .arow:first-child .ip input, .alist.dhcp .arow:first-child .prefix { color: var(--accent); }
+.arow.primary .ip input, .arow.primary .prefix { font-weight: 600; color: var(--ink); transition: color 240ms; }
+.alist.dhcp .arow.primary .ip input, .alist.dhcp .arow.primary .prefix { color: var(--accent); }
 .arow:not(:first-child) .ip input, .arow:not(:first-child) .prefix { color: var(--muted); }
 .arow:not(:first-child) .ip:focus-within input { color: var(--ink); }
 .arow { display: flex; align-items: center; gap: 4px; height: calc(var(--row-h) + var(--row-gap)); padding-bottom: var(--row-gap); box-sizing: border-box; }
@@ -656,6 +663,8 @@ button, input, select { font: inherit; color: inherit; }
 .menu hr { border: 0; border-top: 1px solid var(--border); margin: var(--s1) 0; }
 .menu i { font-size: 16px; color: var(--muted); }
 .head-wrap { position: relative; z-index: 2; }
+/* No title bar: X sits at the end of the header row, which drags the window */
+.winbtns { grid-column: 4; display: flex; } .winbtns .close { transition: color 200ms var(--ease-out), background-color var(--t-fast) var(--ease-out); } .winbtns .close:hover { color: oklch(0.63 0.21 25); }   /* only the X turns red, fading in */
 dialog { width: 400px; max-width: calc(var(--win-w) - 2 * var(--s6)); position: fixed; margin: 0; padding: 0;
   border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink); }
 dialog::backdrop { background: oklch(0.2 0.02 250 / 0.35); }
@@ -974,10 +983,10 @@ dialog.closing::backdrop { animation: fade-out var(--t-fast) ease-in forwards; }
 .loading :is(.ip, .seg, .slot-btn) > *, .loading .tag::after { visibility: hidden; }
 .loading #a-ssid { visibility: hidden; }   /* filled in once the adapters are read */
 
-/* Inside Octet (Tauri) the page is the window: no demo frame, titlebar or note */
+/* Inside Octet (Tauri) the page is the window: no demo frame or note */
 html.app body { display: block; padding: 0; background: var(--bg); }
-html.app .window { width: 100vw; height: 100vh; border-radius: 0; box-shadow: none; grid-template-rows: 1fr; }
-html.app .titlebar, html.app .note { display: none; }
+html.app .window { width: 100vw; height: 100vh; border-radius: 0; box-shadow: none; }
+html.app .note { display: none; }
 
 /* No scrollbars anywhere: the window is fixed-size and the list scrolls by wheel or keys */
 html, body, .list, .scroll { scrollbar-width: none; }
@@ -998,7 +1007,7 @@ html.app, html.app body { overflow: hidden; }
 <body>
 
 <div class="window rail compact" aria-label="Octet">   <!-- starts collapsed: no width transition on load -->
-  <div class="titlebar"><img src="icon.png" alt="" width="16" height="16">Octet</div>
+  <div class="grip" data-tauri-drag-region aria-hidden="true"></div>
   <div class="body">
     <nav class="side" aria-label="Adapters">
       <div class="side-head">
@@ -1017,11 +1026,10 @@ html.app, html.app body { overflow: hidden; }
     <section class="main">
       <div class="scroll">
         <div class="head-wrap">
-          <div class="head">
+          <div class="head" data-tauri-drag-region>
             <h1><i id="a-icon" class="ph ph-wifi-high"></i><span id="a-name"></span><span id="a-ssid"></span></h1>
-            <span class="state" id="a-state-chip"><span class="dot" id="a-dot"></span><span id="a-state"></span></span>
-            <span></span>
             <button class="icon-btn" id="more" aria-haspopup="menu" aria-expanded="false" title="Adapter tools" aria-label="Adapter tools"><i class="ph ph-dots-three"></i></button>
+            <span class="winbtns" data-win><button class="icon-btn close" id="win-close" title="Hide to tray" aria-label="Hide to tray"><i class="ph ph-x"></i></button></span>
             <p class="sub">
               <span class="desc" id="a-desc"></span>
               <button class="kv copy" id="mac-kv" title="MAC address · click to copy" aria-label="MAC address, click to copy"><i class="ph ph-barcode k" aria-hidden="true"></i><span class="v" id="a-mac"></span></button>
@@ -1089,7 +1097,7 @@ html.app, html.app body { overflow: hidden; }
         </div>
         </div>
         <div class="page" id="page-adv" data-page="adv" role="tabpanel" hidden>
-          <div class="ahead" aria-hidden="true"><span class="host">IP address</span><span class="slash"></span><span class="cidr">CIDR</span><span class="to"></span><span class="host">Gateway</span></div>
+          <div class="ahead" aria-hidden="true"><span class="ord"></span><span class="host">IP address</span><span class="slash"></span><span class="cidr">CIDR</span><span class="to"></span><span class="host">Gateway</span></div>
           <div class="alist" id="adv-list" role="list" aria-label="Addresses"></div>
         </div>
         <div class="page share" id="page-share" data-page="share" role="tabpanel" data-win hidden>
@@ -1333,6 +1341,11 @@ const firstVisible = () => adapters.findIndex(a => !hidden.has(a.id));
 const L = (en, th) => lang === "th" ? th : en;
 // Inside Octet, Tauri is here and the sample list above is replaced by this machine's adapters.
 const tauri = window.__TAURI__, invoke = tauri?.core.invoke;
+document.getElementById("win-close").onclick = () => tauri?.window.getCurrentWindow().hide();
+// Drag the window by the top strip or the header's empty space (on the element itself, not its buttons).
+document.addEventListener("mousedown", e => {
+  if (e.button === 0 && e.target.hasAttribute?.("data-tauri-drag-region")) tauri?.window.getCurrentWindow().startDragging();
+});   // X: to the tray (Windows), Quit lives in the tray menu
 if (tauri) document.documentElement.classList.add("app");
 // macOS: ⌘ instead of Ctrl, and none of the Windows-only parts: the Advanced lists (macOS keeps one
 // address per service), Release (it has none), Register in DNS, and Run as admin (it asks with each change).
@@ -1710,7 +1723,7 @@ function problems() {
   }
   return out;
 }
-const keys = ["ipAuto", "address", "subnet", "gateway", "extra", "gws", "gwMetric", "metric", "dnsAuto", "dns1", "dns2", "register"];
+const keys = ["ipAuto", "address", "subnet", "gateway", "extra", "gws", "gwMetric", "metric", "first", "dnsAuto", "dns1", "dns2", "register"];
 const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
 const changed = () => {
   if (!draft) return [];
@@ -1724,7 +1737,7 @@ const changed = () => {
 // The Advanced values (more addresses and gateways, metrics) with what Windows reported.
 function cfgOf(a) {
   a.cfg.extra ??= (a.extraIps || []).map((address, i) => ({ address, subnet: a.extraSubnets?.[i] || a.cfg.subnet }));
-  a.cfg.gws ??= (a.extraGws || []).map(gateway => ({ gateway, metric: "" })); a.cfg.gwMetric ??= ""; a.cfg.metric ??= "";
+  a.cfg.gws ??= (a.extraGws || []).map(gateway => ({ gateway, metric: "" })); a.cfg.gwMetric ??= ""; a.cfg.metric ??= ""; a.cfg.first ??= "";
   return a.cfg;
 }
 const okMetric = v => v === "" || (/^\d{1,4}$/.test(v) && +v >= 1);
@@ -1918,10 +1931,7 @@ function renderAdapterFacts() {
   retext($("a-desc"), a.desc); $("a-desc").title = a.desc;
   countMac($("a-mac"), a.mac);   // always 17 characters: crossfade in place
   $("mac-kv").hidden = !a.mac;   // a disabled adapter reports none
-  retext($("a-state"), t(a.state));
   if (draft) sync();
-  $("a-state-chip").className = "state" + (a.state === "up" ? "" : " off");
-  $("a-dot").className = "dot" + (a.state === "up" ? "" : " off") + (a.state === "disabled" ? " gone" : "");
   $("toggle-label").textContent = a.state === "disabled" ? t("enable") : t("disable");
 }
 function renderAdapter(roll = false) {
@@ -2125,7 +2135,7 @@ $("apply").onclick = async () => {
   const work = change({ op: "apply", index: a.index, name: a.name, cfg: sent, ip: has(["ipAuto", "address", "subnet", "gateway", "gwMetric"]), dns: has(["dnsAuto", "dns1", "dns2", "register"]),
     // The first gateway's metric only goes on with `set address`, so a change to it counts as an IP change (static only:
     // on DHCP it isn't counted as a change at all).
-    extra: has(["extra", "gws", "gwMetric", "metric"]), wasExtra: cfgOf(a).extra, wasGws: cfgOf(a).gws, wasMetric: cfgOf(a).metric })   // whole entries: a changed mask or metric is re-applied
+    extra: has(["extra", "gws", "gwMetric", "metric", "first"]), wasFirst: cfgOf(a).first || "", wasExtra: cfgOf(a).extra, wasGws: cfgOf(a).gws, wasMetric: cfgOf(a).metric })   // whole entries: a changed mask or metric is re-applied
     .then(() => null, e => String(e));
   work.then(async err => {
     rows.forEach(el => el.classList.remove("working"));
@@ -2212,7 +2222,7 @@ function refresh(quiet) {
     // them behind our back, and an old copy in the form would look like an edit and go out with the next Apply.
     // Compared with what Windows had when the read began, so a value typed during the read stays too.
     const old = JSON.parse(was);
-    for (const k of ["metric", "gwMetric", "gws"]) if (JSON.stringify(draft[k]) === JSON.stringify(old[k])) draft[k] = structuredClone(cfgOf(a)[k]);
+    for (const k of ["metric", "gwMetric", "gws", "first"]) if (JSON.stringify(draft[k]) === JSON.stringify(old[k])) draft[k] = structuredClone(cfgOf(a)[k]);
     if (draft.ipAuto) for (const k of ["address", "subnet", "gateway"]) draft[k] = a.cfg[k];
     if (draft.dnsAuto) for (const k of ["dns1", "dns2"]) draft[k] = a.cfg[k];
     renderList(); renderAdapterFacts(); renderForm(true);   // values that changed roll; the rest stay still
@@ -3030,8 +3040,9 @@ function placePill(animate = false) {
     { transform: `translateX(${to}px)`, width: w + "px" },
   ], { duration: 320 });
 }
-// Labels change width with the language and the font: keep the pill under its word.
-new ResizeObserver(() => placePill()).observe($("ptabs"));
+// Labels change width with the language, the font and the IP & DNS diamond (which widens its column
+// and shifts every tab after it): keep the pill under its word.
+{ const ro = new ResizeObserver(() => placePill()); ro.observe($("ptabs")); ptabs.forEach(b => ro.observe(b)); }
 function showPage(next) {
   if (next === page) return;
   if (page === "adv") adv.rows.slice(1).forEach(foldIfEmpty);   // empty added lines fold as you leave
@@ -3143,6 +3154,35 @@ function setGws(gs) {
   const m = new Map([[draft.gateway, draft.gwMetric], ...draft.gws.map(g => [g.gateway, g.metric])]);
   draft.gateway = gs[0] || ""; draft.gwMetric = m.get(draft.gateway) ?? "";
   draft.gws = gs.slice(1).map(g => ({ gateway: g, metric: m.get(g) ?? "" }));
+  if (!gs.includes(draft.first)) draft.first = "";   // its line went: nothing goes ahead of DHCP any more
+}
+// Gateway order = lowest metric first; an unset metric goes after the set ones, in list order.
+const gwMetricAt = (c, g) => g === 0 ? c.gwMetric : c.gws[g - 1]?.metric ?? "";
+function gwRank(c) {
+  const key = g => { const m = gwMetricAt(c, g); return m === "" ? 1e6 + g : +m; };
+  // DHCP's gateway has metric 0 in Windows whatever we send: it ranks first, unless `first` (the /1 routes) beats it.
+  const r = gwsOf(c).map((_, g) => g).sort((x, y) => (!c.ipAuto || x && y ? key(x) - key(y) : x - y));
+  const f = gwsOf(c).indexOf(c.first);
+  if (c.ipAuto && f > 0) { r.splice(r.indexOf(f), 1); r.unshift(f); }
+  return r;
+}
+// One step up or down: swap with the neighbour, then number every gateway 10, 20, 30... in the new order.
+function moveGw(row, d) {
+  const g = routes(draft)[adv.rows.indexOf(row)]?.gi, rank = gwRank(draft), k = rank.indexOf(g);
+  if (g === undefined || g < 0 || rank[k + d] === undefined) return false;
+  [rank[k], rank[k + d]] = [rank[k + d], rank[k]];
+  // On DHCP, metrics can't beat its gateway: one line may go above it, carried by the /1 routes (`first`).
+  if (draft.ipAuto && rank.indexOf(0) > 1) return false;
+  draft.first = draft.ipAuto && rank[0] !== 0 ? gwsOf(draft)[rank[0]] : "";
+  rank.forEach((x, n) => { if (x === 0) { if (!draft.ipAuto) draft.gwMetric = String((n + 1) * 10); } else draft.gws[x - 1].metric = String((n + 1) * 10); });
+  // The lines the dragged one passes slide into their new place instead of jumping (it follows the pointer).
+  const was = new Map(adv.rows.map(r => [r, r.el.offsetTop]));
+  sync("adv"); paintAdv();
+  if (!calm.matches) for (const [r, y] of was) {
+    const dy = y - r.el.offsetTop;
+    if (r !== row && dy) r.el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 200, easing: rowEase });
+  }
+  return true;
 }
 const addrAt = n => n ? draft.extra[n - 1] : { address: draft.address, subnet: draft.subnet };
 function putAddr(n, v) { if (n) draft.extra[n - 1] = v; else { draft.address = v.address; draft.subnet = v.subnet; } }
@@ -3159,7 +3199,21 @@ function advRow() {
   to.innerHTML = `<i class="ph ph-arrow-right"></i><i class="ph ph-x"></i>`;
   to.setAttribute("aria-label", "Remove this address"); to.title = "Remove";
   to.onclick = () => { const n = at(); if (n < 1 || row === adv.ph || row.locked) return; putAddr(n, { ...addrAt(n), address: "" }); foldIfEmpty(row); };
-  el.append(ipHost, sl, pre, to, gwHost);
+  // Drag the grip up or down: the higher a line, the sooner its gateway is used.
+  const ord = document.createElement("span"); ord.className = "ord"; ord.title = "Drag to change which gateway goes first";
+  ord.innerHTML = `<i class="ph ph-dots-six-vertical"></i>`;
+  ord.onpointerdown = e => {
+    if (ord.classList.contains("off")) return;
+    e.preventDefault(); ord.setPointerCapture(e.pointerId); el.classList.add("dragging");
+    let y0 = e.clientY;
+    ord.onpointermove = m => {
+      const step = el.offsetHeight, dy = m.clientY - y0;
+      if (Math.abs(dy) >= step / 2 && moveGw(row, Math.sign(dy))) y0 += Math.sign(dy) * step;
+      el.style.transform = `translateY(${m.clientY - y0}px)`;
+    };
+    ord.onpointerup = ord.onpointercancel = () => { ord.onpointermove = null; el.classList.remove("dragging"); el.style.transform = ""; };
+  };
+  el.append(ord, ipHost, sl, pre, to, gwHost);
   // The empty row turns real on the first keystroke.
   const real = () => { if (row === adv.ph) promote(row); return at(); };
   row.ipf = ipField(ipHost, `advip${advUid++}`, true, false, v => { const n = real(); putAddr(n, { ...addrAt(n), address: v }); sync("adv"); });
@@ -3177,7 +3231,7 @@ function advRow() {
   pre.addEventListener("keydown", e => { if (e.key === "ArrowRight" && pre.selectionStart === pre.value.length) { e.preventDefault(); row.gwf.inputs[0].focus(); } });
   // Left empty: an added line folds away (the first one never does).
   el.addEventListener("focusout", e => { if (!el.contains(e.relatedTarget)) foldIfEmpty(row); });
-  row.pre = pre;
+  row.pre = pre; row.ord = ord;
   return row;
 }
 function newPh() {
@@ -3218,7 +3272,7 @@ function paintAdv(roll = false) {
   const ed = !draft.ipAuto, cur = adapters[sel].cfg;
   if (!ed) Object.assign(draft, { address: cur.address, subnet: cur.subnet, gateway: cur.gateway });
   $("adv-list").classList.toggle("dhcp", !ed);
-  const c = draft, rs = routes(c), was = routes(cfgOf(adapters[sel])), bad = problems();
+  const c = draft, rs = routes(c), was = routes(cfgOf(adapters[sel])), bad = problems(), rank = gwRank(c);
   // While sharing here, the address Windows gave this adapter for it is Windows' to remove (Stop does), not yours.
   const s = sharing(), icsOwn = s && s.id === adapters[sel].id ? [s.cfg.address, ...(s.cfg.extra || []).map(e => e.address)] : null;
   adv.rows.forEach((row, i) => {
@@ -3233,6 +3287,14 @@ function paintAdv(roll = false) {
       row.pre.value = prefixOf(r.subnet) >= 0 ? prefixOf(r.subnet) : "";
       row.gwf.set(r.gw, (ed || i > 0) && !r.shared, roll);
     }
+    row.el.classList.toggle("primary", i === 0);
+    // Lines sit in gateway order; a line without its own gateway follows the one it shares, or goes last.
+    const k = rank.indexOf(r.gi);
+    row.el.style.order = r.gi < 0 ? 900 + i : k * 10 + (r.shared ? 1 + i / 100 : 0);
+    const own = r.gi >= 0 && !r.shared && !row.locked;
+    // DHCP's gateway is Windows' to rank: it stays first, and nothing goes above it.
+    row.ord.classList.toggle("off", !own || rank.length < 2);
+    row.ord.style.visibility = own && rank.length > 1 ? "" : "hidden";
     row.pre.disabled = !ed && i === 0 || row.locked;
     row.gwf.box.classList.toggle("shared", r.shared);
     row.gwf.box.title = r.shared ? L("Same gateway as the address above (same subnet)", "gateway เดียวกับ IP ข้างบน (subnet เดียวกัน)") : "";

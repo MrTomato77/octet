@@ -184,6 +184,9 @@
 .ph.ph-dot:before {
   content: "\ecde";
 }
+.ph.ph-dots-six-vertical:before {
+  content: "\eae2";
+}
 .ph.ph-dots-three:before {
   content: "\e1fe";
 }
@@ -438,6 +441,9 @@
 }
 .ph.ph-translate:before {
   content: "\e4a2";
+}
+.ph.ph-tray:before {
+  content: "\e4aa";
 }
 .ph.ph-tray-arrow-down:before {
   content: "\e010";

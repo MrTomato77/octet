@@ -33,6 +33,8 @@ pub enum Request {
         was_gws: Vec<Gw>,
         #[serde(default, rename = "wasMetric")]
         was_metric: String,
+        #[serde(default, rename = "wasFirst")]
+        was_first: String,
     },
     Release { index: u32, name: String },
     Renew { index: u32, name: String },
@@ -77,6 +79,7 @@ const SHARE: &str = "octet:share";
 const XADDR: &str = "octet:extra-address";
 #[cfg(windows)]
 const GW: &str = "octet:gateway";
+const FIRST: &str = "octet:first";
 /// macOS: wait until the new address is on the device (see `crate::mac::wait_address`).
 #[cfg(target_os = "macos")]
 const WAIT: &str = "octet:wait-address";
@@ -212,7 +215,7 @@ fn platform(r: &Request, index: u32, _name: &str) -> Result<Vec<Vec<String>>, St
         Request::Enable { on, .. } => {
             vec![cmd(&[ENABLE, &index.to_string(), if *on { "on" } else { "off" }])]
         }
-        Request::Apply { cfg, ip, dns, extra, was_extra, was_gws, was_metric, .. } => {
+        Request::Apply { cfg, ip, dns, extra, was_extra, was_gws, was_metric, was_first, .. } => {
             if *ip && !cfg.ip_auto && cfg.dns_auto {
                 return Err("A static IP needs manual DNS".into());
             }
@@ -291,6 +294,11 @@ fn platform(r: &Request, index: u32, _name: &str) -> Result<Vec<Vec<String>>, St
                 }
                 if let Some(m) = if_metric {
                     out.push(vec![METRIC.into(), index.to_string(), m.map(|v| v.to_string()).unwrap_or_else(|| "auto".into())]);
+                }
+                // Ahead of DHCP: the two /1 halves through the chosen gateway, or none.
+                if cfg.first.trim() != was_first.trim() {
+                    let first = if cfg.first.trim().is_empty() { "none".to_string() } else { ipv4(&cfg.first, "First gateway")?.to_string() };
+                    out.push(cmd(&[FIRST, &index.to_string(), &first]));
                 }
             }
             out
@@ -461,12 +469,13 @@ pub fn run_elevated(request_hex: &str, out: &str, id: Option<&str>) -> i32 {
 fn run(cmds: Vec<Vec<String>>) -> Result<(), String> {
     for c in cmds {
         #[cfg(windows)]
-        if matches!(c[0].as_str(), ADDRESS | XADDR | GW | ENABLE | METRIC | SHARE) {
+        if matches!(c[0].as_str(), ADDRESS | XADDR | GW | FIRST | ENABLE | METRIC | SHARE) {
             let index = c[1].parse().map_err(|_| "Bad interface index")?;
             match c[0].as_str() {
                 ADDRESS => crate::win::set_address(index, c.get(3).map(|m| (c[2].as_str(), m.as_str())))?,
                 XADDR => crate::win::extra_address(index, &c[3], c.get(4).map(|p| p.parse().map_err(|_| "Bad prefix")).transpose()?)?,
                 GW => crate::win::gateway(index, &c[3], c.get(4).map(|m| m.parse().map_err(|_| "Bad metric")).transpose()?)?,
+                FIRST => crate::win::first(index, Some(c[2].as_str()).filter(|g| *g != "none"))?,
                 ENABLE => crate::win::enable(index, c[2] == "on")?,
                 METRIC => crate::win::set_metric(index, if c[2] == "auto" { None } else { Some(c[2].parse().map_err(|_| "Bad metric")?) })?,
                 SHARE => crate::ics::set(index, c[2].parse().map_err(|_| "Bad interface index")?, c[3] == "on", c.get(4).map(String::as_str))?,
@@ -547,7 +556,7 @@ mod tests {
     }
 
     fn apply(cfg: Cfg, ip: bool, dns: bool) -> Request {
-        Request::Apply { index: 12, name: "vEthernet (WSL)".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![], was_metric: String::new() }
+        Request::Apply { index: 12, name: "vEthernet (WSL)".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![], was_metric: String::new(), was_first: String::new() }
     }
 
     #[test]
@@ -581,7 +590,7 @@ mod tests {
         c.extra = vec![Addr { address: "192.168.1.60".into(), subnet: "24".into() }, Addr { address: "10.9.0.1".into(), subnet: "255.255.0.0".into() }];
         // Only the Advanced list changed, on DHCP: coexistence, then the new one; the kept one and the main address untouched.
         let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c.clone(), ip: false, dns: false, extra: true,
-            was_extra: vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }, Addr { address: "172.16.0.9".into(), subnet: "255.255.0.0".into() }], was_gws: vec![], was_metric: String::new() };
+            was_extra: vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }, Addr { address: "172.16.0.9".into(), subnet: "255.255.0.0".into() }], was_gws: vec![], was_metric: String::new(), was_first: String::new() };
         let got: Vec<String> = commands(&r).unwrap().iter().map(|c| c.join(" ")).collect();
         // The elevated copy gets the request as JSON and must build the same commands.
         let sent: Request = serde_json::from_slice(&serde_json::to_vec(&r).unwrap()).unwrap();
@@ -596,7 +605,7 @@ mod tests {
         s.extra = vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }];
         s.gws = vec![Gw { gateway: "192.168.1.2".into(), metric: "20".into() }];
         s.gw_metric = "10".into();
-        let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: s, ip: true, dns: false, extra: true, was_extra: vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }], was_gws: vec![], was_metric: String::new() };
+        let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: s, ip: true, dns: false, extra: true, was_extra: vec![Addr { address: "192.168.1.60".into(), subnet: "255.255.255.0".into() }], was_gws: vec![], was_metric: String::new(), was_first: String::new() };
         let got: Vec<String> = commands(&r).unwrap().iter().map(|c| c.join(" ")).collect();
         assert_eq!(got, [
             "octet:address 12 192.168.1.50 255.255.255.0",
@@ -606,10 +615,10 @@ mod tests {
         ]);
         // Bad Advanced values stop everything before any command.
         c.extra[0].subnet = "33".into();
-        assert!(commands(&Request::Apply { index: 1, name: "a".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new() }).is_err());
+        assert!(commands(&Request::Apply { index: 1, name: "a".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new(), was_first: String::new() }).is_err());
         let mut m = cfg();
         m.metric = "0".into();
-        assert!(commands(&Request::Apply { index: 1, name: "a".into(), cfg: m, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new() }).is_err());
+        assert!(commands(&Request::Apply { index: 1, name: "a".into(), cfg: m, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new(), was_first: String::new() }).is_err());
     }
 
     #[test]
@@ -617,7 +626,7 @@ mod tests {
     fn advanced_edits_and_failures_land_right() {
         use crate::adapters::{Addr, Gw};
         let run = |cfg: Cfg, ip: bool, dns: bool, was_extra: Vec<Addr>, was_gws: Vec<Gw>| -> Result<Vec<String>, String> {
-            commands(&Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip, dns, extra: true, was_extra, was_gws, was_metric: String::new() }).map(|v| v.iter().map(|c| c.join(" ")).collect())
+            commands(&Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip, dns, extra: true, was_extra, was_gws, was_metric: String::new(), was_first: String::new() }).map(|v| v.iter().map(|c| c.join(" ")).collect())
         };
         let addr = |a: &str, m: &str| Addr { address: a.into(), subnet: m.into() };
         let gw = |g: &str, m: &str| Gw { gateway: g.into(), metric: m.into() };
@@ -657,11 +666,28 @@ mod tests {
 
     #[test]
     #[cfg(not(target_os = "macos"))]
+    fn first_gateway_set_kept_and_cleared() {
+        let run = |first: &str, was: &str| -> Vec<String> {
+            let mut c = cfg();
+            c.first = first.into();
+            let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new(), was_first: was.into() };
+            commands(&r).unwrap().iter().map(|c| c.join(" ")).collect()
+        };
+        assert_eq!(run("192.168.1.2", ""), ["octet:first 12 192.168.1.2"]);
+        assert!(run("192.168.1.2", "192.168.1.2").is_empty());
+        assert_eq!(run("", "192.168.1.2"), ["octet:first 12 none"]);
+        let mut c = cfg();
+        c.first = "nope".into();
+        assert!(commands(&Request::Apply { index: 12, name: "a".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new(), was_first: String::new() }).is_err());
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
     fn interface_metric_set_kept_and_back_to_automatic() {
         let run = |metric: &str, was: &str| -> Vec<String> {
             let mut c = cfg();
             c.metric = metric.into();
-            let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: was.into() };
+            let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: was.into(), was_first: String::new() };
             commands(&r).unwrap().iter().map(|c| c.join(" ")).collect()
         };
         assert_eq!(run("15", ""), ["octet:metric 12 15"]);
@@ -677,7 +703,7 @@ mod tests {
         let run = |ip_auto: bool, extra: Vec<Addr>, was: Vec<Addr>| -> Vec<String> {
             let mut c = cfg();
             (c.ip_auto, c.extra) = (ip_auto, extra);
-            let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: was, was_gws: vec![], was_metric: String::new() };
+            let r = Request::Apply { index: 12, name: "Wi-Fi".into(), cfg: c, ip: false, dns: false, extra: true, was_extra: was, was_gws: vec![], was_metric: String::new(), was_first: String::new() };
             commands(&r).unwrap().iter().map(|c| c.join(" ")).collect()
         };
         let a = |s: &str| Addr { address: s.into(), subnet: "24".into() };
@@ -732,7 +758,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn builds_networksetup_by_service_name() {
         let got = |r: &Request| commands(r).map(|c| c.iter().map(|c| c.join(" ")).collect::<Vec<_>>());
-        let wifi = |cfg: Cfg, ip, dns| Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![], was_metric: String::new() };
+        let wifi = |cfg: Cfg, ip, dns| Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip, dns, extra: false, was_extra: vec![], was_gws: vec![], was_metric: String::new(), was_first: String::new() };
         assert_eq!(got(&wifi(cfg(), true, true)).unwrap(), [
             "networksetup -setmanual Wi-Fi 192.168.1.50 255.255.255.0 192.168.1.1",
             "octet:wait-address 12 192.168.1.50",
@@ -754,7 +780,7 @@ mod tests {
         assert_eq!(got(&Request::FlushDns).unwrap(), ["dscacheutil -flushcache", "killall -HUP mDNSResponder"]);
         let mut x = cfg();
         x.extra = vec![crate::adapters::Addr { address: "10.0.0.2".into(), subnet: "24".into() }];
-        assert!(commands(&Request::Apply { index: 1, name: "Wi-Fi".into(), cfg: x, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new() }).is_err());
+        assert!(commands(&Request::Apply { index: 1, name: "Wi-Fi".into(), cfg: x, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new(), was_first: String::new() }).is_err());
     }
 
     #[test]

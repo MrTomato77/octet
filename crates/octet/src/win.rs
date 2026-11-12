@@ -179,6 +179,20 @@ pub fn gateway(index: u32, gw: &str, metric: Option<u32>) -> Result<()> {
     }
 }
 
+/// Puts `gw` ahead of every default route (DHCP's too) with 0.0.0.0/1 and 128.0.0.0/1, or takes them off (None).
+/// A longer prefix wins over 0.0.0.0/0 whatever the metrics, and a DHCP renew leaves them alone.
+pub fn first(index: u32, gw: Option<&str>) -> Result<()> {
+    let wmi = Wmi::connect(r"ROOT\StandardCimv2")?;
+    for half in ["0.0.0.0/1", "128.0.0.0/1"] {
+        delete(&wmi, &format!("SELECT * FROM MSFT_NetRoute WHERE InterfaceIndex={index} AND DestinationPrefix='{half}'"))?;
+        if let Some(gw) = gw {
+            create(&wmi, "MSFT_NetRoute", &[("InterfaceIndex", VARIANT::from(index as i32)), ("AddressFamily", VARIANT::from(2i32)),
+                ("DestinationPrefix", VARIANT::from(BSTR::from(half))), ("NextHop", VARIANT::from(BSTR::from(gw))), ("RouteMetric", VARIANT::from(0i32))])?;
+        }
+    }
+    Ok(())
+}
+
 /// By index, so a renamed adapter (or one named "2") cannot be confused with another.
 pub fn enable(index: u32, on: bool) -> Result<()> {
     let wmi = Wmi::connect(r"ROOT\CIMV2")?;
