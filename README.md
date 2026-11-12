@@ -4,7 +4,8 @@
 
 **Switch IPv4 and DNS in seconds. Then see who else is on the network.**
 
-A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simple-IP-Config), written in Rust. For Windows and macOS.
+A free, open-source **IP and DNS changer** for Windows and macOS: static IP, DHCP and DNS in one click, plus a network scanner.<br>
+A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simple-IP-Config), written in Rust. **[Website](https://thomasrieger.github.io/octet-web/)**
 
 [![Release](https://img.shields.io/github/v/release/MrTomato77/octet?style=flat-square&color=3b82f6)](https://github.com/MrTomato77/octet/releases/latest)
 [![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FMrTomato77%2Foctet%2Fbadges%2Fdownloads.json&style=flat-square)](https://github.com/MrTomato77/octet/releases)
@@ -68,9 +69,14 @@ A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simpl
 
 ## Good to know
 
-- **First run:** Octet isn't code-signed or notarized yet. On Windows choose *More info → Run anyway*; on macOS, *System Settings → Privacy & Security → Open Anyway*.
+- **First run:** Octet isn't code-signed or notarized yet, so Windows SmartScreen and macOS warn about an unknown publisher. On Windows choose *More info → Run anyway*; on macOS, *System Settings → Privacy & Security → Open Anyway*.
+- **Is the download genuine?** Every file is built by [GitHub Actions](.github/workflows/release.yml) from this repository, and comes with a `.sha256` file. Check it before you run it:
+  - Windows (PowerShell): `(Get-FileHash .\Octet.exe).Hash` should match the first word of `Octet.exe.sha256` (case aside)
+  - macOS: `shasum -a 256 Octet.dmg` should print the same line as `Octet.dmg.sha256`
+
+  Updates from inside Octet are checked against a signature (`.sig`) before they install. Prefer to build it yourself? See [docs/guide.md](docs/guide.md).
 - **Admin rights:** asked only for the change itself (Apply, enable / disable, release / renew), never just to open the app: UAC on Windows, your password on macOS.
-- **Privacy:** no telemetry and no server of its own. The internet is reached only for your public IP and the speed test (through Cloudflare), and for updates when you ask.
+- **Privacy:** no telemetry. The internet is reached only for your public IP and the speed test (through Cloudflare), for updates when you ask, and for feedback when you press Send (your message, the Octet version and the system, posted as a GitHub issue through a small relay in [worker/](worker/)).
 
 Details on each of these, the macOS differences, and how to build: **[docs/guide.md](docs/guide.md)**.
 
