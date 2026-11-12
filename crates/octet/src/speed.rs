@@ -101,10 +101,67 @@ fn said(e: i32) -> String {
     }
 }
 
-// ponytail: not pinned to the adapter off Windows; IP_BOUND_IF (macOS) when the test ships there.
-#[cfg(not(windows))]
+/// The same on macOS: IP_BOUND_IF pins the device (macOS routes by destination alone, so binding the address
+/// isn't enough), and the bind sets the address it leaves from.
+#[cfg(target_os = "macos")]
 fn tcp(via: Via) -> Result<TcpStream, String> {
-    TcpStream::connect_timeout(&via.to, Duration::from_secs(10)).map_err(|e| e.to_string())
+    use std::os::fd::{FromRawFd, OwnedFd};
+    let SocketAddr::V4(t) = via.to else { return Err("IPv4 only".into()) };
+    let errno = || std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+    let len = size_of::<libc::sockaddr_in>() as u32;
+    unsafe {
+        let s = libc::socket(libc::AF_INET, libc::SOCK_STREAM, libc::IPPROTO_TCP);
+        if s < 0 {
+            return Err(format!("socket: {}", said(errno())));
+        }
+        let fd = OwnedFd::from_raw_fd(s);   // closed on every early return
+        let fail = |what: &str, e: i32| Err(format!("{what}: {}", said(e)));
+        // A peer that hangs up mid-upload gives the write an error, not SIGPIPE (as std's own sockets do).
+        let on = 1i32;
+        libc::setsockopt(s, libc::SOL_SOCKET, libc::SO_NOSIGPIPE, (&on as *const i32).cast(), 4);
+        if via.pinned {
+            if libc::setsockopt(s, libc::IPPROTO_IP, libc::IP_BOUND_IF, (&via.index as *const u32).cast(), 4) != 0 {
+                return fail("IP_BOUND_IF", errno());
+            }
+            let from = crate::mac::sockaddr(via.src, 0);
+            if libc::bind(s, (&from as *const libc::sockaddr_in).cast(), len) != 0 {
+                return fail("bind", errno());
+            }
+        }
+        // Connect with a deadline: a blocking one waits out every SYN retry on a line that goes nowhere.
+        let flags = libc::fcntl(s, libc::F_GETFL);
+        libc::fcntl(s, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        let to = crate::mac::sockaddr(*t.ip(), t.port());
+        if libc::connect(s, (&to as *const libc::sockaddr_in).cast(), len) != 0 && errno() != libc::EINPROGRESS {
+            return fail("connect", errno());
+        }
+        let mut p = libc::pollfd { fd: s, events: libc::POLLOUT, revents: 0 };
+        match libc::poll(&mut p, 1, 10_000) {
+            0 => return Err("connect: timed out".into()),
+            n if n < 0 => return fail("connect", errno()),
+            _ => {}
+        }
+        let (mut e, mut elen) = (0i32, 4u32);
+        libc::getsockopt(s, libc::SOL_SOCKET, libc::SO_ERROR, (&mut e as *mut i32).cast(), &mut elen);
+        if e != 0 {
+            return fail("connect", e);
+        }
+        libc::fcntl(s, libc::F_SETFL, flags);
+        Ok(TcpStream::from(fd))
+    }
+}
+
+/// The errors a connect meets most, in words; any other as the system says it.
+#[cfg(target_os = "macos")]
+fn said(e: i32) -> String {
+    match e {
+        libc::ENETUNREACH => "no route to the internet".into(),
+        libc::EHOSTUNREACH => "no route to Cloudflare".into(),
+        libc::ETIMEDOUT => "timed out".into(),
+        libc::ECONNREFUSED => "refused".into(),
+        libc::EADDRNOTAVAIL => "this adapter's address isn't usable".into(),
+        _ => std::io::Error::from_raw_os_error(e).to_string(),
+    }
 }
 
 fn open(via: Via) -> Result<Tls, String> {
@@ -195,23 +252,31 @@ fn brand(asn: u64) -> Option<&'static str> {
 }
 
 /// Bytes the far end has acknowledged on these sockets (SIO_TCP_INFO): sent, less what's still in flight or was sent again.
-#[cfg(windows)]
 /// Each socket keeps the last count it gave: one that can no longer say (dropped and opened again) still counts what it had.
-fn acked(socks: &mut [(TcpStream, u64)]) -> Option<u64> {
+#[cfg(windows)]
+fn acked(socks: &mut [(TcpStream, u64)], _written: u64) -> u64 {
     use std::os::windows::io::AsRawSocket;
     use windows_sys::Win32::Networking::WinSock::{SIO_TCP_INFO, TCP_INFO_v0, WSAIoctl};
-    Some(socks.iter_mut().map(|(s, last)| {
+    socks.iter_mut().map(|(s, last)| {
         let (ver, mut info, mut got) = (0u32, TCP_INFO_v0::default(), 0u32);
         let ok = unsafe { WSAIoctl(s.as_raw_socket() as usize, SIO_TCP_INFO, (&ver as *const u32).cast(), 4,
             (&mut info as *mut TCP_INFO_v0).cast(), size_of::<TCP_INFO_v0>() as u32, &mut got, std::ptr::null_mut(), None) } == 0;
         if ok { *last = (*last).max(info.BytesOut.saturating_sub(info.BytesInFlight as u64 + info.BytesRetrans as u64)); }
         *last
-    }).sum())
+    }).sum()
 }
 
-#[cfg(not(windows))]
-fn acked(_: &mut [(TcpStream, u64)]) -> Option<u64> {
-    None
+/// macOS: what the streams have written, less what still sits in their send buffers (SO_NWRITE: not yet sent, or
+/// sent and not yet acknowledged). A closed socket has nothing left there; what it held counts as gone.
+#[cfg(target_os = "macos")]
+fn acked(socks: &mut [(TcpStream, u64)], written: u64) -> u64 {
+    use std::os::fd::AsRawFd;
+    let waiting: u64 = socks.iter().map(|(s, _)| {
+        let (mut n, mut len) = (0i32, 4u32);
+        let ok = unsafe { libc::getsockopt(s.as_raw_fd(), libc::SOL_SOCKET, libc::SO_NWRITE, (&mut n as *mut i32).cast(), &mut len) } == 0;
+        if ok { n.max(0) as u64 } else { 0 }
+    }).sum();
+    written.saturating_sub(waiting)
 }
 
 fn median(v: &[f64]) -> Option<u32> {
@@ -281,7 +346,7 @@ fn leg(via: Via, up: bool, live: &dyn Fn() -> bool, used: &Arc<AtomicU64>, send:
     // end acknowledges them: counting writes would count what only reached the socket's send buffer, megabytes a
     // stream in the first moments, and the dial would shoot up as upload starts.
     let base = used.load(Relaxed);   // used runs over the whole test
-    let moved = || if up { acked(&mut socks.lock().unwrap()) } else { None }.unwrap_or_else(|| used.load(Relaxed) - base);
+    let moved = || { let written = used.load(Relaxed) - base; if up { acked(&mut socks.lock().unwrap(), written) } else { written } };
     let t0 = Instant::now();
     let mut warm_at = None;
     let result = loop {
@@ -409,7 +474,7 @@ pub fn run(index: u32, src: Ipv4Addr, send: impl Fn(Value)) -> Result<(), String
 mod tests {
     // Sends nothing: an address this PC doesn't have fails at bind, before any connect.
     #[test]
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn says_why_it_cant_connect() {
         let _ = std::net::TcpListener::bind("127.0.0.1:0");   // starts Winsock, as resolving the host does in a real run
         let via = super::Via { index: 1, src: "192.0.2.1".parse().unwrap(), to: "192.0.2.2:443".parse().unwrap(), pinned: true };

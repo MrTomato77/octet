@@ -91,8 +91,18 @@ async fn flush_dns() -> Result<(), String> {
 async fn neighbours(index: u32) -> Result<Vec<(String, String)>, String> {
     #[cfg(windows)]
     return blocking(move || Ok(net::neighbours(index).into_iter().map(|(ip, mac)| (ip.to_string(), mac)).collect())).await;
-    #[cfg(not(windows))]
-    { let _ = index; Ok(vec![]) }
+    #[cfg(target_os = "macos")]
+    return blocking(move || Ok(mac::neighbours(index).into_iter().map(|(ip, mac)| (ip.to_string(), mac)).collect())).await;
+}
+
+/// macOS: what Internet Sharing is set to and doing, read from its own settings (Windows: null; the page
+/// goes by the shared adapter's address there).
+#[tauri::command]
+async fn share_state() -> Result<Option<serde_json::Value>, String> {
+    #[cfg(target_os = "macos")]
+    return blocking(|| serde_json::to_value(mac::share_state()).map(Some).map_err(|e| e.to_string())).await;
+    #[cfg(not(target_os = "macos"))]
+    Ok(None)
 }
 
 /// Internet Sharing: MikroTiks on the shared adapter's cable, heard through MNDP (works before they have an IP).
@@ -443,7 +453,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            read_adapters, change, flush_dns, who_has, neighbours, mndp, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, send_feedback, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
+            read_adapters, change, flush_dns, who_has, neighbours, share_state, mndp, ping, tcping, open_device, scan_host, speed_test, speed_stop, hostname, vendor, computer_name, public_ip, open_ncpa, open_link, system_info, send_feedback, update_check, update_install, update_restart, ready, admin_state, set_always_admin, restart_as_admin
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Octet");

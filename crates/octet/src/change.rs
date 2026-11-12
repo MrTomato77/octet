@@ -37,11 +37,12 @@ pub enum Request {
         was_first: String,
     },
     Release { index: u32, name: String },
-    Renew { index: u32, name: String },
+    /// `cycle`: release first, in the same elevated run (one password prompt on macOS).
+    Renew { index: u32, name: String, #[serde(default)] cycle: bool },
     Enable { index: u32, name: String, on: bool },
     /// macOS only: emptying the DNS cache needs root there (Windows does it in-process).
     FlushDns,
-    /// Windows only: Internet Connection Sharing from `public` (has the internet) to `private`.
+    /// Internet Sharing from `public` (has the internet) to `private`: Windows' ICS, or macOS's Internet Sharing.
     /// `restore` (turning off only): the private adapter's saved settings, put back in the same elevated run,
     /// so Stop asks for admin once.
     Share { public: u32, private: u32, on: bool, #[serde(default)] scope: Option<Ipv4Addr>, #[serde(default)] restore: Option<Box<Request>> },
@@ -72,20 +73,20 @@ const ADDRESS: &str = "octet:address";
 const ENABLE: &str = "octet:enable";
 #[cfg(windows)]
 const METRIC: &str = "octet:metric";
-#[cfg(windows)]
 const SHARE: &str = "octet:share";
 /// Windows: one more or one fewer Advanced address / default gateway (see `crate::win`).
 #[cfg(windows)]
 const XADDR: &str = "octet:extra-address";
 #[cfg(windows)]
 const GW: &str = "octet:gateway";
+/// Windows: the gateway ahead of DHCP's (see `crate::win::first`); macOS goes by service order instead.
+#[cfg(not(target_os = "macos"))]
 const FIRST: &str = "octet:first";
 /// macOS: wait until the new address is on the device (see `crate::mac::wait_address`).
 #[cfg(target_os = "macos")]
 const WAIT: &str = "octet:wait-address";
 
 /// An extra address's mask: a dotted mask or a prefix length.
-#[cfg(not(target_os = "macos"))]
 fn mask_of(v: &str) -> Result<Ipv4Addr, String> {
     let prefix = match v.parse::<u8>() {
         Ok(p) if (1..=32).contains(&p) => p,
@@ -113,16 +114,17 @@ pub fn commands(r: &Request) -> Result<Vec<Vec<String>>, String> {
     let (index, name) = match r {
         Request::Apply { index, name, .. }
         | Request::Release { index, name }
-        | Request::Renew { index, name }
+        | Request::Renew { index, name, .. }
         | Request::Enable { index, name, .. } => (*index, name),
         Request::FlushDns if cfg!(target_os = "macos") => return Ok(vec![cmd(&["dscacheutil", "-flushcache"]), cmd(&["killall", "-HUP", "mDNSResponder"])]),
         Request::FlushDns => return Ok(vec![]),
-        #[cfg(windows)]
         Request::Share { public, private, on, scope, restore } => {
             let mut c = vec![SHARE.to_string(), public.to_string(), private.to_string(), (if *on { "on" } else { "off" }).into()];
             if let Some(ip) = scope.filter(|_| *on) {
                 let o = ip.octets();
                 if !ip.is_private() || o[3] == 0 || o[3] == 255 { return Err(format!("{ip} is not a private host address for sharing")); }
+                // macOS gives this Mac the network's .1 and hands out the rest.
+                if cfg!(target_os = "macos") && o[3] != 1 { return Err(format!("On a Mac, sharing takes the .1 address of the network: {}.{}.{}.1", o[0], o[1], o[2])); }
                 c.push(ip.to_string());
             }
             let mut all = vec![c];
@@ -133,8 +135,6 @@ pub fn commands(r: &Request) -> Result<Vec<Vec<String>>, String> {
             }
             return Ok(all);
         }
-        #[cfg(not(windows))]
-        Request::Share { .. } => return Err("Internet Sharing is Windows only".into()),
     };
     // * and ? are wildcards to some tools; a leading - would read as an option.
     if name.is_empty() || name.starts_with('-') || name.chars().any(|c| c.is_control() || matches!(c, '"' | '*' | '?')) {
@@ -157,23 +157,73 @@ fn cmd(args: &[&str]) -> Vec<String> {
     args.iter().map(|s| s.to_string()).collect()
 }
 
-/// macOS: networksetup, by the service's name (it takes nothing else). Each service has one
-/// address, so the Advanced lists don't apply; macOS has no lease release either.
+/// Whether `ip` is on the network `net`/`prefix`.
+#[cfg(target_os = "macos")]
+fn in_net(ip: Ipv4Addr, net: Ipv4Addr, prefix: u8) -> bool {
+    let m = u32::from(prefix_mask(prefix));
+    u32::from(ip) & m == u32::from(net) & m
+}
+
+/// macOS: networksetup, by the service's name (it takes nothing else).
+/// Release turns the service's IPv4 off (macOS has no release of its own; System Settings' Configure IPv4: Off
+/// does the same) and Renew turns DHCP back on. Each service has one address and one router, so an Advanced
+/// address is a service of its own on the same port (`crate::mac::extra_name`), and each gateway goes with the
+/// first address whose network holds it, as the Advanced page draws it.
 #[cfg(target_os = "macos")]
 fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, String> {
     let ns = |args: &[&str]| [&["networksetup"], args].concat().iter().map(|s| s.to_string()).collect::<Vec<_>>();
     Ok(match r {
         Request::FlushDns | Request::Share { .. } => unreachable!(),
-        Request::Release { .. } => return Err("macOS can't release a lease on its own; use Renew".into()),
-        // In-process (SCNetworkInterfaceForceConfigurationRefresh), as System Settings' Renew DHCP Lease.
-        Request::Renew { .. } => vec![cmd(&[LEASE, &index.to_string(), "renew"])],
+        Request::Release { .. } => vec![ns(&["-setv4off", name])],
+        // In-process: DHCP back on after a Release, else SCNetworkInterfaceForceConfigurationRefresh (System Settings' Renew DHCP Lease).
+        Request::Renew { cycle, .. } => {
+            let mut out = if *cycle { vec![ns(&["-setv4off", name])] } else { vec![] };
+            out.push(cmd(&[LEASE, &index.to_string(), "renew"]));
+            out
+        }
         Request::Enable { on, .. } => vec![ns(&["-setnetworkserviceenabled", name, if *on { "on" } else { "off" }])],
-        Request::Apply { cfg, ip, dns, extra, .. } => {
+        Request::Apply { cfg, ip, dns, extra, was_extra, was_metric, was_first, .. } => {
             if *ip && !cfg.ip_auto && cfg.dns_auto {
                 return Err("A static IP needs manual DNS".into());
             }
-            if *extra && (!cfg.extra.is_empty() || !cfg.gws.is_empty()) {
-                return Err("macOS keeps one address per service; add a second service in System Settings for another".into());
+            if cfg.first.trim() != was_first.trim() {
+                return Err("On a Mac a gateway can't go ahead of DHCP's; the service order decides (System Settings > Network > ... > Set Service Order)".into());
+            }
+            if cfg.metric.trim() != was_metric.trim() || !cfg.gw_metric.trim().is_empty() || cfg.gws.iter().any(|g| !g.metric.trim().is_empty()) {
+                return Err("macOS has no metrics; it goes by service order (System Settings > Network > ... > Set Service Order)".into());
+            }
+            // Every value is checked before any command is built.
+            let main: Option<(Ipv4Addr, u8)> = match (cfg.address.parse::<Ipv4Addr>(), parse_subnet(&cfg.subnet)) {
+                (Ok(a), Ok(p)) if p > 0 => Some((a, p)),
+                _ => None,
+            };
+            let extras = cfg.extra.iter().map(|a| Ok((ipv4(&a.address, "Extra IP address")?, mask_of(&a.subnet)?))).collect::<Result<Vec<_>, String>>()?;
+            let was: Vec<Ipv4Addr> = was_extra.iter().filter_map(|a| a.address.parse().ok()).collect();
+            let mut seen: Vec<Ipv4Addr> = main.map(|m| m.0).into_iter().collect();
+            for (a, _) in &extras {
+                if seen.contains(a) { return Err(format!("{a} is listed twice")); }
+                seen.push(*a);
+            }
+            // Each gateway onto the first address whose network holds it. On DHCP the first address's router is the lease's.
+            let mut gws: Vec<Ipv4Addr> = vec![];
+            for g in std::iter::once(&cfg.gateway).chain(cfg.gws.iter().map(|g| &g.gateway)).filter(|g| !g.is_empty()) {
+                let g = ipv4(g, "Gateway")?;
+                if !gws.contains(&g) { gws.push(g); }
+            }
+            let (mut main_router, mut routers) = (None, vec![None; extras.len()]);
+            for g in gws {
+                if let Some((a, p)) = main && in_net(g, a, p) {
+                    if cfg.ip_auto { continue; }
+                    if main_router.is_some() { return Err(format!("Gateway {g}: on a Mac each address has one gateway")); }
+                    main_router = Some(g);
+                } else if let Some(i) = extras.iter().position(|&(a, m)| in_net(g, a, u32::from(m).leading_ones() as u8)) {
+                    if routers[i].is_some() { return Err(format!("Gateway {g}: on a Mac each address has one gateway")); }
+                    routers[i] = Some(g);
+                } else if !cfg.ip_auto && main_router.is_none() && cfg.gateway.parse() == Ok(g) {
+                    main_router = Some(g);   // a gateway off the address's network, as it could be set before
+                } else {
+                    return Err(format!("Gateway {g} isn't on the network of any address here; on a Mac a gateway goes with an address"));
+                }
             }
             let mut out = vec![];
             if *ip {
@@ -187,9 +237,7 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                     }
                     let mask = prefix_mask(prefix).to_string();
                     let mut c = ns(&["-setmanual", name, &address, &mask]);
-                    if !cfg.gateway.is_empty() {
-                        c.push(ipv4(&cfg.gateway, "Gateway")?.to_string());
-                    }
+                    c.extend(main_router.map(|g| g.to_string()));
                     out.push(c);
                     out.push(cmd(&[WAIT, &index.to_string(), &address]));
                 }
@@ -201,6 +249,27 @@ fn platform(r: &Request, index: u32, name: &str) -> Result<Vec<Vec<String>>, Str
                 c.extend(if servers.is_empty() { vec!["Empty".to_string()] } else { servers });
                 out.push(c);
             }
+            if *extra || *ip {
+                for a in was.iter().filter(|a| !extras.iter().any(|(e, _)| e == *a)) {
+                    out.push(ns(&["-removenetworkservice", &crate::mac::extra_name(name, &a.to_string())]));
+                }
+                for ((a, m), router) in extras.iter().zip(&routers) {
+                    let svc = crate::mac::extra_name(name, &a.to_string());
+                    // A new one starts as a copy of this service (same port), then gets its own address and nothing else:
+                    // no DNS servers of its own, no IPv6 (the first service has those).
+                    let new = !was.contains(a);
+                    if new {
+                        out.push(ns(&["-duplicatenetworkservice", name, &svc]));
+                    }
+                    let mut c = ns(&["-setmanual", &svc, &a.to_string(), &m.to_string()]);
+                    c.extend(router.map(|g| g.to_string()));
+                    out.push(c);
+                    if new {
+                        out.push(ns(&["-setdnsservers", &svc, "Empty"]));
+                        out.push(ns(&["-setv6off", &svc]));
+                    }
+                }
+            }
             out
         }
     })
@@ -211,7 +280,11 @@ fn platform(r: &Request, index: u32, _name: &str) -> Result<Vec<Vec<String>>, St
     Ok(match r {
         Request::FlushDns | Request::Share { .. } => unreachable!(),
         Request::Release { .. } => vec![cmd(&[LEASE, &index.to_string(), "release"])],
-        Request::Renew { .. } => vec![cmd(&[LEASE, &index.to_string(), "renew"])],
+        Request::Renew { cycle, .. } => {
+            let mut out = if *cycle { vec![cmd(&[LEASE, &index.to_string(), "release"])] } else { vec![] };
+            out.push(cmd(&[LEASE, &index.to_string(), "renew"]));
+            out
+        }
         Request::Enable { on, .. } => {
             vec![cmd(&[ENABLE, &index.to_string(), if *on { "on" } else { "off" }])]
         }
@@ -483,6 +556,12 @@ fn run(cmds: Vec<Vec<String>>) -> Result<(), String> {
             }
             continue;
         }
+        #[cfg(target_os = "macos")]
+        if c[0] == SHARE {
+            let (public, private) = (c[1].parse().map_err(|_| "Bad interface index")?, c[2].parse().map_err(|_| "Bad interface index")?);
+            crate::mac::share_set(public, private, c[3] == "on", c.get(4).map(|ip| ipv4(ip, "Sharing address")).transpose()?)?;
+            continue;
+        }
         if c[0] == DNS {
             let index = c[1].parse().map_err(|_| "Bad interface index".to_string())?;
             crate::net::set_dns(index, &c[2], c[3] == "register")?;
@@ -750,7 +829,7 @@ mod tests {
         c.dns_auto = false;
         c.address = "300.1.1.1".into();
         assert!(commands(&apply(c, true, false)).is_err());
-        assert!(commands(&Request::Renew { index: 1, name: "a\" & calc".into() }).is_err());
+        assert!(commands(&Request::Renew { index: 1, name: "a\" & calc".into(), cycle: false }).is_err());
         assert!(commands(&Request::Release { index: 1, name: "*".into() }).is_err());
     }
 
@@ -775,12 +854,55 @@ mod tests {
         // The name is one argument however it is spelled; one that reads as an option is refused.
         assert_eq!(commands(&Request::Enable { index: 4, name: "a b; rm".into(), on: true }).unwrap()[0][2], "a b; rm");
         assert!(commands(&Request::Enable { index: 4, name: "-listallnetworkservices".into(), on: true }).is_err());
-        assert!(commands(&Request::Release { index: 4, name: "Wi-Fi".into() }).is_err());
-        assert_eq!(got(&Request::Renew { index: 4, name: "Wi-Fi".into() }).unwrap(), ["octet:lease 4 renew"]);
+        assert_eq!(got(&Request::Release { index: 4, name: "Wi-Fi".into() }).unwrap(), ["networksetup -setv4off Wi-Fi"]);
+        assert_eq!(got(&Request::Renew { index: 4, name: "Wi-Fi".into(), cycle: false }).unwrap(), ["octet:lease 4 renew"]);
+        assert_eq!(got(&Request::Renew { index: 4, name: "Wi-Fi".into(), cycle: true }).unwrap(), ["networksetup -setv4off Wi-Fi", "octet:lease 4 renew"]);
         assert_eq!(got(&Request::FlushDns).unwrap(), ["dscacheutil -flushcache", "killall -HUP mDNSResponder"]);
-        let mut x = cfg();
-        x.extra = vec![crate::adapters::Addr { address: "10.0.0.2".into(), subnet: "24".into() }];
-        assert!(commands(&Request::Apply { index: 1, name: "Wi-Fi".into(), cfg: x, ip: false, dns: false, extra: true, was_extra: vec![], was_gws: vec![], was_metric: String::new(), was_first: String::new() }).is_err());
+    }
+
+    /// Advanced on a Mac: each extra address is a service of its own beside the first, with the gateway on its network.
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn mac_advanced_addresses_are_services() {
+        use crate::adapters::{Addr, Gw};
+        let got = |r: &Request| commands(r).map(|c| c.iter().map(|c| c.join(" ")).collect::<Vec<_>>());
+        let adv = |cfg: Cfg, was_extra: Vec<Addr>| Request::Apply { index: 12, name: "Wi-Fi".into(), cfg, ip: false, dns: false, extra: true, was_extra, was_gws: vec![], was_metric: String::new(), was_first: String::new() };
+        let addr = |a: &str, m: &str| Addr { address: a.into(), subnet: m.into() };
+        let mut c = cfg();   // 192.168.1.50/24 via 192.168.1.1
+        c.extra = vec![addr("10.0.0.2", "24")];
+        c.gws = vec![Gw { gateway: "10.0.0.1".into(), metric: String::new() }];
+        assert_eq!(got(&adv(c.clone(), vec![])).unwrap(), [
+            "networksetup -duplicatenetworkservice Wi-Fi Wi-Fi + 10.0.0.2",
+            "networksetup -setmanual Wi-Fi + 10.0.0.2 10.0.0.2 255.255.255.0 10.0.0.1",
+            "networksetup -setdnsservers Wi-Fi + 10.0.0.2 Empty",
+            "networksetup -setv6off Wi-Fi + 10.0.0.2",
+        ]);
+        // Already there: set again (its gateway may have changed), not made again. Gone from the list: removed.
+        assert_eq!(got(&adv(c.clone(), vec![addr("10.0.0.2", "255.255.255.0"), addr("172.16.0.9", "255.255.0.0")])).unwrap(), [
+            "networksetup -removenetworkservice Wi-Fi + 172.16.0.9",
+            "networksetup -setmanual Wi-Fi + 10.0.0.2 10.0.0.2 255.255.255.0 10.0.0.1",
+        ]);
+        // A gateway on no address's network, two on one address, a metric, a repeat: refused before anything runs.
+        let mut x = c.clone();
+        x.gws = vec![Gw { gateway: "172.31.0.1".into(), metric: String::new() }];
+        assert!(commands(&adv(x, vec![])).is_err(), "gateway off every network");
+        let mut x = c.clone();
+        x.gws.push(Gw { gateway: "10.0.0.254".into(), metric: String::new() });
+        assert!(commands(&adv(x, vec![])).is_err(), "two gateways for one address");
+        let mut x = c.clone();
+        x.gws[0].metric = "10".into();
+        assert!(commands(&adv(x, vec![])).is_err(), "metric");
+        let mut x = c.clone();
+        x.extra.push(addr("192.168.1.50", "24"));
+        assert!(commands(&adv(x, vec![])).is_err(), "the first address again");
+        // On DHCP the lease's router stays the lease's; the extra still gets its own.
+        let mut x = c;
+        x.ip_auto = true;
+        assert_eq!(got(&adv(x, vec![addr("10.0.0.2", "24")])).unwrap(), ["networksetup -setmanual Wi-Fi + 10.0.0.2 10.0.0.2 255.255.255.0 10.0.0.1"]);
+        // Sharing: this Mac takes the .1.
+        let share = |scope: &str| serde_json::from_str::<Request>(&format!(r#"{{"op":"share","public":11,"private":7,"on":true,"scope":"{scope}"}}"#)).unwrap();
+        assert_eq!(got(&share("192.168.9.1")).unwrap(), ["octet:share 11 7 on 192.168.9.1"]);
+        assert!(commands(&share("192.168.9.20")).is_err());
     }
 
     #[test]

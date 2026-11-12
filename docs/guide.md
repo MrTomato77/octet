@@ -20,7 +20,10 @@ Get `Octet.dmg` from the same release, open it and drag Octet onto Applications.
 
 - **Not notarized yet:** the first time, macOS says it can't check Octet. Open *System Settings → Privacy & Security* and choose *Open Anyway*.
 - **Wi-Fi name:** macOS gives the network's name only to apps with Location permission, so Octet asks once. Say no and everything else still works; only the name stays hidden.
-- **What differs from Windows:** each change asks for your password (there is no *Run as admin*). There is no Advanced tab, because macOS keeps one address per network service. There is no Release, because macOS can only renew a lease. *Register in DNS* is Windows-only.
+- **What differs from Windows:** each change asks for your password (there is no *Run as admin*). *Register in DNS* is Windows-only. The rest is done the macOS way:
+  - **Advanced:** macOS keeps one address per network service, so each extra address becomes a service of its own on the same port, named like *Wi-Fi + 10.0.0.5* (what System Settings calls *Duplicate Service*), with the gateway on its network as its router. Octet shows them as rows of the first service. There are no metrics on a Mac; it goes by *Set Service Order*.
+  - **Release:** turns the service's IPv4 off (macOS has no release of its own), so it stays released after a restart until you Renew, which turns DHCP back on. *Release and renew* asks for your password once.
+  - **Share:** uses macOS's own Internet Sharing, set the way System Settings sets it. The Mac takes the .1 address of the network you pick and the adapter's own settings aren't touched. Sharing out over Wi-Fi (a hotspot) stays in System Settings.
 
 ## Administrator permission
 
@@ -42,7 +45,7 @@ The internet is reached only when you ask: your public IP (Info) and the speed t
 
 ## How it works
 
-The backend is Rust. On Windows it talks to the system directly: IP Helper for addresses, DNS and DHCP, ICMP for ping, WinHTTP for update checks, and TLS sockets pinned to the adapter on screen for the speed test and public IP. No `ipconfig`, no PowerShell, no console windows flashing by; a DNS change takes milliseconds. On macOS, changes go through `networksetup`.
+The backend is Rust. On Windows it talks to the system directly: IP Helper for addresses, DNS and DHCP, ICMP for ping, WinHTTP for update checks, and TLS sockets pinned to the adapter on screen for the speed test and public IP. No `ipconfig`, no PowerShell, no console windows flashing by; a DNS change takes milliseconds. On macOS, changes go through `networksetup`; ping, Scan and the speed test use sockets pinned to the adapter on screen (`IP_BOUND_IF`), and Scan asks again about a device macOS hasn't heard from in the last two minutes, so one that left doesn't linger.
 
 The interface is one file, `ui/index.html`. Open it over http in a browser and it runs on sample data and changes nothing.
 

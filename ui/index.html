@@ -228,6 +228,8 @@ button, input, select { font: inherit; color: inherit; }
 .arow .ord { width: 20px; height: 28px; flex: none; margin-left: -24px; display: grid; place-items: center; border-radius: var(--r-input); color: var(--muted); font-size: 16px; cursor: grab; touch-action: none; transition: color var(--t-fast), background-color var(--t-fast); }
 .arow .ord:hover { background: var(--hover); color: var(--ink); }
 .arow .ord.off { cursor: default; opacity: 0.35; pointer-events: none; }
+/* macOS has no gateway metrics (it goes by service order): no grips there, their room kept so the boxes stay put */
+.mac .arow .ord { visibility: hidden; pointer-events: none; }
 .arow.dragging { position: relative; z-index: 2; } .arow.dragging .ord { cursor: grabbing; color: var(--ink); }
 /* The first line is the main address: its numbers stand out (weight, full ink), the rest sit back */
 .arow.primary .ip input, .arow.primary .prefix { font-weight: 600; color: var(--ink); transition: color 240ms; }
@@ -1050,9 +1052,9 @@ html.app, html.app body { overflow: hidden; }
             </p>
           </div>
           <div class="menu" id="tools" role="menu" style="right:0; top:36px">
-            <button role="menuitem" data-act="release" data-win><i class="ph ph-arrow-line-up"></i><span data-t="release">Release DHCP</span></button>
+            <button role="menuitem" data-act="release"><i class="ph ph-arrow-line-up"></i><span data-t="release">Release DHCP</span></button>
             <button role="menuitem" data-act="renew"><i class="ph ph-arrow-line-down"></i><span data-t="renew">Renew DHCP</span></button>
-            <button role="menuitem" data-act="cycle" data-win><i class="ph ph-arrows-clockwise"></i><span data-t="cycle">Release and renew</span></button>
+            <button role="menuitem" data-act="cycle"><i class="ph ph-arrows-clockwise"></i><span data-t="cycle">Release and renew</span></button>
             <hr>
             <button role="menuitem" data-act="toggle"><i class="ph ph-power"></i><span id="toggle-label">Disable adapter</span></button>
             <button role="menuitem" data-act="hide"><i class="ph ph-eye-slash"></i><span data-t="hide">Hide from list</span></button>
@@ -1066,7 +1068,7 @@ html.app, html.app body { overflow: hidden; }
           <span id="ptab-pill" aria-hidden="true"></span>
           <button class="ptab" role="tab" data-page="ip" aria-selected="true" aria-controls="page-ip"><span data-t="tabIp">IP &amp; DNS</span><span class="diff" aria-hidden="true"></span></button>
           <button class="ptab" role="tab" data-page="adv" aria-selected="false" aria-controls="page-adv" tabindex="-1"><span data-t="tabAdv">Advanced</span></button>
-          <button class="ptab" role="tab" data-page="share" data-win aria-selected="false" aria-controls="page-share" tabindex="-1"><span data-t="tabShare">Share</span></button>
+          <button class="ptab" role="tab" data-page="share" aria-selected="false" aria-controls="page-share" tabindex="-1"><span data-t="tabShare">Share</span></button>
           <button class="ptab" role="tab" data-page="probe" aria-selected="false" aria-controls="page-probe" tabindex="-1"><span data-t="tabProbe">Ping</span></button>
           <button class="ptab" role="tab" data-page="scan" aria-selected="false" aria-controls="page-scan" tabindex="-1"><span data-t="tabScan">Scan</span></button>
           <button class="ptab" role="tab" data-page="info" aria-selected="false" aria-controls="page-info" tabindex="-1"><span data-t="tabInfo">Info</span></button>
@@ -1114,7 +1116,7 @@ html.app, html.app body { overflow: hidden; }
           <div class="ahead" aria-hidden="true"><span class="ord"></span><span class="host">IP address</span><span class="slash"></span><span class="cidr">CIDR</span><span class="to"></span><span class="host">Gateway</span></div>
           <div class="alist" id="adv-list" role="list" aria-label="Addresses"></div>
         </div>
-        <div class="page share" id="page-share" data-page="share" role="tabpanel" data-win hidden>
+        <div class="page share" id="page-share" data-page="share" role="tabpanel" hidden>
           <div class="sh-link" id="sh-link"><div class="sh-ends">
             <div class="sh-end"><div class="sh-tile"><i class="ph sh-src-ic"></i></div><div><b class="sh-src-name"></b><small class="sh-src-sub"></small></div></div>
             <span class="sh-wire"><span class="fill"></span><span class="flow"></span></span>
@@ -1383,15 +1385,14 @@ document.addEventListener("mousedown", e => {
   if (e.button === 0 && e.target.hasAttribute?.("data-tauri-drag-region")) tauri?.window.getCurrentWindow().startDragging();
 });   // X: to the tray (Windows), Quit lives in the tray menu
 if (tauri) document.documentElement.classList.add("app");
-// macOS: ⌘ instead of Ctrl, and none of the Windows-only parts: the Advanced lists (macOS keeps one
-// address per service), Release (it has none), Register in DNS, and Run as admin (it asks with each change).
+// macOS: ⌘ instead of Ctrl, and none of the Windows-only parts: Register in DNS, and Run as admin (it asks with
+// each change). Advanced, Release and Share are there too, done the macOS way (see change.rs and mac.rs).
 // In a browser, ?mac shows the macOS layout.
 const mac = tauri ? /Mac/.test(navigator.platform) : new URLSearchParams(location.search).has("mac");
 const OS = mac ? "macOS" : "Windows", MOD = mac ? "⌘" : "Ctrl+";
 const isMod = e => mac ? e.metaKey : e.ctrlKey;
 if (mac) {
   document.documentElement.classList.add("mac");
-  document.querySelector(".ptab[data-page=adv]").remove();
   for (const el of document.querySelectorAll("[data-win]")) { el.hidden = true; el.disabled = true; }
   for (const k of document.querySelectorAll(".keys kbd")) {
     if (k.textContent === "Ctrl") k.textContent = "⌘";
@@ -2336,16 +2337,25 @@ tools.onclick = async e => {
 // say) gets an address and the internet. Windows gives this adapter the address picked here; what it had
 // before is kept and put back on Stop.
 const sharing = () => { try { return JSON.parse(pref("octet-share")); } catch { return null; } };
-// The Share state, from data only: "off", "other" (another adapter is shared), "on", or "gone" (Windows
-// stopped it: ICS pins the shared adapter to the chosen address, so another address means it is off).
-// ponytail: guessed from the address; read INetSharingManager instead if this ever guesses wrong.
+// The Share state: "off", "other" (another adapter is shared), "on", or "gone" (stopped elsewhere). Windows: from
+// data only (ICS pins the shared adapter to the chosen address, so another address means it is off).
+// ponytail: guessed from the address there; read INetSharingManager instead if this ever guesses wrong.
+// macOS: from Internet Sharing's own settings (macShare, read every few seconds); the adapter keeps its address.
+let macShare = null;
+const readMacShare = () => mac && tauri ? net("share_state").then(v => { macShare = v; }, () => {}) : Promise.resolve();
 function shareMode(a) {
   const s = sharing();
   if (!s || !a) return { mode: "off" };
   if (s.id !== a.id) return { mode: "other", s };
-  const gone = a.state === "up" && !!a.cfg.address && a.cfg.address !== (s.scope || "192.168.137.1");
+  const gone = mac ? !!macShare && !(macShare.on && macShare.private.includes(a.index))
+    : a.state === "up" && !!a.cfg.address && a.cfg.address !== (s.scope || "192.168.137.1");
   return { mode: gone ? "gone" : "on", s };
 }
+// macOS gives this Mac the shared network's .1 and Wi-Fi out makes a hotspot (System Settings does that one).
+const shScopeBad = v => !privateIp(v) || mac && !/\.1$/.test(v);
+const macWifiOut = a => mac && kind(a) === "wifi";
+// This Mac's own address on the shared network (the sharing bridge's), else the one chosen.
+const shOwn = (a, s) => mac ? (s && (macShare?.address || s.scope)) || a.cfg.address || "" : a.cfg.address || "";
 const net24 = ip => ip.split(".").slice(0, 3).join(".");
 const shareSources = a => adapters.filter(x => x !== a && x.state === "up" && x.cfg.gateway);
 const srcSub = x => x.ssid || x.cfg.address;
@@ -2448,12 +2458,12 @@ function renderShare() {
   }
   const ip = mine ? (s.scope || "192.168.137.1") : shScope;
   if (shIp.inputs.map(x => x.value).join(".") !== ip || shIp.inputs[0].disabled !== mine) shIp.set(ip, !mine);
-  const bad = !mine && !!shScope && !privateIp(shScope);
+  const bad = !mine && !!shScope && shScopeBad(shScope);
   shIp.box.classList.toggle("invalid", bad);
   const go = $("share-go");
   go.innerHTML = mine ? `<i class="ph ph-stop"></i><span>${L("Stop", "หยุดแชร์")}</span>` : `<i class="ph ph-share"></i><span>${L("Share", "แชร์")}</span>`;
   go.className = mine ? "btn" : "btn primary";
-  go.disabled = busyNow || (!mine && (other || !src || bad || a.state === "disabled"));
+  go.disabled = busyNow || (!mine && (other || !src || bad || a.state === "disabled" || macWifiOut(a)));
   shSay(a);
   shDevPaint(a, mine);
 }
@@ -2467,13 +2477,16 @@ function shFade(e, t) {
 }
 let shNote = "";   // what Share/Stop is doing now; Share's own footer, since the status line is hidden on this page
 function shSay(a) {
-  const { mode, s } = shareMode(a), mine = mode === "on", other = mode === "other", bad = !s && !!shScope && !privateIp(shScope);
+  const { mode, s } = shareMode(a), mine = mode === "on", other = mode === "other", bad = !s && !!shScope && shScopeBad(shScope);
   if (shNote) { if ($("share-say").textContent !== shNote) $("share-say").textContent = shNote; return; }
-  if (mode === "gone") { const g = L("Windows stopped sharing · Stop puts your settings back", "Windows หยุดแชร์ไปแล้ว · กดหยุดเพื่อคืนค่าเดิม"); if ($("share-say").textContent !== g) $("share-say").textContent = g; return; }
+  if (mode === "gone") { const g = mac ? L("Sharing was turned off elsewhere · Stop clears it here", "การแชร์ถูกปิดจากที่อื่น · กดหยุดเพื่อล้างสถานะ")
+    : L("Windows stopped sharing · Stop puts your settings back", "Windows หยุดแชร์ไปแล้ว · กดหยุดเพื่อคืนค่าเดิม"); if ($("share-say").textContent !== g) $("share-say").textContent = g; return; }
   const t = mine ? Math.max(0, Math.floor((Date.now() - (s.at || Date.now())) / 1000)) : 0;
   const text = mine ? `<i class="ph ph-clock"></i> ${t >= 60 ? Math.floor(t / 60) + " " + L("min", "นาที") + " " : ""}${t % 60} ${L("s", "วิ")}`
     : other ? L(`Already sharing to ${s.name}`, `กำลังแชร์ไปที่ ${s.name} อยู่`)
-    : bad ? L("Use a private address, e.g. 192.168.1.1", "ใช้ IP วงภายใน เช่น 192.168.1.1")
+    : !s && macWifiOut(a) ? L("Sharing out over Wi-Fi is set in System Settings > Sharing", "แชร์ออกทาง Wi-Fi ตั้งได้ใน System Settings > Sharing")
+    : bad ? (mac ? L("Use a private address ending in .1, e.g. 192.168.1.1", "ใช้ IP วงภายในที่ลงท้าย .1 เช่น 192.168.1.1") : L("Use a private address, e.g. 192.168.1.1", "ใช้ IP วงภายใน เช่น 192.168.1.1"))
+    : mac ? `<i class="ph ph-shield-check"></i> ${L("This adapter's own settings stay as they are", "ค่าของอะแดปเตอร์นี้ไม่ถูกเปลี่ยน")}`
     : `<i class="ph ph-shield-check"></i> ${L("Current settings come back on Stop", "กดหยุดแล้วค่าเดิมกลับมา")}`;
   if ($("share-say").innerHTML !== text) $("share-say").innerHTML = text;
 }
@@ -2527,7 +2540,8 @@ async function shareLook() {
   if (!a || page !== "share" || shBusy) return;
   shBusy = true;
   try {
-    const own = a.cfg.address || "";
+    await readMacShare();
+    const own = shOwn(a, mine && s);
     const n = mine && a.state === "up" ? await net("neighbours", { index: a.index }).catch(() => []) : [];
     // Only the shared /24 (Windows keeps old neighbours from before), and one row per device (one MAC, first IP).
     const found = [];
@@ -2567,10 +2581,13 @@ $("share-go").onclick = async () => {
   try {
     if (s) {
       // Windows turns ICS off one side after the other (~3 s, measured); say so rather than look stuck.
-      note(L("Stopping sharing… Windows takes a few seconds", "กำลังหยุดแชร์… Windows ใช้เวลาสักครู่"));
+      note(L(`Stopping sharing… ${OS} takes a few seconds`, `กำลังหยุดแชร์… ${OS} ใช้เวลาสักครู่`));
       // One elevated run (one UAC): sharing off, then the saved settings back. Already off: just the settings.
+      // macOS leaves the adapter's settings alone, so there it is sharing off only (and nothing at all once it is off).
       const back = { op: "apply", index: a.index, name: a.name, cfg: s.cfg, ip: true, dns: true, extra: true, wasExtra: [], wasGws: [], wasMetric: cfgOf(a).metric };
-      await change(mode === "gone" ? back : { op: "share", public: s.pub, private: a.index, on: false, restore: back });
+      const off = { op: "share", public: s.pub, private: a.index, on: false };
+      if (mac) { if (mode !== "gone") await change(off); }
+      else await change(mode === "gone" ? back : { ...off, restore: back });
       forget("octet-share");   // after: a failed Stop can be pressed again
     } else {
       const src = adapters.find(x => x.id === shFrom), scope = shScope || "192.168.1.1";
@@ -2600,6 +2617,7 @@ $("share-go").onclick = async () => {
       catch (e) { forget("octet-share"); throw e; }
     }
     shDevs = []; shMndp = [];
+    await readMacShare();
     if (tauri) await reload();
     shNote = ""; lock(false); renderAdapter(true); renderList(); renderShare();
     say((s ? L("Sharing stopped · settings put back", "หยุดแชร์แล้ว · คืนค่าเดิมแล้ว") : L("Sharing on", "เริ่มแชร์แล้ว")), "ok");
@@ -2625,7 +2643,10 @@ function leaseAction(act) {
     const req = op => change({ op, index: a.index, name: a.name });
     // ipconfig waits about a minute when no DHCP server answers: give up on it after 10 s.
     const wait = new Promise((_, no) => setTimeout(() => no(L("No DHCP server answered", "ไม่มี DHCP server ตอบ")), 10000));
-    const go = Promise.race([act === "cycle" ? req("release").then(() => req("renew")) : req(act), wait]);
+    // A Mac asks for the password with each change: there, release and renew go as one.
+    const cycle = act === "cycle" && mac ? change({ op: "renew", index: a.index, name: a.name, cycle: true })
+      : act === "cycle" ? req("release").then(() => req("renew")) : req(act);
+    const go = Promise.race([cycle, wait]);
     return go.then(reload).then(() => {
       lock(false);
       const c = adapters[sel].cfg;
@@ -3237,6 +3258,7 @@ function gwRank(c) {
 }
 // One step up or down: swap with the neighbour, then number every gateway 10, 20, 30... in the new order.
 function moveGw(row, d) {
+  if (mac) return false;   // no metrics on a Mac: the service order decides
   const g = routes(draft)[adv.rows.indexOf(row)]?.gi, rank = gwRank(draft), k = rank.indexOf(g);
   if (g === undefined || g < 0 || rank[k + d] === undefined) return false;
   [rank[k], rank[k + d]] = [rank[k + d], rank[k]];
@@ -3343,7 +3365,7 @@ function paintAdv(roll = false) {
   $("adv-list").classList.toggle("dhcp", !ed);
   const c = draft, rs = routes(c), was = routes(cfgOf(adapters[sel])), bad = problems(), rank = gwRank(c);
   // While sharing here, the address Windows gave this adapter for it is Windows' to remove (Stop does), not yours.
-  const s = sharing(), icsOwn = s && s.id === adapters[sel].id ? [s.cfg.address, ...(s.cfg.extra || []).map(e => e.address)] : null;
+  const s = !mac && sharing(), icsOwn = s && s.id === adapters[sel].id ? [s.cfg.address, ...(s.cfg.extra || []).map(e => e.address)] : null;
   adv.rows.forEach((row, i) => {
     const r = rs[i]; if (!r) return;
     row.locked = !!icsOwn && i > 0 && !!r.address && !icsOwn.includes(r.address);
@@ -4317,7 +4339,7 @@ function scanPick(h, cell) {
     if (draft.ipAuto) Object.assign(draft, { ipAuto: false, gateway: c.gateway, dnsAuto: false, dns1: c.dns1, dns2: c.dns2 });
     Object.assign(draft, { address: ip, subnet: mask }); sync(); showPage("ip");
   });
-  if (!mac) item("ph-plus", L("Add as another IP", "เพิ่มเป็นอีก IP"), () => { draft.extra.push({ address: ip, subnet: mask }); sync(); showPage("adv"); });
+  item("ph-plus", L("Add as another IP", "เพิ่มเป็นอีก IP"), () => { draft.extra.push({ address: ip, subnet: mask }); sync(); showPage("adv"); });
   scanMenu(h, cell);
 }
 // The box shows the range on screen unless you are typing in it.
