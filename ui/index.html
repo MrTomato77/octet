@@ -3008,9 +3008,9 @@ const links = {
   issue: "https://github.com/octet-app/octet/issues/new",   // the app adds the version and system (Rust, main.rs)
 };
 // About: what this version brought, and the system in one line for a ticket or an issue.
-const NEWS = { v: "0.2.2",
-  en: ["Settings, General: rows grouped under headings", "Octet.exe is about 1 MB smaller", "Smoother speed test, scan and ping graph"],
-  th: ["การตั้งค่า หน้าทั่วไป: จัดเป็นหมวดมีหัวข้อ", "Octet.exe เล็กลงราว 1 MB", "Speed Test, Scan และกราฟ Ping ลื่นขึ้น"] };
+const NEWS = { v: "0.3.5",
+  en: ["Send feedback from Settings, no GitHub account needed", "macOS: Octet stays in the menu bar, with quick DNS, Renew and Flush", "macOS: DNS servers you set yourself show correctly"],
+  th: ["ส่งความเห็นได้จากการตั้งค่า ไม่ต้องมีบัญชี GitHub", "macOS: Octet อยู่บน menu bar สลับ DNS, Renew และ Flush ได้ทันที", "macOS: DNS ที่ตั้งเองแสดงถูกต้องแล้ว"] }
 // The app asks Tauri for its version (above); the demo, here and on the website, shows the version these notes are for.
 if (!tauri) { $("s-version").textContent = NEWS.v; updShow(); }
 function renderAbout() {
