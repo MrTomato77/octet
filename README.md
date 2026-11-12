@@ -5,7 +5,7 @@
 **Switch IPv4 and DNS in seconds. Then see who else is on the network.**
 
 A free, open-source **IP and DNS changer** for Windows and macOS: static IP, DHCP and DNS in one click, plus a network scanner.<br>
-A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simple-IP-Config), written in Rust. **[Website](https://thomasrieger.github.io/octet-web/)**
+A fast, modern take on [Simple IP Config](https://github.com/KurtisLiggett/Simple-IP-Config), written in Rust. **[Website](https://octet-app.github.io/)**
 
 [![Release](https://img.shields.io/github/v/release/octet-app/octet?style=flat-square&color=3b82f6)](https://github.com/octet-app/octet/releases/latest)
 [![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Foctet-app%2Foctet%2Fbadges%2Fdownloads.json&style=flat-square)](https://github.com/octet-app/octet/releases)
